@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\Auth\EcosystemAuthController;
+use App\Http\Controllers\AlertController;
+use App\Http\Controllers\ControlRoomController;
+use App\Http\Controllers\DispatchDecisionController;
+use App\Http\Controllers\OperatorSessionController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -33,4 +37,27 @@ Route::middleware([
             'totalTokens', 'totalSkills', 'agents', 'skills'
         ));
     })->name('dashboard');
+
+    // Mining-dispatch domain (MVP scaffold) — control rooms are the tenant
+    // root, dispatch decisions/alerts/operator sessions nest underneath.
+    Route::resource('control-rooms', ControlRoomController::class);
+
+    Route::post('control-rooms/{controlRoom}/dispatch-decisions', [DispatchDecisionController::class, 'store'])
+        ->name('control-rooms.dispatch-decisions.store');
+    Route::delete('dispatch-decisions/{dispatchDecision}', [DispatchDecisionController::class, 'destroy'])
+        ->name('dispatch-decisions.destroy');
+
+    Route::post('control-rooms/{controlRoom}/alerts', [AlertController::class, 'store'])
+        ->name('control-rooms.alerts.store');
+    Route::patch('alerts/{alert}', [AlertController::class, 'update'])
+        ->name('alerts.update');
+    Route::delete('alerts/{alert}', [AlertController::class, 'destroy'])
+        ->name('alerts.destroy');
+
+    Route::post('control-rooms/{controlRoom}/operator-sessions', [OperatorSessionController::class, 'store'])
+        ->name('control-rooms.operator-sessions.store');
+    Route::patch('operator-sessions/{operatorSession}', [OperatorSessionController::class, 'update'])
+        ->name('operator-sessions.update');
+    Route::delete('operator-sessions/{operatorSession}', [OperatorSessionController::class, 'destroy'])
+        ->name('operator-sessions.destroy');
 });
