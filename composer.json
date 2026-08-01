@@ -1,9 +1,9 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "dot-ecosystem/dot-central",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Dot.Central — AI-agent command centre and mining-dispatch control-room scaffold for the Dot Ecosystem.",
+    "keywords": ["laravel", "dot-ecosystem", "dot-central"],
     "license": "MIT",
     "require": {
         "php": "^8.3",

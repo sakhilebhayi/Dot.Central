@@ -25,7 +25,16 @@ class ControlRoomController extends Controller
             ->latest()
             ->get();
 
-        return view('control-rooms.index', compact('controlRooms'));
+        $controlRoomIds = $controlRooms->pluck('id');
+
+        $summary = [
+            'activeControlRooms' => $controlRooms->where('is_active', true)->count(),
+            'totalDecisions'     => DispatchDecision::whereIn('control_room_id', $controlRoomIds)->count(),
+            'openAlerts'         => Alert::whereIn('control_room_id', $controlRoomIds)->whereNull('cleared_at')->count(),
+            'activeSessions'     => \App\Models\OperatorSession::whereIn('control_room_id', $controlRoomIds)->whereNull('ended_at')->count(),
+        ];
+
+        return view('control-rooms.index', compact('controlRooms', 'summary'));
     }
 
     public function create(): View

@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\EcosystemAuthController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\ControlRoomController;
 use App\Http\Controllers\DispatchDecisionController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +38,8 @@ Route::middleware([
             'totalTokens', 'totalSkills', 'agents', 'skills'
         ));
     })->name('dashboard');
+
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
 
     // Mining-dispatch domain (MVP scaffold) — control rooms are the tenant
     // root, dispatch decisions/alerts/operator sessions nest underneath.

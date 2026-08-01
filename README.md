@@ -20,40 +20,41 @@
 
 ## What is Dot.Central?
 
-Dot.Central is the AI command centre in the InfoDot ecosystem. Teams create specialised Claude-powered agents with custom system prompts, knowledge bases, and tool integrations — then converse with them directly or route tasks from other Dot platforms through them.
+Dot.Central hosts two domains side by side. See [`wiki.md`](wiki.md) for the full, actively-maintained picture — this README is a quick orientation, not the source of truth.
+
+1. **AI command centre** — teams create specialised Claude-powered agents with custom system prompts and skills, then converse with them and track token usage.
+2. **Mining-dispatch scaffold (MVP)** — control rooms, dispatch decisions, alerts, and operator sessions, scoped to Jetstream teams. Data model and CRUD only — no event emission or Dot.Mines integration yet.
+
+`wiki.md` also documents a known, tracked discrepancy: Dot.Brain's ingested view of this platform (`platforms/dot-central.md`) describes it as an operational-intelligence center for mining dispatch, while it was originally built as the AI-agent command centre, with the mining-dispatch domain added later as a scaffold on top. That gap is intentionally left open for a human decision, not resolved here.
 
 ## Core Features
 
-- Agent builder — system prompt, persona, and tool configuration
-- Conversation interface with streaming responses
-- Knowledge base upload — ground agents on internal documents
-- Multi-agent routing — chain agents for complex workflows
+- Agent builder — system prompt, persona, and skill assignment
+- Conversation interface, per-conversation message history
 - Usage and cost tracking per agent and per team member
-- Conversation history with search and export
-- API endpoint per agent for external integrations
-- Ecosystem SSO from InfoDot hub
+- Mining-dispatch control rooms — dispatch decisions, alerts (with in-app notifications), operator sessions
+- Ecosystem SSO from the InfoDot hub
+
+Not yet built (tracked in `wiki.md` §4/§7): knowledge-base grounding per agent, multi-agent routing/chaining, streaming chat responses, a public per-agent API endpoint, and Dot.Mines event integration for the dispatch domain.
 
 ## Domain Models
 
-- **CentralAgent** — Claude-backed AI persona
-- **CentralConversation** — full message thread
-- **CentralMessage** — individual turn in a conversation
-- **AgentKnowledge** — uploaded context document
+AI command centre: `Agent`, `AgentSkill`, `Conversation`, `Message`, `AgentUsageLog`.
+
+Mining dispatch (MVP scaffold): `ControlRoom`, `DispatchDecision`, `Alert`, `OperatorSession`.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Laravel 12 |
-| Language | PHP 8.4 |
+| Framework | Laravel 12, PHP 8.4 |
 | Frontend | Livewire 3 · Alpine.js 3 · Tailwind CSS |
 | Database | PostgreSQL 16 (shared across ecosystem) |
-| Realtime | Laravel Reverb |
-| Auth | Laravel Sanctum (InfoDot SSO) |
-| AI | Anthropic Claude (`claude-sonnet-4-6`) |
-| Storage | AWS S3 / Local (Flysystem) |
-| Search | Laravel Scout · Meilisearch |
-| Queue | Redis · Laravel Horizon |
+| Auth | Laravel Jetstream (teams) + Sanctum, ecosystem SSO from the InfoDot hub |
+| AI | Anthropic Claude, via direct HTTP call in `App\Services\AgentChatService` (falls back to a mock reply when `ANTHROPIC_API_KEY` is unset) |
+| Realtime (planned) | Laravel Reverb |
+| Search (planned) | Laravel Scout · Meilisearch |
+| Queue (planned) | Redis · Laravel Horizon |
 
 ## Quick Start
 

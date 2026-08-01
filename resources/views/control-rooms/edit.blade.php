@@ -1,6 +1,6 @@
 <x-app-layout>
     <div style="padding:2rem 2.5rem;max-width:520px;">
-        <h1 style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:#f4f4f5;margin:0 0 1.5rem;">Edit Control Room</h1>
+        <h1 style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--text-primary);margin:0 0 1.5rem;">Edit Control Room</h1>
 
         <x-validation-errors class="mb-4" />
 
@@ -19,7 +19,7 @@
             </div>
 
             <div style="margin-bottom:1.5rem;">
-                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;color:#a1a1aa;">
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;color:var(--text-secondary);">
                     <input type="checkbox" name="is_active" value="1" {{ $controlRoom->is_active ? 'checked' : '' }} />
                     Active
                 </label>
