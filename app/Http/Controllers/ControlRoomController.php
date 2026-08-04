@@ -25,13 +25,15 @@ class ControlRoomController extends Controller
             ->latest()
             ->get();
 
-        $controlRoomIds = $controlRooms->pluck('id');
-
+        // DispatchDecision/Alert/OperatorSession carry HasControlRoomTeamScope,
+        // so these no longer need an explicit whereIn('control_room_id', ...)
+        // filter — every query against them is already scoped to the current
+        // team's control rooms at the model level.
         $summary = [
             'activeControlRooms' => $controlRooms->where('is_active', true)->count(),
-            'totalDecisions'     => DispatchDecision::whereIn('control_room_id', $controlRoomIds)->count(),
-            'openAlerts'         => Alert::whereIn('control_room_id', $controlRoomIds)->whereNull('cleared_at')->count(),
-            'activeSessions'     => \App\Models\OperatorSession::whereIn('control_room_id', $controlRoomIds)->whereNull('ended_at')->count(),
+            'totalDecisions'     => DispatchDecision::count(),
+            'openAlerts'         => Alert::whereNull('cleared_at')->count(),
+            'activeSessions'     => \App\Models\OperatorSession::whereNull('ended_at')->count(),
         ];
 
         return view('control-rooms.index', compact('controlRooms', 'summary'));

@@ -85,6 +85,17 @@ class ControlRoomTest extends TestCase
             ->assertSee('Sentinel threshold breach');
     }
 
+    /**
+     * As of HasTeamScope (App\Models\Concerns\HasTeamScope), a control room
+     * belonging to another team is invisible to implicit route-model
+     * binding before ControlRoomController::authorizeAccess()'s
+     * abort_unless() ever runs, so this now 404s rather than 403ing — a
+     * stronger, fail-closed posture than before, since it no longer
+     * depends on every route remembering that check. See
+     * test_scope_alone_blocks_cross_team_access_even_without_an_explicit_where
+     * in HasTeamScopeTest for direct proof the scope itself is
+     * load-bearing.
+     */
     public function test_a_user_cannot_view_a_control_room_belonging_to_another_team(): void
     {
         $owner = User::factory()->withPersonalTeam()->create();
@@ -94,7 +105,7 @@ class ControlRoomTest extends TestCase
 
         $this->actingAs($outsider)
             ->get(route('control-rooms.show', $controlRoom))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_raising_an_alert_notifies_the_rest_of_the_team(): void

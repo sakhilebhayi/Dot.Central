@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTeamScope;
 use Database\Factories\ControlRoomFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,12 +13,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Tenant root of the mining-dispatch domain. Maps 1:1 to a Dot.Mines site
  * (via mines_site_ref — a plain external reference, not a live integration)
  * and is scoped to a Jetstream team, matching this repo's existing tenancy
- * pattern.
+ * pattern. HasTeamScope makes that scoping automatic at the query layer
+ * instead of depending on every controller remembering belongsToTeam().
  */
 class ControlRoom extends Model
 {
     /** @use HasFactory<ControlRoomFactory> */
-    use HasFactory;
+    use HasFactory, HasTeamScope;
 
     protected $fillable = [
         'team_id', 'name', 'slug', 'mines_site_ref', 'is_active',

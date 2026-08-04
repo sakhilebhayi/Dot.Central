@@ -2,12 +2,21 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasUserScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * A user's private chat session with an Agent. HasUserScope scopes every
+ * query to the authenticated user, replacing the ad-hoc
+ * where('user_id', ...) calls that used to live directly in the dashboard
+ * route closure.
+ */
 class Conversation extends Model
 {
+    use HasUserScope;
+
     protected $fillable = ['user_id', 'agent_id', 'title'];
 
     public function user(): BelongsTo

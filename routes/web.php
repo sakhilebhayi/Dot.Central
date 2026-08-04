@@ -20,14 +20,16 @@ Route::middleware([
     'verified',
 ])->group(function () {
     Route::get('/dashboard', function () {
+        // Agent/AgentSkill are the ecosystem-wide agent catalog (no owner
+        // column at all) and are intentionally never scoped. Conversation/
+        // Message/AgentUsageLog carry HasUserScope/HasConversationUserScope,
+        // so they no longer need the ad-hoc where('user_id', ...) filters
+        // that used to live directly in this closure.
         $totalAgents        = \App\Models\Agent::count();
         $activeAgents       = \App\Models\Agent::where('is_active', true)->count();
-        $totalConversations = \App\Models\Conversation::where('user_id', auth()->id())->count();
-        $totalMessages      = \App\Models\Message::whereHas(
-            'conversation', fn ($q) => $q->where('user_id', auth()->id())
-        )->count();
-        $totalTokens        = \App\Models\AgentUsageLog::where('user_id', auth()->id())
-            ->selectRaw('COALESCE(SUM(tokens_input + tokens_output), 0) as total')
+        $totalConversations = \App\Models\Conversation::count();
+        $totalMessages      = \App\Models\Message::count();
+        $totalTokens        = \App\Models\AgentUsageLog::selectRaw('COALESCE(SUM(tokens_input + tokens_output), 0) as total')
             ->value('total') ?? 0;
         $totalSkills        = \App\Models\AgentSkill::count();
         $agents             = \App\Models\Agent::withCount('conversations')->latest()->get();
