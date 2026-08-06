@@ -232,8 +232,24 @@
         </section>
 
         <!-- Mining Dispatch (MVP scaffold) -->
-        <section id="dispatch" class="py-24 sm:py-28 px-5 sm:px-8 bg-[var(--ink-soft)] border-y border-[var(--line)]">
-            <div class="max-w-[1400px] mx-auto">
+        <!-- Deliberately no photo in the hero above: that section (and its copy) is domain one, the AI-agent command
+             centre, which is abstract with no honest physical referent (wiki §1). This section is domain two, the
+             mining-dispatch scaffold, which *does* have a genuine real-world equivalent per wiki §3a — an operations/
+             dispatch control room with monitors and an operator, mirroring the actual Control Room / Alert / Operator
+             Session entities described below. Putting the photo here, not the hero, is the point: it depicts the thing
+             the copy right next to it is actually describing, rather than being generic tech-vibe decoration bolted
+             onto unrelated copy — the mistake the 0.7.0 pass explicitly removed a control-room photo for repeating. -->
+        <section id="dispatch" class="relative py-24 sm:py-28 px-5 sm:px-8 border-y border-[var(--line)] overflow-hidden">
+            <!-- Photo: a man sitting in front of multiple monitors in a control room, by Tasha Kostyuk, unsplash.com/photos/a-man-sitting-in-front-of-multiple-monitors-TtMKq3lJm-U -->
+            <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1708807472445-d33589e6b090?q=80&w=2400&auto=format&fit=crop');"></div>
+            <!-- Overlay kept >=90% opaque ink everywhere text sits (computed against sRGB luminance: mist-on-ink is
+                 ~7.05:1 at rest; even the worst case — a pure-white monitor pixel directly behind text at exactly 90%
+                 ink opacity — computes to ~5.39:1, still clear of WCAG AA's 4.5:1 for body copy). Uniform top-to-bottom
+                 wash rather than Mines' one-sided hero vignette, because both grid columns here carry real copy, not
+                 just one side. -->
+            <div class="absolute inset-0" style="background: linear-gradient(180deg, rgba(16,20,26,0.94) 0%, rgba(16,20,26,0.90) 45%, rgba(16,20,26,0.96) 100%);"></div>
+
+            <div class="relative z-10 max-w-[1400px] mx-auto">
                 <div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-12 lg:gap-20">
                     <div class="reveal" data-reveal>
                         <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-4">Domain two — early-stage MVP</p>
