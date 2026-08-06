@@ -3,151 +3,228 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dot.Central — AI Command Centre for the Dot Ecosystem</title>
-        <meta name="description" content="Build, configure, and converse with specialised Claude-powered agents, then route work from other Dot platforms through them.">
+        <title>Dot.Central — AI command centre for the Dot Ecosystem</title>
+        <meta name="description" content="Build, configure, and converse with Claude-powered agents, then route work from other Dot platforms through them. One command centre for the ecosystem's AI capability.">
 
         <!-- Favicon -->
         <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon-32x32.png') }}">
         <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon-16x16.png') }}">
 
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
+
+        <!-- Alpine.js is not bundled into resources/js/app.js on this platform (unlike Mines);
+             loaded the same way resources/views/layouts/app.blade.php already does it, so the
+             mobile nav toggle (x-data) actually works on this standalone guest page. -->
+        <script defer src="https://unpkg.com/alpinejs@3.10.2/dist/cdn.min.js"></script>
+
+        <style>
+            :root {
+                --ink: #10141a;
+                --ink-soft: #171d26;
+                --panel: #1b222c;
+                --gold: #e8bd3d;
+                --gold-soft: #f3d878;
+                --cyan: #22d3e0;
+                --cyan-soft: #7be8f0;
+                --paper: #edeff2;
+                --mist: #97a1ad;
+                --line: rgba(237, 239, 242, 0.10);
+                --font-display: 'Sora', system-ui, sans-serif;
+                --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+                --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+                --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+            }
+            html { background: var(--ink); }
+            body { font-family: var(--font-body); background: var(--ink); color: var(--paper); }
+            .font-display { font-family: var(--font-display); }
+            .font-mono { font-family: var(--font-mono); }
+
+            .press { transition: transform 160ms var(--ease-out); }
+            .press:active { transform: scale(0.97); }
+
+            @media (prefers-reduced-motion: no-preference) {
+                .reveal {
+                    opacity: 0;
+                    transform: translateY(14px);
+                    transition: opacity 600ms var(--ease-out), transform 600ms var(--ease-out);
+                }
+                .reveal.is-visible { opacity: 1; transform: translateY(0); }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .reveal { opacity: 1; transform: none; }
+            }
+
+            @media (hover: hover) and (pointer: fine) {
+                .row-hover:hover { background: rgba(237, 239, 242, 0.03); }
+                .link-underline { background-size: 0% 1px; }
+                .link-underline:hover { background-size: 100% 1px; }
+            }
+            .link-underline {
+                background-image: linear-gradient(currentColor, currentColor);
+                background-position: 0 100%;
+                background-repeat: no-repeat;
+                transition: background-size 220ms var(--ease-out);
+            }
+        </style>
     </head>
-    <body class="bg-slate-950 text-gray-100 antialiased">
+    <body class="antialiased">
 
-        <!-- Header -->
-        <header class="fixed top-0 left-0 right-0 z-50 transition-all duration-300" x-data="{ scrolled: false, mobileMenuOpen: false }"
-                @scroll.window="scrolled = window.pageYOffset > 50"
-                :class="scrolled ? 'bg-slate-950/95 backdrop-blur-xl shadow-lg border-b border-slate-800' : 'bg-transparent'">
-            <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                <div class="flex items-center justify-between">
-                    <a href="/" class="flex items-center gap-3 group">
-                        <img src="{{ asset('images/logo.png') }}" alt="Dot.Central" class="h-14 w-auto transform group-hover:scale-105 transition-transform duration-300">
-                        <p class="hidden sm:block text-xs text-violet-400 font-medium border-l border-slate-700 pl-3">AI Command Centre</p>
-                    </a>
+        <!-- Nav -->
+        <header
+            x-data="{ scrolled: false, mobileMenuOpen: false }"
+            @scroll.window="scrolled = window.pageYOffset > 24"
+            :class="scrolled ? 'bg-[#10141a]/95 backdrop-blur-md border-b border-[var(--line)]' : 'border-b border-transparent'"
+            class="fixed top-0 left-0 right-0 z-50 transition-colors duration-300"
+        >
+            <nav class="max-w-[1400px] mx-auto px-5 sm:px-8 py-3 flex items-center justify-between">
+                <a href="/" class="flex items-center gap-2.5 press">
+                    <img src="{{ asset('images/logo.png') }}" alt="Dot.Central" class="h-16 sm:h-20 w-auto">
+                </a>
 
-                    <div class="hidden md:flex items-center gap-8">
-                        <a href="#features" class="text-gray-300 hover:text-violet-400 transition-colors font-medium">Features</a>
-                        <a href="#dispatch" class="text-gray-300 hover:text-violet-400 transition-colors font-medium">Mining Dispatch</a>
-                        <a href="#platform" class="text-gray-300 hover:text-violet-400 transition-colors font-medium">Platform</a>
-                    </div>
+                <div class="hidden md:flex items-center gap-8 font-mono text-[13px] tracking-wide uppercase text-[var(--mist)]">
+                    <a href="#agents" class="link-underline hover:text-[var(--paper)] pb-0.5">Agents</a>
+                    <a href="#dispatch" class="link-underline hover:text-[var(--paper)] pb-0.5">Dispatch</a>
+                    <a href="#platform" class="link-underline hover:text-[var(--paper)] pb-0.5">Platform</a>
+                </div>
 
-                    @if (Route::has('login'))
-                        <div class="flex items-center gap-3">
-                            @auth
-                                <a href="{{ url('/dashboard') }}" class="hidden sm:flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-violet-500/30 transform hover:scale-105">
-                                    <span>Dashboard</span>
+                @if (Route::has('login'))
+                    <div class="flex items-center gap-3">
+                        @auth
+                            <a href="{{ url('/dashboard') }}" class="press flex items-center gap-2 px-5 py-2.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] text-sm font-display font-semibold rounded-lg transition-colors">
+                                Dashboard
+                            </a>
+                        @else
+                            <a href="{{ route('login') }}" class="hidden sm:block text-sm font-medium text-[var(--mist)] hover:text-[var(--paper)] transition-colors">
+                                Sign in
+                            </a>
+                            @if (Route::has('register'))
+                                <a href="{{ route('register') }}" class="press px-5 py-2.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] text-sm font-display font-semibold rounded-lg transition-colors">
+                                    Get started
                                 </a>
-                            @else
-                                <a href="{{ route('login') }}" class="hidden sm:block px-4 py-2 text-gray-300 hover:text-white transition-colors font-medium">Sign In</a>
-                                @if (Route::has('register'))
-                                    <a href="{{ route('register') }}" class="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-violet-500/30 transform hover:scale-105">
-                                        <span>Get Started</span>
-                                    </a>
-                                @endif
-                            @endauth
-                            <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden p-2 text-gray-400 hover:text-white">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path x-show="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                                    <path x-show="mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                            </button>
-                        </div>
-                    @endif
-                </div>
+                            @endif
+                        @endauth
 
-                <div x-show="mobileMenuOpen"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 transform scale-95"
-                     x-transition:enter-end="opacity-100 transform scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 transform scale-100"
-                     x-transition:leave-end="opacity-0 transform scale-95"
-                     class="md:hidden mt-4 py-4 border-t border-slate-800"
-                     style="display: none;">
-                    <div class="flex flex-col gap-2">
-                        <a href="#features" class="px-4 py-2 text-gray-300 hover:text-violet-400 hover:bg-slate-800 rounded-lg transition-colors">Features</a>
-                        <a href="#dispatch" class="px-4 py-2 text-gray-300 hover:text-violet-400 hover:bg-slate-800 rounded-lg transition-colors">Mining Dispatch</a>
-                        @guest
-                            <a href="{{ route('login') }}" class="px-4 py-2 text-gray-300 hover:text-violet-400 hover:bg-slate-800 rounded-lg transition-colors">Sign In</a>
-                        @endguest
+                        <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden press p-2 -mr-2 text-[var(--paper)]" aria-label="Toggle menu">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path x-show="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 7h16M4 12h16M4 17h16"></path>
+                                <path x-show="mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
                     </div>
-                </div>
+                @endif
             </nav>
+
+            <div x-show="mobileMenuOpen"
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="md:hidden border-t border-[var(--line)] bg-[#10141a]"
+                 style="display: none;">
+                <div class="flex flex-col px-5 py-4 gap-1 font-mono text-sm uppercase tracking-wide">
+                    <a href="#agents" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Agents</a>
+                    <a href="#dispatch" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Dispatch</a>
+                    <a href="#platform" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Platform</a>
+                    @guest
+                        <a href="{{ route('login') }}" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Sign in</a>
+                    @endguest
+                </div>
+            </div>
         </header>
 
         <!-- Hero -->
-        <section class="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
-            <!-- Photographic Background: real control-room-displays photo by Noah Gremmert (@noahgremmert1), unsplash.com/photos/control-room-displays-ready-for-use-Sp3YykrgnWs -->
-            <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1753153481105-7a979eabe5a9?q=80&w=2400&auto=format&fit=crop');"></div>
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-slate-950/60"></div>
-            <div class="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/40 to-transparent"></div>
+        <section class="relative min-h-[100dvh] flex items-center overflow-hidden">
+            <div class="absolute inset-0" style="background: radial-gradient(ellipse 80% 60% at 8% 0%, rgba(232,189,61,0.10) 0%, transparent 55%), radial-gradient(ellipse 70% 50% at 100% 100%, rgba(34,211,224,0.08) 0%, transparent 55%);"></div>
 
-            <div class="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
-                <div class="inline-flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/20 rounded-full text-violet-400 text-sm font-medium mb-8">
-                    <span class="relative flex h-2 w-2">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
-                    </span>
-                    <span>Powered by Anthropic Claude</span>
+            <!-- Signature: a routing diagram — other Dot platforms feeding into a central hub with the mark's own chevron,
+                 echoing the real logo's toggle-switch icon and outward-pointing chevron. -->
+            <svg class="hidden lg:block absolute right-[4%] top-1/2 -translate-y-1/2 h-[64%] w-auto opacity-[0.55] pointer-events-none" viewBox="0 0 360 420" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <!-- five source nodes, one per sibling platform -->
+                <circle cx="30" cy="60" r="7" stroke="#97a1ad" stroke-width="2"/>
+                <circle cx="30" cy="150" r="7" stroke="#97a1ad" stroke-width="2"/>
+                <circle cx="30" cy="240" r="7" stroke="#97a1ad" stroke-width="2"/>
+                <circle cx="30" cy="330" r="7" stroke="#97a1ad" stroke-width="2"/>
+                <circle cx="30" cy="20" r="4" stroke="#97a1ad" stroke-width="1.5" opacity="0.5"/>
+                <!-- converging routes -->
+                <path d="M37 60 C 140 60, 140 195, 190 195" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
+                <path d="M37 150 C 120 150, 140 195, 190 195" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
+                <path d="M37 240 C 120 240, 140 205, 190 205" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
+                <path d="M37 330 C 140 330, 140 205, 190 205" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
+                <!-- the hub: switch-pair, echoing the logo icon -->
+                <circle cx="220" cy="200" r="58" stroke="#e8bd3d" stroke-width="3"/>
+                <rect x="188" y="172" width="64" height="24" rx="12" stroke="#edeff2" stroke-width="3"/>
+                <circle cx="204" cy="184" r="7" fill="#edeff2"/>
+                <rect x="188" y="204" width="64" height="24" rx="12" stroke="#edeff2" stroke-width="3"/>
+                <circle cx="236" cy="216" r="7" fill="#edeff2"/>
+                <!-- outbound chevron -->
+                <path d="M300 150 L 350 200 L 300 250" stroke="#22d3e0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+
+            <div class="relative z-10 max-w-[1400px] mx-auto px-5 sm:px-8 pt-28 pb-16 w-full">
+                <div class="max-w-2xl reveal" data-reveal>
+                    <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-6">
+                        AI command centre — Dot Ecosystem
+                    </p>
+
+                    <h1 class="font-display font-bold text-4xl sm:text-5xl lg:text-6xl leading-[1.05] tracking-tight text-[var(--paper)] mb-6">
+                        Where the ecosystem's<br>work gets routed.
+                    </h1>
+
+                    <p class="text-lg text-[var(--mist)] leading-relaxed max-w-xl mb-10">
+                        Dot.Central is where teams build, configure, and converse with specialised Claude-powered agents — then route work from other Dot platforms through them. A home base for the ecosystem's AI capability, not another silo.
+                    </p>
+
+                    @guest
+                        <div class="flex flex-wrap items-center gap-4">
+                            <a href="{{ route('register') }}" class="press px-7 py-3.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] font-display font-semibold rounded-lg transition-colors">
+                                Get started
+                            </a>
+                            <a href="#agents" class="press flex items-center gap-2 px-7 py-3.5 text-[var(--paper)] font-medium rounded-lg border border-[var(--line)] hover:border-[var(--mist)] transition-colors">
+                                See what's inside
+                            </a>
+                        </div>
+                    @endguest
                 </div>
-
-                <h1 class="text-5xl lg:text-7xl font-bold leading-tight mb-6">
-                    <span class="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">Your AI</span><br>
-                    <span class="bg-gradient-to-r from-violet-400 via-violet-500 to-indigo-400 bg-clip-text text-transparent">Command Centre</span>
-                </h1>
-
-                <p class="text-xl text-gray-400 leading-relaxed max-w-2xl mx-auto mb-10">
-                    Dot.Central is where teams build, configure, and converse with specialised Claude-powered agents, then route work from other Dot platforms through them — a home base for the ecosystem's AI capability.
-                </p>
-
-                @guest
-                    <div class="flex flex-wrap items-center justify-center gap-4">
-                        <a href="{{ route('register') }}" class="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white font-bold rounded-xl transition-all duration-300 shadow-2xl shadow-violet-500/30 transform hover:scale-105">
-                            <span>Get Started</span>
-                        </a>
-                        <a href="#features" class="flex items-center gap-2 px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-all duration-300 border border-slate-700 hover:border-slate-600">
-                            <span>See What's Inside</span>
-                        </a>
-                    </div>
-                @endguest
             </div>
         </section>
 
-        <!-- Features -->
-        <section id="features" class="py-24 px-4 sm:px-6 lg:px-8 bg-slate-900/50 relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-b from-transparent via-violet-500/5 to-transparent"></div>
-
-            <div class="relative z-10 max-w-7xl mx-auto">
-                <div class="text-center mb-16">
-                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/20 rounded-full text-violet-400 text-sm font-medium mb-6">
-                        <span>Core Features</span>
-                    </div>
-                    <h2 class="text-4xl lg:text-5xl font-bold text-white mb-6">
-                        Configure Agents.<br>
-                        <span class="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">Converse With Them.</span>
+        <!-- Agents / AI command centre -->
+        <section id="agents" class="py-24 sm:py-28 px-5 sm:px-8">
+            <div class="max-w-[1400px] mx-auto">
+                <div class="max-w-xl mb-16 reveal" data-reveal>
+                    <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-4">Domain one — running today</p>
+                    <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight">
+                        Configure agents. Converse with them.
                     </h2>
-                    <p class="text-xl text-gray-400 max-w-3xl mx-auto">The AI command-centre scaffolding — agents, skills, conversations, messages, usage tracking, and ecosystem SSO — is implemented and running today.</p>
+                    <p class="text-[var(--mist)] leading-relaxed mt-4">
+                        The AI command-centre scaffolding — agents, skills, conversations, usage tracking, and ecosystem SSO — is implemented and running.
+                    </p>
                 </div>
 
-                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    @foreach([
-                        ['title' => 'Configurable Agents', 'desc' => 'Each agent is a Claude-backed persona with its own name, system prompt, model, and an open capabilities list you shape to the job.', 'color' => 'from-violet-500 to-violet-600'],
-                        ['title' => 'Agent Skills', 'desc' => 'Tag agents with skills — a many-to-many taxonomy that lets you group and discover agents by what they are actually good at.', 'color' => 'from-indigo-500 to-indigo-600'],
-                        ['title' => 'Conversations', 'desc' => 'Every chat is a persisted thread between a user and an agent, with full message history replayed on each turn.', 'color' => 'from-blue-500 to-blue-600'],
-                        ['title' => 'Usage Tracking', 'desc' => 'Every assistant turn logs input and output tokens per user and per agent — the foundation for cost visibility as usage grows.', 'color' => 'from-emerald-500 to-emerald-600'],
-                        ['title' => 'Team-Scoped Access', 'desc' => 'Agents, conversations, and usage all live inside Jetstream teams, sharing the same tenancy model as the rest of the ecosystem.', 'color' => 'from-amber-500 to-amber-600'],
-                        ['title' => 'Ecosystem SSO', 'desc' => 'Sign in once through the InfoDot hub — Dot.Central authenticates via the same Sanctum-backed ecosystem handoff as every other Dot platform.', 'color' => 'from-pink-500 to-pink-600'],
-                    ] as $f)
-                        <div class="group bg-gradient-to-br from-slate-800 to-slate-900 p-8 rounded-2xl border border-slate-700 hover:border-violet-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-violet-500/10 transform hover:-translate-y-2">
-                            <div class="w-14 h-14 bg-gradient-to-br {{ $f['color'] }} rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-                                </svg>
-                            </div>
-                            <h3 class="text-xl font-bold text-white mb-3 group-hover:text-violet-400 transition-colors">{{ $f['title'] }}</h3>
-                            <p class="text-gray-400 leading-relaxed">{{ $f['desc'] }}</p>
+                <div class="grid md:grid-cols-2 border-t border-[var(--line)]">
+                    @php
+                        $features = [
+                            ['tag' => 'Agent', 'title' => 'Configurable agents', 'body' => 'Each agent is a Claude-backed persona with its own name, system prompt, model, and an open capabilities list you shape to the job.'],
+                            ['tag' => 'Skill', 'title' => 'Agent skills', 'body' => 'Tag agents with skills — a many-to-many taxonomy that lets you group and discover agents by what they are actually good at.'],
+                            ['tag' => 'Thread', 'title' => 'Conversations', 'body' => 'Every chat is a persisted thread between a user and an agent, with full message history replayed to Claude on each turn.'],
+                            ['tag' => 'Log', 'title' => 'Usage tracking', 'body' => 'Every assistant turn logs input and output tokens per user and per agent — the foundation for cost visibility as usage grows.'],
+                            ['tag' => 'Team', 'title' => 'Team-scoped access', 'body' => 'Conversations and usage logs are scoped per user; the mining-dispatch domain below is scoped per Jetstream team.'],
+                            ['tag' => 'SSO', 'title' => 'Ecosystem SSO', 'body' => 'Sign in once through the InfoDot hub — Dot.Central authenticates via the same Sanctum-backed ecosystem handoff as every other Dot platform.'],
+                        ];
+                    @endphp
+                    @foreach ($features as $i => $f)
+                        <div class="row-hover border-b border-[var(--line)] {{ $i % 2 === 0 ? 'md:border-r' : '' }} px-1 py-8 sm:py-10 transition-colors reveal" data-reveal>
+                            <p class="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--cyan)] mb-3">{{ $f['tag'] }}</p>
+                            <h3 class="font-display font-semibold text-xl text-[var(--paper)] mb-2.5">{{ $f['title'] }}</h3>
+                            <p class="text-[var(--mist)] leading-relaxed max-w-md">{{ $f['body'] }}</p>
                         </div>
                     @endforeach
                 </div>
@@ -155,49 +232,79 @@
         </section>
 
         <!-- Mining Dispatch (MVP scaffold) -->
-        <section id="dispatch" class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950"></div>
-
-            <div class="relative z-10 max-w-5xl mx-auto">
-                <div class="text-center mb-14">
-                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-sm font-medium mb-6">
-                        <span>Early-Stage MVP</span>
+        <section id="dispatch" class="py-24 sm:py-28 px-5 sm:px-8 bg-[var(--ink-soft)] border-y border-[var(--line)]">
+            <div class="max-w-[1400px] mx-auto">
+                <div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-12 lg:gap-20">
+                    <div class="reveal" data-reveal>
+                        <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-4">Domain two — early-stage MVP</p>
+                        <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight mb-5">
+                            A second domain: mining dispatch
+                        </h2>
+                        <p class="text-[var(--mist)] leading-relaxed max-w-sm">
+                            Alongside the agent hub, Dot.Central hosts a data-model-and-CRUD scaffold for mining-dispatch operations: control rooms, dispatch decisions, alerts, and operator sessions. Honestly labelled — no event emission or Dot.Mines integration yet.
+                        </p>
                     </div>
-                    <h2 class="text-4xl lg:text-5xl font-bold text-white mb-6">A Second Domain: <span class="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">Mining Dispatch</span></h2>
-                    <p class="text-xl text-gray-400 max-w-3xl mx-auto">Alongside the AI command centre, Dot.Central hosts an operational-intelligence data model for mining dispatch — control rooms, dispatch decisions, alerts, and operator sessions. This is a data-model-and-CRUD scaffold today, not a finished operations product.</p>
-                </div>
-                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    @foreach([
-                        ['label' => 'Control Rooms', 'desc' => 'Team-scoped tenant root, pointing at a Dot.Mines site'],
-                        ['label' => 'Dispatch Decisions', 'desc' => 'Assign, reroute, hold, or stagger — logged in sequence'],
-                        ['label' => 'Alerts', 'desc' => 'Severity-ranked threshold and sentinel trips'],
-                        ['label' => 'Operator Sessions', 'desc' => 'Shift-level staffing context per control room'],
-                    ] as $item)
-                        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center">
-                            <p class="font-bold text-sm text-white mb-1">{{ $item['label'] }}</p>
-                            <p class="text-xs text-gray-400">{{ $item['desc'] }}</p>
-                        </div>
-                    @endforeach
+
+                    <div class="grid sm:grid-cols-2 gap-x-10">
+                        @php
+                            $dispatch = [
+                                ['title' => 'Control rooms', 'body' => 'Team-scoped tenant root. Carries a mines_site_ref pointer to a Dot.Mines site — a plain string today, not a live integration.'],
+                                ['title' => 'Dispatch decisions', 'body' => 'Assign, reroute, hold, or stagger — the four workflow types, recorded in sequence per control room.'],
+                                ['title' => 'Alerts', 'body' => 'Severity-ranked threshold and sentinel trips, with a trigger and clear timestamp.'],
+                                ['title' => 'Operator sessions', 'body' => 'Shift-level staffing context per control room — deliberately no individual performance fields.'],
+                            ];
+                        @endphp
+                        @foreach ($dispatch as $c)
+                            <div class="py-6 border-t border-[var(--line)] reveal" data-reveal>
+                                <h3 class="font-display font-medium text-base text-[var(--paper)] mb-1.5">{{ $c['title'] }}</h3>
+                                <p class="text-sm text-[var(--mist)] leading-relaxed">{{ $c['body'] }}</p>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             </div>
         </section>
 
         <!-- Platform -->
-        <section id="platform" class="py-24 px-4 sm:px-6 lg:px-8 bg-slate-900/50">
-            <div class="max-w-5xl mx-auto">
-                <div class="text-center mb-14">
-                    <h2 class="text-4xl lg:text-5xl font-bold text-white mb-6">Built on the <span class="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">InfoDot Stack</span></h2>
+        <section id="platform" class="py-24 sm:py-28 px-5 sm:px-8">
+            <div class="max-w-[1400px] mx-auto">
+                <div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-12 lg:gap-20 items-start">
+                    <div class="reveal" data-reveal>
+                        <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-4">Under the hood</p>
+                        <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight mb-5">
+                            Built on the InfoDot stack
+                        </h2>
+                        <p class="text-[var(--mist)] leading-relaxed max-w-sm">
+                            Laravel 12, Jetstream teams, and a shared PostgreSQL instance across the ecosystem — with a direct line to Anthropic's Messages API for every agent turn.
+                        </p>
+                    </div>
+
+                    <div class="rounded-xl border border-[var(--line)] bg-[var(--panel)] overflow-hidden reveal" data-reveal>
+                        <div class="flex items-center gap-2 px-5 py-3 border-b border-[var(--line)]">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[var(--gold)]"></span>
+                            <span class="font-mono text-[11px] tracking-wide text-[var(--mist)]">AgentChatService.php</span>
+                        </div>
+                        <pre class="font-mono text-[13px] leading-relaxed px-5 py-6 overflow-x-auto text-[var(--mist)]"><code><span class="text-[var(--cyan)]">POST</span> https://api.anthropic.com/v1/messages
+  model:  claude-sonnet-4-6
+  system: agent.system_prompt
+  history: conversation.messages
+
+<span class="text-[var(--gold)]"># no ANTHROPIC_API_KEY?</span>
+<span class="text-[var(--mist)]"># falls back to a mock echo reply —</span>
+<span class="text-[var(--mist)]"># dev-mode fallback, not a bug</span></code></pre>
+                    </div>
                 </div>
-                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-[var(--line)] mt-14 rounded-xl overflow-hidden">
                     @foreach([
                         ['label' => 'Laravel 12 / PHP 8.4', 'desc' => 'Jetstream teams + Sanctum'],
                         ['label' => 'Livewire 3 + Alpine.js', 'desc' => 'Chat and dashboard UI'],
                         ['label' => 'PostgreSQL 16', 'desc' => 'Shared ecosystem instance'],
                         ['label' => 'Anthropic Claude', 'desc' => 'Direct Messages API integration'],
                     ] as $item)
-                        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center">
-                            <p class="font-bold text-sm text-white mb-1">{{ $item['label'] }}</p>
-                            <p class="text-xs text-gray-400">{{ $item['desc'] }}</p>
+                        <div class="bg-[var(--ink)] p-5 reveal" data-reveal>
+                            <p class="font-display font-medium text-sm text-[var(--paper)] mb-1">{{ $item['label'] }}</p>
+                            <p class="text-xs text-[var(--mist)]">{{ $item['desc'] }}</p>
                         </div>
                     @endforeach
                 </div>
@@ -205,20 +312,24 @@
         </section>
 
         <!-- CTA -->
-        <section class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-violet-950/30 to-slate-950"></div>
-            <div class="relative z-10 max-w-4xl mx-auto text-center">
-                <h2 class="text-4xl lg:text-5xl font-bold text-white mb-6">
-                    Ready to Build Your <span class="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">First Agent?</span>
+        <section class="relative py-28 sm:py-32 px-5 sm:px-8 overflow-hidden border-t border-[var(--line)]">
+            <div class="absolute inset-0" style="background: radial-gradient(ellipse 60% 80% at 50% 100%, rgba(232,189,61,0.08) 0%, transparent 60%);"></div>
+
+            <div class="relative z-10 max-w-2xl mx-auto text-center reveal" data-reveal>
+                <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight mb-5">
+                    Build your first agent
                 </h2>
-                <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">Get started with Dot.Central.</p>
+                <p class="text-[var(--mist)] leading-relaxed mb-10 max-w-lg mx-auto">
+                    Sign in once through the ecosystem hub, then configure an agent, tag it with skills, and start a conversation.
+                </p>
+
                 @guest
                     <div class="flex flex-wrap justify-center gap-4">
-                        <a href="{{ route('register') }}" class="group flex items-center gap-2 px-10 py-4 bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white font-bold rounded-xl transition-all duration-300 shadow-2xl shadow-violet-500/30 transform hover:scale-105">
-                            <span>Get Started</span>
+                        <a href="{{ route('register') }}" class="press px-8 py-3.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] font-display font-semibold rounded-lg transition-colors">
+                            Get started
                         </a>
-                        <a href="{{ route('login') }}" class="flex items-center gap-2 px-10 py-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-all duration-300 border border-slate-700 hover:border-slate-600">
-                            <span>Sign In</span>
+                        <a href="{{ route('login') }}" class="press px-8 py-3.5 text-[var(--paper)] font-medium rounded-lg border border-[var(--line)] hover:border-[var(--mist)] transition-colors">
+                            Sign in
                         </a>
                     </div>
                 @endguest
@@ -226,14 +337,31 @@
         </section>
 
         <!-- Footer -->
-        <footer class="py-12 px-4 sm:px-6 lg:px-8 border-t border-slate-800 bg-slate-900/50">
-            <div class="max-w-7xl mx-auto">
-                <div class="flex flex-col md:flex-row items-center justify-between gap-6">
-                    <img src="{{ asset('images/logo.png') }}" alt="Dot.Central" class="h-12 w-auto">
-                    <p class="text-gray-400 text-sm">&copy; {{ date('Y') }} Dot.Central. Part of the Dot Ecosystem.</p>
-                </div>
+        <footer class="py-14 px-5 sm:px-8 border-t border-[var(--line)]">
+            <div class="max-w-[1400px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+                <a href="/" class="flex items-center gap-2.5">
+                    <img src="{{ asset('images/logo.png') }}" alt="Dot.Central" class="h-11 w-auto opacity-90">
+                </a>
+                <p class="font-mono text-xs tracking-wide text-[var(--mist)]">
+                    &copy; {{ date('Y') }} Dot.Central. AI command centre for the Dot Ecosystem.
+                </p>
             </div>
         </footer>
 
+        <script>
+            if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches && 'IntersectionObserver' in window) {
+                const io = new IntersectionObserver((entries) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('is-visible');
+                            io.unobserve(entry.target);
+                        }
+                    });
+                }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+                document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
+            } else {
+                document.querySelectorAll('[data-reveal]').forEach((el) => el.classList.add('is-visible'));
+            }
+        </script>
     </body>
 </html>
