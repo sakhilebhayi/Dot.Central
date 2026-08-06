@@ -142,6 +142,10 @@
 
         <!-- Hero -->
         <section class="relative min-h-[100dvh] flex items-center overflow-hidden">
+            <!-- Photo: patch-panel/network rack wiring, by Yuriy Vertikov, unsplash.com/photos/ca9Ex6yVRgw — a literal routing hub, matching what this platform actually does -->
+            <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1702478475268-aa8ef54c084e?q=80&w=2400&auto=format&fit=crop');"></div>
+            <div class="absolute inset-0" style="background: linear-gradient(100deg, var(--ink) 0%, var(--ink) 30%, rgba(16,20,26,0.5) 52%, rgba(16,20,26,0.2) 76%, rgba(16,20,26,0.06) 100%);"></div>
+            <div class="absolute inset-0" style="background: linear-gradient(180deg, rgba(16,20,26,0.65) 0%, transparent 16%);"></div>
             <div class="absolute inset-0" style="background: radial-gradient(ellipse 80% 60% at 8% 0%, rgba(232,189,61,0.10) 0%, transparent 55%), radial-gradient(ellipse 70% 50% at 100% 100%, rgba(34,211,224,0.08) 0%, transparent 55%);"></div>
 
             <!-- Signature: a routing diagram — other Dot platforms feeding into a central hub with the mark's own chevron,
