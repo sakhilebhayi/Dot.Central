@@ -21,10 +21,12 @@ class ControlRoomController extends Controller
     public function index(Request $request): View
     {
         $controlRooms = $request->user()->currentTeam
-            ->controlRooms()
-            ->withCount(['dispatchDecisions', 'alerts', 'operatorSessions'])
-            ->latest()
-            ->get();
+            ? $request->user()->currentTeam
+                ->controlRooms()
+                ->withCount(['dispatchDecisions', 'alerts', 'operatorSessions'])
+                ->latest()
+                ->get()
+            : collect();
 
         // DispatchDecision/Alert/OperatorSession carry HasControlRoomTeamScope,
         // so these no longer need an explicit whereIn('control_room_id', ...)
@@ -51,6 +53,8 @@ class ControlRoomController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'mines_site_ref' => ['nullable', 'string', 'max:255'],
         ]);
+
+        abort_unless($request->user()->currentTeam, 403, 'You need a team before creating a control room.');
 
         $controlRoom = $request->user()->currentTeam->controlRooms()->create([
             'name' => $validated['name'],
