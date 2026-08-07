@@ -23,8 +23,8 @@ class MiningDispatchSeeder extends Seeder
         $team = Team::first() ?? User::factory()->withPersonalTeam()->create()->currentTeam;
 
         $controlRoom = ControlRoom::factory()->create([
-            'team_id'        => $team->id,
-            'name'           => 'Kolomela Control Room',
+            'team_id' => $team->id,
+            'name' => 'Kolomela Control Room',
             'mines_site_ref' => 'kolomela',
         ]);
 
@@ -32,29 +32,29 @@ class MiningDispatchSeeder extends Seeder
 
         foreach (DispatchDecision::WORKFLOW_TYPES as $index => $workflowType) {
             DispatchDecision::factory()->create([
-                'control_room_id'    => $controlRoom->id,
-                'workflow_type'      => $workflowType,
-                'sequence'           => $index + 1,
+                'control_room_id' => $controlRoom->id,
+                'workflow_type' => $workflowType,
+                'sequence' => $index + 1,
                 'decided_by_user_id' => $operator->id,
             ]);
         }
 
         Alert::factory()->create([
             'control_room_id' => $controlRoom->id,
-            'severity'        => 'critical',
-            'title'           => 'Haul-cycle variance above threshold',
+            'severity' => 'critical',
+            'title' => 'Haul-cycle variance above threshold',
         ]);
 
         Alert::factory()->cleared()->create([
             'control_room_id' => $controlRoom->id,
-            'severity'        => 'warning',
-            'title'           => 'Moisture-flagged shift — reroute clustering',
+            'severity' => 'warning',
+            'title' => 'Moisture-flagged shift — reroute clustering',
         ]);
 
         OperatorSession::factory()->create([
             'control_room_id' => $controlRoom->id,
-            'user_id'         => $operator->id,
-            'shift_label'     => 'day',
+            'user_id' => $operator->id,
+            'shift_label' => 'day',
         ]);
     }
 }

@@ -12,9 +12,7 @@ use Illuminate\Notifications\Notification;
  */
 class AlertRaisedNotification extends Notification
 {
-    public function __construct(public Alert $alert)
-    {
-    }
+    public function __construct(public Alert $alert) {}
 
     /**
      * @return array<int, string>
@@ -32,12 +30,12 @@ class AlertRaisedNotification extends Notification
         $controlRoom = $this->alert->controlRoom;
 
         return [
-            'type'             => 'alert_raised',
-            'title'            => ucfirst($this->alert->severity).' alert raised',
-            'message'          => "\"{$this->alert->title}\" was raised in \"{$controlRoom->name}\".",
-            'control_room_id'  => $controlRoom->id,
-            'alert_id'         => $this->alert->id,
-            'url'              => route('control-rooms.show', $controlRoom),
+            'type' => 'alert_raised',
+            'title' => ucfirst($this->alert->severity).' alert raised',
+            'message' => "\"{$this->alert->title}\" was raised in \"{$controlRoom->name}\".",
+            'control_room_id' => $controlRoom->id,
+            'alert_id' => $this->alert->id,
+            'url' => route('control-rooms.show', $controlRoom),
         ];
     }
 }

@@ -30,17 +30,18 @@ class AgentChatService
         // Persist user message
         Message::create([
             'conversation_id' => $conversation->id,
-            'role'            => 'user',
-            'content'         => $userMessage,
+            'role' => 'user',
+            'content' => $userMessage,
         ]);
 
         if (! $this->isConfigured()) {
             $reply = $this->mockReply($agent, $userMessage);
             Message::create([
                 'conversation_id' => $conversation->id,
-                'role'            => 'assistant',
-                'content'         => $reply,
+                'role' => 'assistant',
+                'content' => $reply,
             ]);
+
             return $reply;
         }
 
@@ -55,32 +56,33 @@ class AgentChatService
             ->withHeaders(['anthropic-version' => '2023-06-01'])
             ->timeout(30)
             ->post('https://api.anthropic.com/v1/messages', [
-                'model'      => $agent->model,
+                'model' => $agent->model,
                 'max_tokens' => 1024,
-                'system'     => $agent->system_prompt,
-                'messages'   => $history,
+                'system' => $agent->system_prompt,
+                'messages' => $history,
             ]);
 
         if (! $response->successful()) {
             Log::error('AgentChat API error', ['status' => $response->status(), 'agent' => $agent->slug]);
+
             return null;
         }
 
-        $reply       = $response->json('content.0.text', '');
+        $reply = $response->json('content.0.text', '');
         $inputTokens = $response->json('usage.input_tokens', 0);
-        $outTokens   = $response->json('usage.output_tokens', 0);
+        $outTokens = $response->json('usage.output_tokens', 0);
 
         Message::create([
             'conversation_id' => $conversation->id,
-            'role'            => 'assistant',
-            'content'         => $reply,
-            'tokens_used'     => $outTokens,
+            'role' => 'assistant',
+            'content' => $reply,
+            'tokens_used' => $outTokens,
         ]);
 
         AgentUsageLog::create([
-            'user_id'       => $userId,
-            'agent_id'      => $agent->id,
-            'tokens_input'  => $inputTokens,
+            'user_id' => $userId,
+            'agent_id' => $agent->id,
+            'tokens_input' => $inputTokens,
             'tokens_output' => $outTokens,
         ]);
 

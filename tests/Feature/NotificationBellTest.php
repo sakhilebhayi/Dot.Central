@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\NotificationBell;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\User;
@@ -34,7 +35,7 @@ class NotificationBellTest extends TestCase
 
         $this->actingAs($user);
 
-        Livewire::test(\App\Livewire\NotificationBell::class)
+        Livewire::test(NotificationBell::class)
             ->assertSet('open', false)
             ->call('toggle')
             ->assertSet('open', true)

@@ -1,15 +1,19 @@
 <?php
 
-use App\Http\Controllers\Auth\EcosystemAuthController;
 use App\Http\Controllers\AlertController;
+use App\Http\Controllers\Auth\EcosystemAuthController;
 use App\Http\Controllers\ControlRoomController;
 use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
+use App\Models\Agent;
+use App\Models\AgentSkill;
+use App\Models\AgentUsageLog;
+use App\Models\Conversation;
+use App\Models\Message;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Laravel\Jetstream\Jetstream;
-
 
 Route::get('/auth/ecosystem', [EcosystemAuthController::class, 'handle'])->name('ecosystem.auth');
 Route::get('/', function () {
@@ -36,15 +40,15 @@ Route::middleware([
         // Message/AgentUsageLog carry HasUserScope/HasConversationUserScope,
         // so they no longer need the ad-hoc where('user_id', ...) filters
         // that used to live directly in this closure.
-        $totalAgents        = \App\Models\Agent::count();
-        $activeAgents       = \App\Models\Agent::where('is_active', true)->count();
-        $totalConversations = \App\Models\Conversation::count();
-        $totalMessages      = \App\Models\Message::count();
-        $totalTokens        = \App\Models\AgentUsageLog::selectRaw('COALESCE(SUM(tokens_input + tokens_output), 0) as total')
+        $totalAgents = Agent::count();
+        $activeAgents = Agent::where('is_active', true)->count();
+        $totalConversations = Conversation::count();
+        $totalMessages = Message::count();
+        $totalTokens = AgentUsageLog::selectRaw('COALESCE(SUM(tokens_input + tokens_output), 0) as total')
             ->value('total') ?? 0;
-        $totalSkills        = \App\Models\AgentSkill::count();
-        $agents             = \App\Models\Agent::withCount('conversations')->latest()->get();
-        $skills             = \App\Models\AgentSkill::withCount('agents')->get();
+        $totalSkills = AgentSkill::count();
+        $agents = Agent::withCount('conversations')->latest()->get();
+        $skills = AgentSkill::withCount('agents')->get();
 
         return view('dashboard', compact(
             'totalAgents', 'activeAgents', 'totalConversations', 'totalMessages',

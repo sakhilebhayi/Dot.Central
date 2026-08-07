@@ -3,11 +3,12 @@
 namespace Database\Factories;
 
 use App\Models\ControlRoom;
+use App\Models\OperatorSession;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\OperatorSession>
+ * @extends Factory<OperatorSession>
  */
 class OperatorSessionFactory extends Factory
 {
@@ -15,10 +16,10 @@ class OperatorSessionFactory extends Factory
     {
         return [
             'control_room_id' => ControlRoom::factory(),
-            'user_id'         => User::factory(),
-            'shift_label'     => fake()->randomElement(['day', 'night']),
-            'started_at'      => fake()->dateTimeBetween('-1 week', 'now'),
-            'ended_at'        => null,
+            'user_id' => User::factory(),
+            'shift_label' => fake()->randomElement(['day', 'night']),
+            'started_at' => fake()->dateTimeBetween('-1 week', 'now'),
+            'ended_at' => null,
         ];
     }
 }

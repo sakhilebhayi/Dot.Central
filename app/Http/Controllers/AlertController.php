@@ -19,8 +19,8 @@ class AlertController extends Controller
         abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
 
         $validated = $request->validate([
-            'severity'    => ['required', 'string', 'in:'.implode(',', Alert::SEVERITIES)],
-            'title'       => ['required', 'string', 'max:255'],
+            'severity' => ['required', 'string', 'in:'.implode(',', Alert::SEVERITIES)],
+            'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'triggered_at' => ['required', 'date'],
         ]);

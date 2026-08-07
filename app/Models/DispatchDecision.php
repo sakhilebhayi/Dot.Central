@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class DispatchDecision extends Model
 {
     /** @use HasFactory<DispatchDecisionFactory> */
-    use HasFactory, HasControlRoomTeamScope;
+    use HasControlRoomTeamScope, HasFactory;
 
     public const WORKFLOW_TYPES = ['assign', 'reroute', 'hold', 'stagger'];
 

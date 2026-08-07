@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OperatorSession extends Model
 {
     /** @use HasFactory<OperatorSessionFactory> */
-    use HasFactory, HasControlRoomTeamScope;
+    use HasControlRoomTeamScope, HasFactory;
 
     protected $fillable = [
         'control_room_id', 'user_id', 'shift_label', 'started_at', 'ended_at',
@@ -30,7 +30,7 @@ class OperatorSession extends Model
 
     protected $casts = [
         'started_at' => 'datetime',
-        'ended_at'   => 'datetime',
+        'ended_at' => 'datetime',
     ];
 
     public function controlRoom(): BelongsTo

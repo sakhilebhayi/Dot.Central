@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Alert extends Model
 {
     /** @use HasFactory<AlertFactory> */
-    use HasFactory, HasControlRoomTeamScope;
+    use HasControlRoomTeamScope, HasFactory;
 
     public const SEVERITIES = ['info', 'warning', 'critical'];
 
@@ -30,7 +30,7 @@ class Alert extends Model
 
     protected $casts = [
         'triggered_at' => 'datetime',
-        'cleared_at'   => 'datetime',
+        'cleared_at' => 'datetime',
     ];
 
     public function controlRoom(): BelongsTo

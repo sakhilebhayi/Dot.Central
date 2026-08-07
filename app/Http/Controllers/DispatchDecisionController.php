@@ -20,18 +20,18 @@ class DispatchDecisionController extends Controller
 
         $validated = $request->validate([
             'workflow_type' => ['required', 'string', 'in:'.implode(',', DispatchDecision::WORKFLOW_TYPES)],
-            'decided_at'    => ['required', 'date'],
-            'summary'       => ['nullable', 'string', 'max:2000'],
+            'decided_at' => ['required', 'date'],
+            'summary' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $nextSequence = $controlRoom->dispatchDecisions()->max('sequence') + 1;
 
         $controlRoom->dispatchDecisions()->create([
-            'workflow_type'      => $validated['workflow_type'],
-            'sequence'           => $nextSequence,
-            'decided_at'         => $validated['decided_at'],
+            'workflow_type' => $validated['workflow_type'],
+            'sequence' => $nextSequence,
+            'decided_at' => $validated['decided_at'],
             'decided_by_user_id' => $request->user()->id,
-            'summary'            => $validated['summary'] ?? null,
+            'summary' => $validated['summary'] ?? null,
         ]);
 
         return redirect()->route('control-rooms.show', $controlRoom);

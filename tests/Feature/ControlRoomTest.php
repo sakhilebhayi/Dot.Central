@@ -48,12 +48,12 @@ class ControlRoomTest extends TestCase
         $user = User::factory()->withPersonalTeam()->create();
 
         $response = $this->actingAs($user)->post('/control-rooms', [
-            'name'           => 'New Site Control Room',
+            'name' => 'New Site Control Room',
             'mines_site_ref' => 'kolomela',
         ]);
 
         $this->assertDatabaseHas('control_rooms', [
-            'name'    => 'New Site Control Room',
+            'name' => 'New Site Control Room',
             'team_id' => $user->currentTeam->id,
         ]);
 
@@ -69,13 +69,13 @@ class ControlRoomTest extends TestCase
 
         DispatchDecision::factory()->for($controlRoom)->for($user, 'decidedBy')->create([
             'workflow_type' => 'reroute',
-            'sequence'      => 1,
-            'summary'       => 'Rerouted haul truck 12',
+            'sequence' => 1,
+            'summary' => 'Rerouted haul truck 12',
         ]);
 
         Alert::factory()->for($controlRoom)->create([
             'severity' => 'critical',
-            'title'    => 'Sentinel threshold breach',
+            'title' => 'Sentinel threshold breach',
         ]);
 
         $this->actingAs($user)
@@ -118,14 +118,14 @@ class ControlRoomTest extends TestCase
         $controlRoom = ControlRoom::factory()->for($team)->create();
 
         $this->actingAs($owner)->post(route('control-rooms.alerts.store', $controlRoom), [
-            'severity'     => 'critical',
-            'title'        => 'Sentinel threshold breach',
+            'severity' => 'critical',
+            'title' => 'Sentinel threshold breach',
             'triggered_at' => now()->format('Y-m-d\TH:i'),
         ]);
 
         $this->assertDatabaseHas('alerts', [
             'control_room_id' => $controlRoom->id,
-            'title'           => 'Sentinel threshold breach',
+            'title' => 'Sentinel threshold breach',
         ]);
 
         $this->assertSame(1, $teammate->fresh()->unreadNotifications()->count());

@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Schema;
  * notification bell so delivery events from the mining-dispatch domain
  * (alert raised) have somewhere to land. See App\Notifications\*.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('notifications', function (Blueprint $table) {

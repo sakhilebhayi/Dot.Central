@@ -19,9 +19,9 @@ class OperatorSessionController extends Controller
         abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
 
         $validated = $request->validate([
-            'user_id'     => ['required', 'exists:users,id'],
+            'user_id' => ['required', 'exists:users,id'],
             'shift_label' => ['required', 'string', 'max:255'],
-            'started_at'  => ['required', 'date'],
+            'started_at' => ['required', 'date'],
         ]);
 
         $controlRoom->operatorSessions()->create($validated);

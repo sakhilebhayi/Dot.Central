@@ -7,7 +7,7 @@ use App\Models\ControlRoom;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Alert>
+ * @extends Factory<Alert>
  */
 class AlertFactory extends Factory
 {
@@ -15,11 +15,11 @@ class AlertFactory extends Factory
     {
         return [
             'control_room_id' => ControlRoom::factory(),
-            'severity'        => fake()->randomElement(Alert::SEVERITIES),
-            'title'           => fake()->sentence(4),
-            'description'     => fake()->optional()->paragraph(),
-            'triggered_at'    => fake()->dateTimeBetween('-1 week', 'now'),
-            'cleared_at'      => null,
+            'severity' => fake()->randomElement(Alert::SEVERITIES),
+            'title' => fake()->sentence(4),
+            'description' => fake()->optional()->paragraph(),
+            'triggered_at' => fake()->dateTimeBetween('-1 week', 'now'),
+            'cleared_at' => null,
         ];
     }
 

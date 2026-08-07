@@ -5,6 +5,8 @@ namespace App\Livewire\Agents;
 use App\Models\Agent;
 use App\Models\Conversation;
 use App\Services\AgentChatService;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\View\View;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
@@ -12,12 +14,14 @@ use Livewire\Component;
 class AgentChat extends Component
 {
     public Agent $agent;
+
     public ?Conversation $conversation = null;
 
     #[Validate('required|string|max:4000')]
     public string $message = '';
 
     public bool $sending = false;
+
     public ?string $error = null;
 
     public function mount(Agent $agent): void
@@ -29,15 +33,15 @@ class AgentChat extends Component
     {
         $this->conversation = Conversation::firstOrCreate(
             [
-                'user_id'  => auth()->id(),
+                'user_id' => auth()->id(),
                 'agent_id' => $this->agent->id,
             ],
-            ['title' => 'Chat with ' . $this->agent->name]
+            ['title' => 'Chat with '.$this->agent->name]
         );
     }
 
     #[Computed]
-    public function messages(): \Illuminate\Database\Eloquent\Collection
+    public function messages(): Collection
     {
         if (! $this->conversation) {
             return collect();
@@ -55,12 +59,12 @@ class AgentChat extends Component
         $this->validate();
 
         $this->sending = true;
-        $this->error   = null;
-        $userMessage   = $this->message;
+        $this->error = null;
+        $userMessage = $this->message;
         $this->message = '';
 
         $service = app(AgentChatService::class);
-        $reply   = $service->chat($this->conversation, $userMessage, auth()->id());
+        $reply = $service->chat($this->conversation, $userMessage, auth()->id());
 
         if ($reply === null) {
             $this->error = 'The agent failed to respond. Please try again.';
@@ -73,14 +77,14 @@ class AgentChat extends Component
     public function newConversation(): void
     {
         $this->conversation = Conversation::create([
-            'user_id'  => auth()->id(),
+            'user_id' => auth()->id(),
             'agent_id' => $this->agent->id,
-            'title'    => 'Chat with ' . $this->agent->name . ' — ' . now()->format('M j, H:i'),
+            'title' => 'Chat with '.$this->agent->name.' — '.now()->format('M j, H:i'),
         ]);
         unset($this->messages);
     }
 
-    public function render(): \Illuminate\View\View
+    public function render(): View
     {
         return view('livewire.agents.agent-chat');
     }

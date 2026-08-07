@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\DispatchDecision;
+use App\Models\OperatorSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -31,9 +32,9 @@ class ControlRoomController extends Controller
         // team's control rooms at the model level.
         $summary = [
             'activeControlRooms' => $controlRooms->where('is_active', true)->count(),
-            'totalDecisions'     => DispatchDecision::count(),
-            'openAlerts'         => Alert::whereNull('cleared_at')->count(),
-            'activeSessions'     => \App\Models\OperatorSession::whereNull('ended_at')->count(),
+            'totalDecisions' => DispatchDecision::count(),
+            'openAlerts' => Alert::whereNull('cleared_at')->count(),
+            'activeSessions' => OperatorSession::whereNull('ended_at')->count(),
         ];
 
         return view('control-rooms.index', compact('controlRooms', 'summary'));
@@ -47,13 +48,13 @@ class ControlRoomController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name'           => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'mines_site_ref' => ['nullable', 'string', 'max:255'],
         ]);
 
         $controlRoom = $request->user()->currentTeam->controlRooms()->create([
-            'name'           => $validated['name'],
-            'slug'           => Str::slug($validated['name']).'-'.Str::random(6),
+            'name' => $validated['name'],
+            'slug' => Str::slug($validated['name']).'-'.Str::random(6),
             'mines_site_ref' => $validated['mines_site_ref'] ?? null,
         ]);
 
@@ -66,14 +67,14 @@ class ControlRoomController extends Controller
 
         $controlRoom->load([
             'dispatchDecisions' => fn ($q) => $q->latest('decided_at')->limit(20),
-            'alerts'            => fn ($q) => $q->latest('triggered_at')->limit(20),
-            'operatorSessions'  => fn ($q) => $q->latest('started_at')->limit(20),
+            'alerts' => fn ($q) => $q->latest('triggered_at')->limit(20),
+            'operatorSessions' => fn ($q) => $q->latest('started_at')->limit(20),
         ]);
 
         return view('control-rooms.show', [
-            'controlRoom'    => $controlRoom,
-            'workflowTypes'  => DispatchDecision::WORKFLOW_TYPES,
-            'severities'     => Alert::SEVERITIES,
+            'controlRoom' => $controlRoom,
+            'workflowTypes' => DispatchDecision::WORKFLOW_TYPES,
+            'severities' => Alert::SEVERITIES,
         ]);
     }
 
@@ -89,15 +90,15 @@ class ControlRoomController extends Controller
         $this->authorizeAccess($request, $controlRoom);
 
         $validated = $request->validate([
-            'name'           => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'mines_site_ref' => ['nullable', 'string', 'max:255'],
-            'is_active'      => ['sometimes', 'boolean'],
+            'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $controlRoom->update([
-            'name'           => $validated['name'],
+            'name' => $validated['name'],
             'mines_site_ref' => $validated['mines_site_ref'] ?? null,
-            'is_active'      => $request->boolean('is_active'),
+            'is_active' => $request->boolean('is_active'),
         ]);
 
         return redirect()->route('control-rooms.show', $controlRoom);
