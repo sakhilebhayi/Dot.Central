@@ -6,6 +6,7 @@ use App\Http\Controllers\ControlRoomController;
 use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
+use App\Http\Controllers\StaleSessionProposalController;
 use App\Models\Agent;
 use App\Models\AgentSkill;
 use App\Models\AgentUsageLog;
@@ -80,4 +81,9 @@ Route::middleware([
         ->name('operator-sessions.update');
     Route::delete('operator-sessions/{operatorSession}', [OperatorSessionController::class, 'destroy'])
         ->name('operator-sessions.destroy');
+
+    Route::patch('stale-session-proposals/{staleSessionProposal}/end', [StaleSessionProposalController::class, 'end'])
+        ->name('stale-session-proposals.end');
+    Route::patch('stale-session-proposals/{staleSessionProposal}/dismiss', [StaleSessionProposalController::class, 'dismiss'])
+        ->name('stale-session-proposals.dismiss');
 });

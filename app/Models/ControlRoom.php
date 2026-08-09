@@ -48,4 +48,9 @@ class ControlRoom extends Model
     {
         return $this->hasMany(OperatorSession::class);
     }
+
+    public function staleSessionProposals(): HasMany
+    {
+        return $this->hasMany(StaleSessionProposal::class);
+    }
 }

@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces: `StaleSessionProposal` model, `$fillable = ['operator_session_id', 'control_room_id', 'hours_silent', 'status', 'resolved_at', 'resolved_by']`, relations `operatorSession()`, `controlRoom()`, `resolver()`.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 Create `database/migrations/2026_08_09_000001_create_stale_session_proposals_table.php`:
 
@@ -67,12 +67,12 @@ return new class extends Migration
 };
 ```
 
-- [ ] **Step 2: Run the migration**
+- [x] **Step 2: Run the migration**
 
 Run: `php artisan migrate`
 Expected: runs without error.
 
-- [ ] **Step 3: Write the model**
+- [x] **Step 3: Write the model**
 
 Create `app/Models/StaleSessionProposal.php`:
 
@@ -118,7 +118,7 @@ class StaleSessionProposal extends Model
 }
 ```
 
-- [ ] **Step 4: Write the factory**
+- [x] **Step 4: Write the factory**
 
 Create `database/factories/StaleSessionProposalFactory.php`:
 
@@ -149,7 +149,7 @@ class StaleSessionProposalFactory extends Factory
 }
 ```
 
-- [ ] **Step 5: Write a model test**
+- [x] **Step 5: Write a model test**
 
 Create `tests/Unit/Models/StaleSessionProposalTest.php`:
 
@@ -216,16 +216,16 @@ wiring a `Team` + `current_team_id`, which needs an explicit `->save()`
 after `->associate()` to actually persist — easy to get wrong, so this
 plan uses the already-proven pattern instead.
 
-- [ ] **Step 6: Run the tests**
+- [x] **Step 6: Run the tests**
 
 Run: `php artisan test --compact tests/Unit/Models/StaleSessionProposalTest.php`
 Expected: PASS, 2 tests.
 
-- [ ] **Step 7: Run Pint**
+- [x] **Step 7: Run Pint**
 
 Run: `vendor/bin/pint --dirty --format agent`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add database/migrations/2026_08_09_000001_create_stale_session_proposals_table.php \
@@ -492,11 +492,11 @@ Schedule::command(ScanStaleSessions::class)
     ->onOneServer();
 ```
 
-- [ ] **Step 6: Run Pint**
+- [x] **Step 6: Run Pint**
 
 Run: `vendor/bin/pint --dirty --format agent`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add app/Console/Commands/ScanStaleSessions.php routes/console.php \
@@ -534,7 +534,7 @@ EOF
 - Consumes: `StaleSessionProposal` (Task 1).
 - Produces: routes `stale-session-proposals.end`, `stale-session-proposals.dismiss`.
 
-- [ ] **Step 1: Write the failing feature test**
+- [x] **Step 1: Write the failing feature test**
 
 Create `tests/Feature/StaleSessionProposalTest.php`:
 
@@ -593,14 +593,19 @@ class StaleSessionProposalTest extends TestCase
         $this->assertSame('dismissed', $proposal->fresh()->status);
     }
 
-    public function test_a_user_from_a_different_team_is_forbidden(): void
+    public function test_a_user_from_a_different_team_gets_a_404(): void
     {
+        // HasControlRoomTeamScope (see its own docblock) makes a
+        // route-model-bound record belonging to another team invisible
+        // before StaleSessionProposalController's abort_unless() check
+        // ever runs -- a 404, not a 403, matching the identical documented
+        // behavior already established for Alert/OperatorSession.
         ['session' => $session, 'proposal' => $proposal] = $this->makeProposal();
         $outsider = User::factory()->withPersonalTeam()->create();
 
         $this->actingAs($outsider)
             ->patch(route('stale-session-proposals.end', $proposal))
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertNull($session->fresh()->ended_at);
         $this->assertSame('pending', $proposal->fresh()->status);
@@ -608,12 +613,12 @@ class StaleSessionProposalTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `php artisan test --compact tests/Feature/StaleSessionProposalTest.php`
 Expected: FAIL — route `stale-session-proposals.end` doesn't exist yet.
 
-- [ ] **Step 3: Write the controller**
+- [x] **Step 3: Write the controller**
 
 Create `app/Http/Controllers/StaleSessionProposalController.php`:
 
@@ -666,7 +671,7 @@ class StaleSessionProposalController extends Controller
 }
 ```
 
-- [ ] **Step 4: Add the routes**
+- [x] **Step 4: Add the routes**
 
 In `routes/web.php`, add `use App\Http\Controllers\StaleSessionProposalController;`
 to the top import block. Inside the existing authenticated group, after the
@@ -679,12 +684,12 @@ Route::patch('stale-session-proposals/{staleSessionProposal}/dismiss', [StaleSes
     ->name('stale-session-proposals.dismiss');
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `php artisan test --compact tests/Feature/StaleSessionProposalTest.php`
 Expected: PASS, 3 tests, 0 failures.
 
-- [ ] **Step 6: Wire pending proposals into `ControlRoomController::show()`**
+- [x] **Step 6: Wire pending proposals into `ControlRoomController::show()`**
 
 In `app/Http/Controllers/ControlRoomController.php`, inside `show()`, add
 after the existing `$controlRoom->load([...])` call:
@@ -706,7 +711,7 @@ public function staleSessionProposals(): HasMany
 }
 ```
 
-- [ ] **Step 7: Render pending proposals in the view**
+- [x] **Step 7: Render pending proposals in the view**
 
 In `resources/views/control-rooms/show.blade.php`, add a full-width banner
 section immediately after the closing `</p>` of the mines-site/active line
@@ -739,17 +744,17 @@ existing card style exactly:
 @endif
 ```
 
-- [ ] **Step 8: Manual verification**
+- [x] **Step 8: Manual verification**
 
 Per this repo's own no-tinker rule, do not verify with `tinker` or a
 throwaway script — the feature test in Step 5 and the full regression
 (Task 4) already exercise this. Skip manual verification.
 
-- [ ] **Step 9: Run Pint**
+- [x] **Step 9: Run Pint**
 
 Run: `vendor/bin/pint --dirty --format agent`
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add app/Http/Controllers/StaleSessionProposalController.php \

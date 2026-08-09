@@ -9,6 +9,30 @@
             {{ $controlRoom->is_active ? 'Active' : 'Inactive' }}
         </p>
 
+        @if($pendingProposals->isNotEmpty())
+        <div style="background:var(--card-bg);border:1px solid #f59e0b;border-radius:0.875rem;padding:1.25rem;margin-bottom:1.5rem;">
+            <h2 style="font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:700;color:var(--text-primary);margin:0 0 1rem;">Awaiting Review</h2>
+            @foreach($pendingProposals as $proposal)
+                <div style="border-top:1px solid var(--divider);padding:0.6rem 0;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                    <div>
+                        <div style="font-size:0.78rem;color:var(--text-primary);font-weight:600;">{{ $proposal->operatorSession->operator->name ?? 'User #'.$proposal->operatorSession->user_id }} — {{ $proposal->operatorSession->shift_label }}</div>
+                        <div style="font-size:0.68rem;color:var(--text-muted);">No dispatch activity for {{ $proposal->hours_silent }}h</div>
+                    </div>
+                    <div style="display:flex;gap:0.4rem;">
+                        <form method="POST" action="{{ route('stale-session-proposals.end', $proposal) }}">
+                            @csrf @method('PATCH')
+                            <button type="submit" style="background:none;border:none;color:#e11d48;cursor:pointer;font-size:0.68rem;">End Session</button>
+                        </form>
+                        <form method="POST" action="{{ route('stale-session-proposals.dismiss', $proposal) }}">
+                            @csrf @method('PATCH')
+                            <button type="submit" style="background:none;border:none;color:#22c55e;cursor:pointer;font-size:0.68rem;">Dismiss</button>
+                        </form>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+        @endif
+
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;">
 
             {{-- Dispatch decisions --}}

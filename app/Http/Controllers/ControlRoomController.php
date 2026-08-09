@@ -75,10 +75,13 @@ class ControlRoomController extends Controller
             'operatorSessions' => fn ($q) => $q->latest('started_at')->limit(20),
         ]);
 
+        $pendingProposals = $controlRoom->staleSessionProposals()->where('status', 'pending')->with('operatorSession.operator')->get();
+
         return view('control-rooms.show', [
             'controlRoom' => $controlRoom,
             'workflowTypes' => DispatchDecision::WORKFLOW_TYPES,
             'severities' => Alert::SEVERITIES,
+            'pendingProposals' => $pendingProposals,
         ]);
     }
 
