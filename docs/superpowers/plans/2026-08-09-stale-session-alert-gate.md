@@ -261,7 +261,7 @@ EOF
 - Consumes: `OperatorSession` (existing), `DispatchDecision` (existing), `Alert`/`AlertRaisedNotification` (existing), `StaleSessionProposal` (Task 1).
 - Produces: Artisan command `central:scan-stale-sessions`.
 
-- [ ] **Step 1: Write the failing command test**
+- [x] **Step 1: Write the failing command test**
 
 Create `tests/Feature/Console/ScanStaleSessionsCommandTest.php`:
 
@@ -360,12 +360,12 @@ class ScanStaleSessionsCommandTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `php artisan test --compact tests/Feature/Console/ScanStaleSessionsCommandTest.php`
 Expected: FAIL — command `central:scan-stale-sessions` does not exist yet.
 
-- [ ] **Step 3: Write the command**
+- [x] **Step 3: Write the command**
 
 Create `app/Console/Commands/ScanStaleSessions.php`:
 
@@ -418,7 +418,11 @@ class ScanStaleSessions extends Command
 
         $lastDecidedAt = $controlRoom->dispatchDecisions()->max('decided_at');
         $sinceActivity = $lastDecidedAt ? max($session->started_at, $lastDecidedAt) : $session->started_at;
-        $hoursSilent = now()->diffInHours($sinceActivity);
+        // Carbon 3's diffInHours() returns a signed difference by default
+        // (unlike Carbon 2, which was always absolute) -- $sinceActivity is
+        // always in the past here, so pass absolute: true explicitly rather
+        // than relying on either version's default.
+        $hoursSilent = now()->diffInHours($sinceActivity, absolute: true);
 
         if ($hoursSilent < self::ALERT_THRESHOLD_HOURS) {
             return;
@@ -460,12 +464,18 @@ class ScanStaleSessions extends Command
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `php artisan test --compact tests/Feature/Console/ScanStaleSessionsCommandTest.php`
-Expected: PASS, 4 tests, 0 failures.
 
-- [ ] **Step 5: Add the schedule entry**
+First run: 2 passed, 2 failed -- `now()->diffInHours($sinceActivity)`
+returned `-5` for a session started 5 hours ago (Carbon 3.13.0, confirmed
+via `composer show nesbot/carbon`, changed `diffInHours()` to a signed
+result by default; Carbon 2 was always absolute). Fixed with
+`diffInHours($sinceActivity, absolute: true)` (see the corrected Step 3
+code above). Actual after the fix: PASS, 4 tests, 0 failures.
+
+- [x] **Step 5: Add the schedule entry**
 
 `routes/console.php` currently has only the stock `inspire` command. Add:
 

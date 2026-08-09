@@ -41,7 +41,7 @@ This platform's first scheduled command. For every `OperatorSession` that
 is active (`started_at` set, `ended_at` null):
 
 ```
-silentFor = now() - max(startedAt, latestDispatchDecisionInRoom.decided_at ?? startedAt)
+silentFor = now()->diffInHours(max(startedAt, latestDispatchDecisionInRoom.decided_at ?? startedAt), absolute: true)
 
 if silentFor >= 4 hours and no uncleared Alert titled STALE_SESSION_ALERT_TITLE exists for this control room:
     raise Alert(control_room_id, severity: 'warning',
@@ -59,6 +59,19 @@ if silentFor >= 4 hours and no uncleared Alert titled STALE_SESSION_ALERT_TITLE 
 if silentFor >= 8 hours and no pending StaleSessionProposal exists for this operator session:
     StaleSessionProposal::create(operator_session_id, control_room_id, hours_silent, status: 'pending')
 ```
+
+**Correction found during implementation, via a genuinely failing test:**
+`now()->diffInHours($pastTimestamp)` was written assuming Carbon 2's
+always-absolute-value behavior. This repo runs Carbon 3.13.0 (confirmed
+via `composer show nesbot/carbon`, not assumed), where `diffInHours()` and
+the other `diffInX()` methods return a **signed** difference by default —
+`$other - $this`, negative when `$other` is in the past. The first test
+run produced `hoursSilent = -5` for a session started 5 hours ago, which
+silently failed the `>= 4 hours` check every time (no exception, just a
+wrong number) rather than raising the expected alert. Fixed by passing
+Carbon's explicit `absolute: true` named argument, which both Carbon 2 and
+3 support, making the call version-independent rather than relying on
+either version's default.
 
 4 and 8 hours are reasonable, explicit defaults (no existing business rule
 names a shift-silence threshold anywhere in this repo) — both as named
