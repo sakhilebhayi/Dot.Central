@@ -3,6 +3,7 @@
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\EcosystemAuthController;
 use App\Http\Controllers\ControlRoomController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
@@ -86,4 +87,9 @@ Route::middleware([
         ->name('stale-session-proposals.end');
     Route::patch('stale-session-proposals/{staleSessionProposal}/dismiss', [StaleSessionProposalController::class, 'dismiss'])
         ->name('stale-session-proposals.dismiss');
+
+    Route::post('agents/{agent}/conversations', [ConversationController::class, 'store'])
+        ->name('agents.conversations.store');
+    Route::get('agents/{agent}/chat/{conversation}', [ConversationController::class, 'show'])
+        ->name('agents.chat');
 });
