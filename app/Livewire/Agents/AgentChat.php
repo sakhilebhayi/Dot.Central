@@ -68,10 +68,14 @@ class AgentChat extends Component
         $this->message = '';
 
         $service = app(AgentChatService::class);
-        $reply = $service->chat($this->conversation, $userMessage, auth()->id());
+        $result = $service->chat($this->conversation, $userMessage, auth()->id(), function (string $textSoFar) {
+            $this->stream(to: 'reply', content: $textSoFar, replace: true);
+        });
 
-        if ($reply === null) {
+        if ($result['text'] === null) {
             $this->error = 'The agent failed to respond. Please try again.';
+        } elseif (! $result['complete']) {
+            $this->error = "The response was interrupted. What was generated is shown above — please try again if you'd like the rest.";
         }
 
         $this->sending = false;

@@ -13,6 +13,8 @@
             <p style="color:var(--text-muted);font-size:0.8rem;text-align:center;margin-top:2rem;">Say hello to get started.</p>
         @endforelse
 
+        <div wire:stream="reply" style="max-width:70%;align-self:flex-start;background:var(--card-bg);border:1px solid var(--card-border);border-radius:0.9rem;padding:0.65rem 0.9rem;color:var(--text-primary);font-size:0.85rem;line-height:1.5;white-space:pre-wrap;"></div>
+
         <div wire:loading wire:target="send" style="align-self:flex-start;color:var(--text-muted);font-size:0.78rem;">
             {{ $agent->name }} is typing…
         </div>
