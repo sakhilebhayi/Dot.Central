@@ -55,4 +55,12 @@ class Team extends JetstreamTeam
     {
         return $this->hasMany(ControlRoom::class);
     }
+
+    /**
+     * The AI agents owned by this team.
+     */
+    public function agents(): HasMany
+    {
+        return $this->hasMany(Agent::class);
+    }
 }
