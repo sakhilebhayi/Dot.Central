@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AgentController;
+use App\Http\Controllers\AgentKnowledgeController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\EcosystemAuthController;
 use App\Http\Controllers\ControlRoomController;
@@ -62,6 +63,7 @@ Route::middleware([
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
 
     Route::resource('agents', AgentController::class)->except(['destroy']);
+    Route::resource('agent-knowledge', AgentKnowledgeController::class)->only(['index', 'create', 'store', 'destroy']);
 
     // Mining-dispatch domain (MVP scaffold) — control rooms are the tenant
     // root, dispatch decisions/alerts/operator sessions nest underneath.
