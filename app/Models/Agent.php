@@ -35,6 +35,11 @@ class Agent extends Model
         return $this->belongsToMany(AgentSkill::class, 'agent_agent_skill');
     }
 
+    public function knowledge(): BelongsToMany
+    {
+        return $this->belongsToMany(AgentKnowledge::class, 'agent_agent_knowledge');
+    }
+
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);

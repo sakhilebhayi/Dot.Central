@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Agent;
+use App\Models\AgentKnowledge;
 use App\Models\ControlRoom;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -56,5 +57,23 @@ class HasTeamScopeTest extends TestCase
 
         $this->assertNotNull(Agent::find($agent->id));
         $this->assertSame(1, Agent::query()->count());
+    }
+
+    public function test_scope_alone_blocks_cross_team_agent_knowledge_access_even_without_an_explicit_where(): void
+    {
+        $owner = User::factory()->withPersonalTeam()->create();
+        $outsider = User::factory()->withPersonalTeam()->create();
+
+        $doc = AgentKnowledge::factory()->for($owner->currentTeam)->create(['title' => 'Owner Doc']);
+
+        $this->actingAs($outsider);
+
+        $this->assertNull(AgentKnowledge::find($doc->id));
+        $this->assertSame(0, AgentKnowledge::query()->count());
+
+        $this->actingAs($owner);
+
+        $this->assertNotNull(AgentKnowledge::find($doc->id));
+        $this->assertSame(1, AgentKnowledge::query()->count());
     }
 }

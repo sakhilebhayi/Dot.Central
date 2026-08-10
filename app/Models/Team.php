@@ -63,4 +63,13 @@ class Team extends JetstreamTeam
     {
         return $this->hasMany(Agent::class);
     }
+
+    /**
+     * The knowledge documents owned by this team, available to be
+     * assigned to any of the team's agents.
+     */
+    public function agentKnowledge(): HasMany
+    {
+        return $this->hasMany(AgentKnowledge::class);
+    }
 }
