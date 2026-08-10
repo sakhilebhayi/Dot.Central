@@ -15,7 +15,7 @@ class AgentChat extends Component
 {
     public Agent $agent;
 
-    public ?Conversation $conversation = null;
+    public Conversation $conversation;
 
     #[Validate('required|string|max:4000')]
     public string $message = '';
@@ -24,38 +24,42 @@ class AgentChat extends Component
 
     public ?string $error = null;
 
-    public function mount(Agent $agent): void
+    /**
+     * Both an agent and an already-existing conversation are always
+     * provided by the caller (see ConversationController::show) — every
+     * conversation is created explicitly via ConversationController::store
+     * before this component is ever mounted, so there is no ambiguous
+     * "find or create the most recent one" case to handle here.
+     */
+    public function mount(Agent $agent, Conversation $conversation): void
     {
+        abort_unless($conversation->agent_id === $agent->id, 404);
+
         $this->agent = $agent;
+        $this->conversation = $conversation;
     }
 
-    public function startOrContinue(): void
-    {
-        $this->conversation = Conversation::firstOrCreate(
-            [
-                'user_id' => auth()->id(),
-                'agent_id' => $this->agent->id,
-            ],
-            ['title' => 'Chat with '.$this->agent->name]
-        );
-    }
-
+    /**
+     * Deliberately not named messages() — Livewire reserves that exact
+     * method name on every component for custom validation messages
+     * (alongside rules()/validationAttributes()). A #[Computed]
+     * messages() here silently collides with it: the instant #[Validate]
+     * fires on a property update, Livewire calls messages() expecting an
+     * array and gets this Collection instead, crashing with
+     * "array_merge(): Argument #1 must be of type array, ... Collection
+     * given" deep inside Livewire's own validation internals. Found live,
+     * via this component's own test, not by inspection — the pre-existing
+     * code had this exact collision and nothing had ever exercised the
+     * validation path before.
+     */
     #[Computed]
-    public function messages(): Collection
+    public function conversationMessages(): Collection
     {
-        if (! $this->conversation) {
-            return collect();
-        }
-
         return $this->conversation->messages()->orderBy('created_at')->get();
     }
 
     public function send(): void
     {
-        if (! $this->conversation) {
-            $this->startOrContinue();
-        }
-
         $this->validate();
 
         $this->sending = true;
@@ -71,17 +75,7 @@ class AgentChat extends Component
         }
 
         $this->sending = false;
-        unset($this->messages);
-    }
-
-    public function newConversation(): void
-    {
-        $this->conversation = Conversation::create([
-            'user_id' => auth()->id(),
-            'agent_id' => $this->agent->id,
-            'title' => 'Chat with '.$this->agent->name.' — '.now()->format('M j, H:i'),
-        ]);
-        unset($this->messages);
+        unset($this->conversationMessages);
     }
 
     public function render(): View
