@@ -110,7 +110,7 @@
     <aside class="sidebar">
         <div class="sidebar-brand">
             <div class="brand-icon">
-                <img src="{{ asset('images/logo.png') }}" alt="Dot.Central" />
+                <img src="{{ asset('images/mark.png') }}" alt="Dot.Central" />
             </div>
             <div>
                 <div class="brand-name">Dot.Central</div>
