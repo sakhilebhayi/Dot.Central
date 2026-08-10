@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Agent;
+use App\Models\AgentKnowledge;
 use App\Models\AgentUsageLog;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -56,6 +57,8 @@ class AgentChatService
             return ['text' => $reply, 'complete' => true];
         }
 
+        $systemPrompt = $this->buildSystemPrompt($agent, $userMessage);
+
         $history = $conversation->messages()
             ->orderBy('created_at')
             ->get()
@@ -65,7 +68,7 @@ class AgentChatService
         $result = $this->streamAnthropic([
             'model' => $agent->model,
             'max_tokens' => 1024,
-            'system' => $agent->system_prompt,
+            'system' => $systemPrompt,
             'messages' => $history,
         ], $onChunk);
 
@@ -90,6 +93,67 @@ class AgentChatService
         ]);
 
         return ['text' => $result['text'], 'complete' => $result['complete']];
+    }
+
+    /**
+     * Appends up to 3 assigned AgentKnowledge documents whose title or
+     * content matches a word from the user's message, ranked by number of
+     * distinct matched words. Retrieval failure is never a chat failure --
+     * if the search itself throws, log it and fall back to the agent's
+     * plain system_prompt rather than blocking the conversation.
+     */
+    private function buildSystemPrompt(Agent $agent, string $userMessage): string
+    {
+        try {
+            $words = array_unique(array_filter(
+                array_map('strtolower', preg_split('/\s+/', trim($userMessage))),
+                fn ($w) => mb_strlen($w) >= 3
+            ));
+
+            if (empty($words)) {
+                return $agent->system_prompt;
+            }
+
+            // $agent->knowledge() is itself directly query-buildable (all
+            // Eloquent relations proxy query-builder methods) -- calling
+            // ->newQuery() here would have been a real bug: it returns a
+            // fresh, unrelated query against AgentKnowledge's base table,
+            // silently dropping the BelongsToMany pivot join/filtering and
+            // searching every team's documents, not just this agent's
+            // assigned ones. Caught in this plan's own self-review, not
+            // written this way originally -- worth the explicit note so a
+            // future edit doesn't reintroduce it.
+            $matches = $agent->knowledge()
+                ->where(function ($q) use ($words) {
+                    foreach ($words as $word) {
+                        $q->orWhere(fn ($sub) => $sub
+                            ->whereRaw('LOWER(agent_knowledge.title) LIKE ?', ['%'.$word.'%'])
+                            ->orWhereRaw('LOWER(agent_knowledge.content) LIKE ?', ['%'.$word.'%']));
+                    }
+                })
+                ->get()
+                ->map(function (AgentKnowledge $doc) use ($words) {
+                    $haystack = strtolower($doc->title.' '.$doc->content);
+                    $doc->matchCount = collect($words)->filter(fn ($w) => str_contains($haystack, $w))->count();
+
+                    return $doc;
+                })
+                ->filter(fn ($doc) => $doc->matchCount > 0)
+                ->sortByDesc('matchCount')
+                ->take(3);
+
+            if ($matches->isEmpty()) {
+                return $agent->system_prompt;
+            }
+
+            $excerpts = $matches->map(fn ($doc) => "---\n{$doc->title}\n{$doc->content}\n---")->implode("\n");
+
+            return $agent->system_prompt."\n\nRelevant reference material:\n\n".$excerpts;
+        } catch (\Throwable $e) {
+            Log::warning('AgentKnowledge retrieval failed', ['agent' => $agent->slug, 'error' => $e->getMessage()]);
+
+            return $agent->system_prompt;
+        }
     }
 
     /**

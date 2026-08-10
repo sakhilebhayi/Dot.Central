@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Models\Agent;
+use App\Models\AgentKnowledge;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Services\AgentChatService;
@@ -127,5 +128,44 @@ class AgentChatServiceTest extends TestCase
         $this->assertNotNull($result['text']);
         $this->assertCount(1, $chunks);
         $this->assertSame($result['text'], $chunks[0]);
+    }
+
+    public function test_a_matching_assigned_document_is_injected_into_the_system_prompt(): void
+    {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->sseBody(['Sure, 20 days.']), 200),
+        ]);
+        config(['services.anthropic.api_key' => 'test-key']);
+
+        $user = User::factory()->withPersonalTeam()->create();
+        $agent = Agent::factory()->for($user->currentTeam)->create(['system_prompt' => 'You are a helpful HR assistant.']);
+        AgentKnowledge::factory()->for($user->currentTeam)->create([
+            'title' => 'Leave Policy',
+            'content' => 'Employees get 20 days of annual leave.',
+        ])->agents()->attach($agent);
+        $conversation = Conversation::factory()->for($user)->for($agent)->create();
+
+        app(AgentChatService::class)->chat($conversation, 'How many leave days do I get?', $user->id);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request['system'], 'Employees get 20 days of annual leave.')
+                && str_contains($request['system'], 'You are a helpful HR assistant.');
+        });
+    }
+
+    public function test_an_agent_with_no_assigned_documents_sends_the_system_prompt_unchanged(): void
+    {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->sseBody(['Hi!']), 200),
+        ]);
+        config(['services.anthropic.api_key' => 'test-key']);
+
+        $user = User::factory()->withPersonalTeam()->create();
+        $agent = Agent::factory()->for($user->currentTeam)->create(['system_prompt' => 'You are a helpful assistant.']);
+        $conversation = Conversation::factory()->for($user)->for($agent)->create();
+
+        app(AgentChatService::class)->chat($conversation, 'Hi', $user->id);
+
+        Http::assertSent(fn ($request) => $request['system'] === 'You are a helpful assistant.');
     }
 }
