@@ -22,7 +22,7 @@ Dot.Central now hosts two domains side by side in the same codebase:
 1. **AI command centre** — the place teams build, configure, and converse with specialised Claude-powered agents, then route work from other Dot platforms through them.
 2. **Mining-dispatch scaffold (MVP, added 2026-08-01)** — the operational-intelligence data model described in Dot.Brain's `platforms/dot-central.md`: control rooms, dispatch decisions, alerts, and operator sessions. This is a data-model-and-CRUD scaffold only; see §3a and §7 for exactly what is and isn't built.
 
-It is a Laravel 12 application (Livewire 3, Alpine.js, Tailwind, PostgreSQL) with Jetstream-based teams/auth and Sanctum-backed ecosystem SSO.
+It is a Laravel 13 application (Livewire 3, Alpine.js, Tailwind, PostgreSQL) with Jetstream-based teams/auth and Sanctum-backed ecosystem SSO.
 
 **Status:** early build on both domains. AI command-centre core loop — create an agent, start a conversation, chat with it — is genuinely reachable and working as of 2026-08-10 (§7). That corrects this section's own prior claim: earlier versions of this wiki said the AI command-centre was "implemented and running," but that only meant the database schema and `AgentChatService`'s Claude integration existed — there was no route to create an agent, no route to open a conversation, and `AgentChat`'s own Blade view didn't exist at all (would have thrown `ViewNotFoundException` the instant it rendered). Nothing had ever exercised that path, which is why it went unnoticed. Deeper AI-domain features (knowledge-base grounding per agent, multi-agent routing/chaining, streaming responses, per-agent public API endpoints) are named in the README as intended direction but not yet built out in code. The mining-dispatch domain has migrations, models, basic CRUD (controllers + Blade views), factories, and a seeder standing, scoped to Jetstream teams the same way the rest of the app is, plus (2026-08-09) this platform's first background automation — a scheduled command that raises alerts and opens human-reviewed proposals on operator-session inactivity, see §3a — but still no event emission out to an ecosystem event bus, no Dot.Mines integration, and no Knowledge Pack publishing.
 
@@ -30,7 +30,7 @@ It is a Laravel 12 application (Livewire 3, Alpine.js, Tailwind, PostgreSQL) wit
 
 | Layer | Technology |
 |---|---|
-| Framework | Laravel 12, PHP 8.4 |
+| Framework | Laravel 13.17.0, PHP 8.5.9 (confirmed via `php artisan --version`/`composer.lock` 2026-08-10 — "Laravel 12, PHP 8.4" was wrong from this wiki's very first version, 0.2.0, never checked since) |
 | Frontend | Livewire 3, Alpine.js 3, Tailwind CSS |
 | Database | PostgreSQL 16 (shared ecosystem instance) |
 | Auth | Laravel Jetstream (teams) + Sanctum, with `EcosystemAuthController` handling SSO handoff from the InfoDot hub |
