@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUserScope;
+use Database\Factories\ConversationFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +17,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Conversation extends Model
 {
-    use HasUserScope;
+    /** @use HasFactory<ConversationFactory> */
+    use HasFactory, HasUserScope;
 
     protected $fillable = ['user_id', 'agent_id', 'title'];
 

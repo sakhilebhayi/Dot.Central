@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasConversationUserScope;
+use Database\Factories\MessageFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,7 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Message extends Model
 {
-    use HasConversationUserScope;
+    /** @use HasFactory<MessageFactory> */
+    use HasConversationUserScope, HasFactory;
 
     protected $fillable = ['conversation_id', 'role', 'content', 'tokens_used'];
 
