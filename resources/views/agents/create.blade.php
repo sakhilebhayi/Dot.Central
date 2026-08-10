@@ -41,6 +41,23 @@
             </div>
             @endif
 
+            @if($knowledge->isNotEmpty())
+            <div style="margin-bottom:1.5rem;">
+                <x-label value="Knowledge Documents" />
+                <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.4rem;">
+                    @foreach($knowledge as $doc)
+                    <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--text-secondary);">
+                        <input type="checkbox" name="knowledge[]" value="{{ $doc->id }}" {{ in_array($doc->id, old('knowledge', [])) ? 'checked' : '' }} />
+                        {{ $doc->title }}
+                    </label>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+            <p style="font-size:0.72rem;color:var(--text-muted);margin:-1rem 0 1.5rem;">
+                <a href="{{ route('agent-knowledge.create') }}" style="color:var(--text-muted);">+ Upload a new document</a>
+            </p>
+
             <x-button>Create Agent</x-button>
         </form>
     </div>

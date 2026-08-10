@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Agent;
+use App\Models\AgentKnowledge;
 use App\Models\AgentSkill;
 use App\Models\Conversation;
 use App\Models\User;
@@ -54,6 +55,23 @@ class AgentControllerTest extends TestCase
 
         $agent = Agent::where('name', 'Research Assistant')->firstOrFail();
         $this->assertTrue($agent->skills->contains($skill));
+        $response->assertRedirect(route('agents.show', $agent));
+    }
+
+    public function test_user_can_create_an_agent_with_assigned_knowledge(): void
+    {
+        $user = User::factory()->withPersonalTeam()->create();
+        $doc = AgentKnowledge::factory()->for($user->currentTeam)->create();
+
+        $response = $this->actingAs($user)->post('/agents', [
+            'name' => 'Support Bot',
+            'system_prompt' => 'You are a support agent.',
+            'model' => 'claude-sonnet-4-6',
+            'knowledge' => [$doc->id],
+        ]);
+
+        $agent = Agent::where('name', 'Support Bot')->firstOrFail();
+        $this->assertTrue($agent->knowledge->contains($doc));
         $response->assertRedirect(route('agents.show', $agent));
     }
 

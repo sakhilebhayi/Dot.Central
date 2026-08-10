@@ -28,8 +28,11 @@ class AgentController extends Controller
     public function create(): View
     {
         $skills = AgentSkill::orderBy('name')->get();
+        $knowledge = auth()->user()->currentTeam
+            ? auth()->user()->currentTeam->agentKnowledge()->latest()->get()
+            : collect();
 
-        return view('agents.create', compact('skills'));
+        return view('agents.create', compact('skills', 'knowledge'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -41,6 +44,8 @@ class AgentController extends Controller
             'model' => ['nullable', 'string', 'max:255'],
             'skills' => ['nullable', 'array'],
             'skills.*' => ['integer', 'exists:agent_skills,id'],
+            'knowledge' => ['nullable', 'array'],
+            'knowledge.*' => ['integer', 'exists:agent_knowledge,id'],
         ]);
 
         abort_unless($request->user()->currentTeam, 403, 'You need a team before creating an agent.');
@@ -54,6 +59,7 @@ class AgentController extends Controller
         ]);
 
         $agent->skills()->sync($validated['skills'] ?? []);
+        $agent->knowledge()->sync($validated['knowledge'] ?? []);
 
         return redirect()->route('agents.show', $agent);
     }
@@ -68,10 +74,13 @@ class AgentController extends Controller
 
     public function edit(Agent $agent): View
     {
-        $agent->load('skills');
+        $agent->load('skills', 'knowledge');
         $skills = AgentSkill::orderBy('name')->get();
+        $knowledge = auth()->user()->currentTeam
+            ? auth()->user()->currentTeam->agentKnowledge()->latest()->get()
+            : collect();
 
-        return view('agents.edit', compact('agent', 'skills'));
+        return view('agents.edit', compact('agent', 'skills', 'knowledge'));
     }
 
     public function update(Request $request, Agent $agent): RedirectResponse
@@ -84,6 +93,8 @@ class AgentController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'skills' => ['nullable', 'array'],
             'skills.*' => ['integer', 'exists:agent_skills,id'],
+            'knowledge' => ['nullable', 'array'],
+            'knowledge.*' => ['integer', 'exists:agent_knowledge,id'],
         ]);
 
         $agent->update([
@@ -95,6 +106,7 @@ class AgentController extends Controller
         ]);
 
         $agent->skills()->sync($validated['skills'] ?? []);
+        $agent->knowledge()->sync($validated['knowledge'] ?? []);
 
         return redirect()->route('agents.show', $agent);
     }
