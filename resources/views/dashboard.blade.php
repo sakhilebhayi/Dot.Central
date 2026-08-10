@@ -7,7 +7,7 @@
                 <h1 style="font-family:'Syne',sans-serif;font-size:1.625rem;font-weight:800;color:var(--text-primary);margin:0 0 0.25rem;">Agent Hub Dashboard</h1>
                 <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Manage AI agents, monitor conversations and track usage across the Dot ecosystem.</p>
             </div>
-            <a href="#" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.65rem 1.35rem;border-radius:9999px;background:linear-gradient(135deg,#e11d48,#9f1239);font-family:'Syne',sans-serif;font-size:0.8rem;font-weight:700;color:#fff;text-decoration:none;box-shadow:0 8px 20px rgba(225,29,72,0.25);white-space:nowrap;">
+            <a href="{{ route('agents.create') }}" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.65rem 1.35rem;border-radius:9999px;background:linear-gradient(135deg,#e11d48,#9f1239);font-family:'Syne',sans-serif;font-size:0.8rem;font-weight:700;color:#fff;text-decoration:none;box-shadow:0 8px 20px rgba(225,29,72,0.25);white-space:nowrap;">
                 <span class="material-symbols-rounded" style="font-size:18px;">add_circle</span>
                 New Agent
             </a>
@@ -51,7 +51,7 @@
                         <span style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;color:var(--text-primary);">Agents</span>
                         <span style="font-size:0.65rem;padding:0.15rem 0.5rem;border-radius:9999px;background:rgba(225,29,72,0.15);color:#fda4af;font-weight:700;">{{ $agents->count() }}</span>
                     </div>
-                    <a href="#" style="font-size:0.72rem;color:#e11d48;text-decoration:none;font-weight:600;">View all</a>
+                    <a href="{{ route('agents.index') }}" style="font-size:0.72rem;color:#e11d48;text-decoration:none;font-weight:600;">View all</a>
                 </div>
 
                 @if($agents->isEmpty())
@@ -61,7 +61,7 @@
                     </div>
                     <div style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:var(--text-primary);margin-bottom:0.5rem;">No agents yet</div>
                     <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 1.5rem;">Create your first AI agent to get started with the Dot ecosystem.</p>
-                    <a href="#" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.6rem 1.25rem;border-radius:9999px;background:linear-gradient(135deg,#e11d48,#9f1239);font-family:'Syne',sans-serif;font-size:0.78rem;font-weight:700;color:#fff;text-decoration:none;">
+                    <a href="{{ route('agents.create') }}" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.6rem 1.25rem;border-radius:9999px;background:linear-gradient(135deg,#e11d48,#9f1239);font-family:'Syne',sans-serif;font-size:0.78rem;font-weight:700;color:#fff;text-decoration:none;">
                         <span class="material-symbols-rounded" style="font-size:16px;">add_circle</span>
                         Create your first agent
                     </a>
@@ -130,7 +130,7 @@
                                     <span style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);">{{ number_format($agent->conversations_count) }}</span>
                                 </td>
                                 <td style="padding:1rem 1.5rem;text-align:right;">
-                                    <a href="#" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.9rem;border-radius:9999px;border:1px solid rgba(225,29,72,0.35);color:#fda4af;font-size:0.7rem;font-weight:700;text-decoration:none;font-family:'Syne',sans-serif;transition:all 0.15s;" onmouseover="this.style.background='rgba(225,29,72,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <a href="{{ route('agents.show', $agent) }}" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.9rem;border-radius:9999px;border:1px solid rgba(225,29,72,0.35);color:#fda4af;font-size:0.7rem;font-weight:700;text-decoration:none;font-family:'Syne',sans-serif;transition:all 0.15s;" onmouseover="this.style.background='rgba(225,29,72,0.1)'" onmouseout="this.style.background='transparent'">
                                         Open
                                         <span class="material-symbols-rounded" style="font-size:14px;">arrow_forward</span>
                                     </a>
@@ -193,7 +193,7 @@
                 <div style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--text-primary);margin-bottom:0.35rem;">Get started with Dot.Central</div>
                 <p style="font-size:0.8rem;color:var(--text-muted);margin:0;max-width:480px;">Create AI agents, assign skills, and deploy them across the Dot ecosystem. Your agents can be wired into Dot.Tasks, Dot.Finance, and every other platform in the hub.</p>
             </div>
-            <a href="#" style="flex-shrink:0;display:inline-flex;align-items:center;gap:0.5rem;padding:0.75rem 1.5rem;border-radius:9999px;background:linear-gradient(135deg,#e11d48,#9f1239);font-family:'Syne',sans-serif;font-size:0.82rem;font-weight:700;color:#fff;text-decoration:none;box-shadow:0 8px 24px rgba(225,29,72,0.3);white-space:nowrap;">
+            <a href="{{ route('agents.create') }}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:0.5rem;padding:0.75rem 1.5rem;border-radius:9999px;background:linear-gradient(135deg,#e11d48,#9f1239);font-family:'Syne',sans-serif;font-size:0.82rem;font-weight:700;color:#fff;text-decoration:none;box-shadow:0 8px 24px rgba(225,29,72,0.3);white-space:nowrap;">
                 <span class="material-symbols-rounded" style="font-size:18px;">rocket_launch</span>
                 Create Your First Agent
             </a>

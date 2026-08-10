@@ -128,6 +128,11 @@
                 <span class="material-symbols-rounded nav-icon">dashboard</span>
                 Dashboard
             </a>
+            <div class="nav-section-label">AI Agents</div>
+            <a href="{{ route('agents.index') }}" class="nav-item {{ request()->routeIs('agents.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">smart_toy</span>
+                Agents
+            </a>
             <div class="nav-section-label">Mining Dispatch</div>
             <a href="{{ route('control-rooms.index') }}" class="nav-item {{ request()->routeIs('control-rooms.*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">satellite_alt</span>
