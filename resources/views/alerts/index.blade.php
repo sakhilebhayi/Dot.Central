@@ -8,6 +8,7 @@
             </div>
         </div>
         @if (session('status'))<div class="dot-msg dot-msg--ok" role="status"><div class="dot-msg__title">{{ session('status') }}</div></div>@endif
+        @if (session('warning'))<div class="dot-msg dot-msg--warning" role="alert"><div class="dot-msg__title">{{ session('warning') }}</div></div>@endif
         <x-validation-errors style="margin-bottom:1rem;" />
         <form method="GET" class="dot-panel" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;padding:0.75rem 1rem;margin-bottom:1.25rem;">
             <select name="room" class="dot-input" style="width:auto;"><option value="">All control rooms</option>@foreach($rooms as $r)<option value="{{ $r->id }}" @selected(($filters['room'] ?? null) == $r->id)>{{ $r->name }}</option>@endforeach</select>

@@ -68,9 +68,9 @@ class AlertController extends Controller
     public function acknowledge(Request $request, Alert $alert): RedirectResponse
     {
         $this->authorize('acknowledge', $alert);
-        $this->workflow->acknowledge($alert, $request->user(), $request->boolean('push'));
+        $outcome = $this->workflow->acknowledge($alert, $request->user(), $request->boolean('push'));
 
-        return back()->with('status', 'Acknowledged.');
+        return back()->with($outcome->requested && ! $outcome->pushed ? 'warning' : 'status', $outcome->message('Acknowledged.'));
     }
 
     public function assign(Request $request, Alert $alert): RedirectResponse
@@ -96,9 +96,9 @@ class AlertController extends Controller
     {
         $this->authorize('resolve', $alert);
         $validated = $request->validate(['note' => ['nullable', 'string', 'max:1000']]);
-        $this->workflow->resolve($alert, $request->user(), $validated['note'] ?? null, $request->boolean('push'));
+        $outcome = $this->workflow->resolve($alert, $request->user(), $validated['note'] ?? null, $request->boolean('push'));
 
-        return back()->with('status', 'Resolved.');
+        return back()->with($outcome->requested && ! $outcome->pushed ? 'warning' : 'status', $outcome->message('Resolved.'));
     }
 
     /** Legacy "clear" action kept for the room page. */

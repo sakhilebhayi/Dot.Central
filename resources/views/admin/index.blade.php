@@ -11,7 +11,7 @@
         @if (session('status'))<div class="dot-msg dot-msg--ok" role="status"><div class="dot-msg__title">{{ session('status') }}</div></div>@endif
         <x-validation-errors style="margin-bottom:1rem;" />
         <div class="dot-stack">
-        <div class="dot-panels dot-panels--split" id="shifts">
+        <div class="dot-split" id="shifts">
             <div class="dot-panel dot-panel--flush">
                 <div class="dot-panel__head"><h2 class="dot-panel__title">Shift types</h2></div>
                 <div class="dot-table-wrap"><table class="dot-ledger"><thead><tr><th>Code</th><th>Name</th><th>Start</th><th>End</th><th>Crosses midnight</th><th>Active</th><th></th></tr></thead><tbody>
@@ -27,7 +27,7 @@
                 <div><x-button>Add</x-button></div>
             </form>
         </div>
-        <div class="dot-panels dot-panels--split" id="reasons">
+        <div class="dot-split" id="reasons">
             <div class="dot-panel dot-panel--flush">
                 <div class="dot-panel__head"><h2 class="dot-panel__title">Stoppage reasons</h2></div>
                 <div class="dot-table-wrap"><table class="dot-ledger"><thead><tr><th>Code</th><th>Reason</th><th>Category</th><th>Availability</th><th>Description</th><th>Active</th><th></th></tr></thead><tbody>
@@ -51,7 +51,7 @@
             @foreach($settingKeys as $key)
                 <div><x-label :for="$key" :value="$key" /><x-input :id="$key" :name="$key" type="number" step="0.5" :value="old($key, $settings[$key] ?? 0)" required /></div>
             @endforeach
-            <div style="grid-column:1/-1;"><x-label for="reason" value="Reason for the change (audited)" /><x-input id="reason" name="reason" required /></div>
+            <div style="grid-column:1/-1;"><x-label for="reason" value="Reason (audited)" /><x-input id="reason" name="reason" required /></div>
             <div style="grid-column:1/-1;"><x-button>Save thresholds</x-button></div>
             <p class="dot-readout__context" style="grid-column:1/-1;">offline_minutes → EQ-01 · stale_minutes → TEL-02 · idle_minutes_threshold → EQ-04 · zero_loads_hours → EQ-03 · classify_after_minutes → DT-01 · unack_minutes → AL-01 · engine_hours_budget → the variance column on Engine Hours.</p>
         </form>

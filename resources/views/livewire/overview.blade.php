@@ -41,7 +41,7 @@
         <div class="dot-panel dot-readout"><span class="dot-readout__label">Review · Info</span><span class="dot-readout__value">{{ Format::integer($exceptionCounts['REVIEW'] ?? 0) }}<span class="dot-readout__unit">· {{ $exceptionCounts['INFO'] ?? 0 }}</span></span><span class="dot-readout__context">{{ $alerts->count() }} open alerts</span></div>
     </div>
 
-    <div class="dot-panels dot-panels--split">
+    <div class="dot-split">
         <div class="dot-stack">
             <div class="dot-panel dot-panel--flush">
                 <div class="dot-panel__head"><h2 class="dot-panel__title">Exceptions needing attention</h2><a href="{{ route('exceptions.index', ['room' => $room->id]) }}" class="dot-panel__action">All</a></div>

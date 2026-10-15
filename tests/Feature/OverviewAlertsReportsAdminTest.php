@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Alert;
+use App\Models\AuditEntry;
 use App\Models\ControlRoom;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
@@ -106,6 +107,20 @@ class OverviewAlertsReportsAdminTest extends TestCase
         $this->actingAs($this->operator)->post(route('control-rooms.alerts.store', $this->room), $payload)->assertForbidden();
         $this->actingAs($this->supervisor)->post(route('control-rooms.alerts.store', $this->room), $payload)->assertRedirect();
         $this->assertSame('manual', Alert::where('title', 'Radio outage')->firstOrFail()->source);
+    }
+
+    public function test_a_refused_push_to_dot_mines_is_reported_not_hidden(): void
+    {
+        Http::fake(['http://mines.test/api/v1/alerts/78/resolve' => Http::response(['message' => 'forbidden'], 403)]);
+        $alert = Alert::factory()->for($this->room)->create(['source' => 'dot_mines', 'external_id' => '78', 'severity' => 'warning', 'title' => 'Caution code']);
+
+        $response = $this->actingAs($this->supervisor)->from(route('alerts.index'))->post(route('alerts.resolve', $alert), ['note' => 'Cleared', 'push' => 1]);
+
+        $response->assertRedirect(route('alerts.index'))->assertSessionHas('warning', fn (string $m) => str_contains($m, 'NOT updated'));
+        $this->assertDatabaseHas('alert_events', ['alert_id' => $alert->id, 'action' => 'resolved', 'pushed_to_source' => false]);
+        $this->assertNotNull($alert->fresh()->cleared_at);
+        $this->assertDatabaseHas('audit_log', ['entity_type' => Alert::class, 'entity_id' => $alert->id, 'action' => 'updated']);
+        $this->assertStringContainsString('Dot.Mines not updated', (string) AuditEntry::where('entity_type', Alert::class)->where('entity_id', $alert->id)->where('action', 'updated')->latest('id')->value('reason'));
     }
 
     public function test_reports_render_from_persisted_records_and_export_is_gated_and_audited(): void
