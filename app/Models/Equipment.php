@@ -156,8 +156,15 @@ class Equipment extends Model
     /**
      * The newest provider clock we hold for this machine.
      */
+    /** Set when Dot.Mines supplied its own last-heard clock for this save; the recompute then keeps it. */
+    public bool $providerLastHeard = false;
+
     public function recomputeLastHeard(): void
     {
+        if ($this->providerLastHeard) {
+            return;
+        }
+
         $candidates = array_filter([$this->location_recorded_at, $this->engine_hours_recorded_at]);
         $this->last_heard_at = $candidates === [] ? null : max($candidates);
     }

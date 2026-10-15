@@ -197,6 +197,7 @@ final class MinesSynchroniser
         }
 
         $equipment->applyEquipmentType(isset($row['equipment_type']) ? (string) $row['equipment_type'] : null);
+        $this->applyProviderFacts($connection, $equipment, $row);
         $equipment->recomputeLastHeard();
         $equipment->save();
         $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
@@ -315,11 +316,48 @@ final class MinesSynchroniser
         }
 
         $equipment->applyEquipmentType(isset($resource['equipment_type']) ? (string) $resource['equipment_type'] : null);
+        $this->applyProviderFacts($connection, $equipment, $resource);
         $equipment->recomputeLastHeard();
         $equipment->save();
         $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
 
         return $equipment;
+    }
+
+    /**
+     * What Dot.Mines now states about a machine (I-03, I-04, I-06): its own
+     * last-heard clock, the provider's declared cadence, the newest hour-meter
+     * reading, and the fuel unit. Each is applied only when present, so an
+     * older Dot.Mines still works; the engine-hour reading lands as a metric
+     * row so every derivation reads it the same way as the metrics endpoint.
+     *
+     * @param  array<string, mixed>  $facts  a fleet sync row or a MachineResource
+     */
+    private function applyProviderFacts(MinesConnection $connection, Equipment $equipment, array $facts): void
+    {
+        if (isset($facts['last_heard_at']) && is_string($facts['last_heard_at'])) {
+            $equipment->last_heard_at = Carbon::parse($facts['last_heard_at']);
+            $equipment->providerLastHeard = true;
+        }
+
+        if (isset($facts['fuel_level_unit']) && is_string($facts['fuel_level_unit'])) {
+            $equipment->fuel_level_unit = $facts['fuel_level_unit'];
+        }
+
+        if (isset($facts['provider_cadence_seconds']) && is_numeric($facts['provider_cadence_seconds']) && (int) $facts['provider_cadence_seconds'] > 0 && (int) $facts['provider_cadence_seconds'] !== $connection->provider_cadence_seconds) {
+            $connection->forceFill(['provider_cadence_seconds' => (int) $facts['provider_cadence_seconds']])->save();
+        }
+
+        if (isset($facts['operating_hours'], $facts['operating_hours_recorded_at']) && is_numeric($facts['operating_hours']) && is_string($facts['operating_hours_recorded_at'])) {
+            if (! $equipment->exists) {
+                $equipment->save();
+            }
+            $this->applyMetrics($equipment, [['recorded_at' => $facts['operating_hours_recorded_at'], 'operating_hours' => (float) $facts['operating_hours'], 'raw_data' => []]]);
+            $equipment->refresh();
+            if (isset($facts['last_heard_at']) && is_string($facts['last_heard_at'])) {
+                $equipment->last_heard_at = Carbon::parse($facts['last_heard_at']);
+            }
+        }
     }
 
     /**
@@ -469,7 +507,8 @@ final class MinesSynchroniser
                 'mines_metadata' => $resource['metadata'] ?? null,
             ], fn ($v) => $v !== null),
             'triggered_at' => $alert->exists ? $alert->triggered_at : (isset($resource['triggered_at']) ? Carbon::parse($resource['triggered_at']) : now()),
-            'source_triggered_at' => isset($resource['triggered_at']) ? Carbon::parse($resource['triggered_at']) : null,
+            // Dot.Mines publishes the provider's own time since I-07; before that, ingest time was the best available.
+            'source_triggered_at' => isset($resource['source_triggered_at']) ? Carbon::parse($resource['source_triggered_at']) : (isset($resource['triggered_at']) ? Carbon::parse($resource['triggered_at']) : null),
             'cleared_at' => ($resource['status'] ?? null) === 'resolved' ? ($resolvedAt ?? now()) : null,
         ]);
 
