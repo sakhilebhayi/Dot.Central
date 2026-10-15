@@ -24,8 +24,8 @@ class MiningDispatchSeeder extends Seeder
 
         $controlRoom = ControlRoom::factory()->create([
             'team_id' => $team->id,
-            'name' => 'Kolomela Control Room',
-            'mines_site_ref' => 'kolomela',
+            'name' => 'Demo Control Room',
+            'mines_site_ref' => 'demo-site',
         ]);
 
         $operator = User::first() ?? User::factory()->create();
@@ -42,13 +42,13 @@ class MiningDispatchSeeder extends Seeder
         Alert::factory()->create([
             'control_room_id' => $controlRoom->id,
             'severity' => 'critical',
-            'title' => 'Haul-cycle variance above threshold',
+            'title' => 'Telemetry missing on three haul units',
         ]);
 
         Alert::factory()->cleared()->create([
             'control_room_id' => $controlRoom->id,
             'severity' => 'warning',
-            'title' => 'Moisture-flagged shift — reroute clustering',
+            'title' => 'Sync completed with partial data',
         ]);
 
         OperatorSession::factory()->create([

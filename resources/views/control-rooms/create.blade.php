@@ -14,7 +14,7 @@
 
             <div style="margin-bottom:1.5rem;">
                 <x-label for="mines_site_ref" value="Dot.Mines Site Reference (optional)" />
-                <x-input id="mines_site_ref" name="mines_site_ref" type="text" class="mt-1 block w-full" value="{{ old('mines_site_ref') }}" placeholder="e.g. kolomela" />
+                <x-input id="mines_site_ref" name="mines_site_ref" type="text" class="mt-1 block w-full" value="{{ old('mines_site_ref') }}" placeholder="e.g. north-pit" />
             </div>
 
             <x-button>Create Control Room</x-button>

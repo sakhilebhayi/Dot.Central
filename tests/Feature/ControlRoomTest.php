@@ -30,7 +30,7 @@ class ControlRoomTest extends TestCase
         $user = User::factory()->withPersonalTeam()->create();
         $team = $user->currentTeam;
 
-        $controlRoom = ControlRoom::factory()->for($team)->create(['name' => 'Kolomela Control Room']);
+        $controlRoom = ControlRoom::factory()->for($team)->create(['name' => 'Demo Control Room']);
         DispatchDecision::factory()->for($controlRoom)->for($user, 'decidedBy')->create();
         Alert::factory()->for($controlRoom)->create();
         OperatorSession::factory()->for($controlRoom)->for($user, 'operator')->create();
@@ -38,7 +38,7 @@ class ControlRoomTest extends TestCase
         $this->actingAs($user)
             ->get('/control-rooms')
             ->assertOk()
-            ->assertSee('Kolomela Control Room')
+            ->assertSee('Demo Control Room')
             ->assertSee('Active Control Rooms')
             ->assertSee('Open Alerts');
     }
@@ -49,7 +49,7 @@ class ControlRoomTest extends TestCase
 
         $response = $this->actingAs($user)->post('/control-rooms', [
             'name' => 'New Site Control Room',
-            'mines_site_ref' => 'kolomela',
+            'mines_site_ref' => 'north-pit',
         ]);
 
         $this->assertDatabaseHas('control_rooms', [
