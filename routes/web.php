@@ -9,6 +9,8 @@ use App\Http\Controllers\ControlRoomController;
 use App\Http\Controllers\ControlRoomMemberController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DispatchDecisionController;
+use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\IntegrationHealthController;
 use App\Http\Controllers\MinesConnectionController;
 use App\Http\Controllers\MinesWebhookController;
 use App\Http\Controllers\NotificationController;
@@ -69,6 +71,13 @@ Route::middleware([
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
+
+    Route::get('/health', [IntegrationHealthController::class, 'index'])->name('health.index');
+    Route::post('/health/connections/{connection}/sync', [IntegrationHealthController::class, 'sync'])->name('health.sync');
+    Route::post('/health/connections/{connection}/test', [IntegrationHealthController::class, 'test'])->name('health.test');
+
+    Route::get('control-rooms/{controlRoom}/equipment', [EquipmentController::class, 'index'])->name('control-rooms.equipment.index');
+    Route::get('control-rooms/{controlRoom}/equipment/{equipment}', [EquipmentController::class, 'show'])->name('control-rooms.equipment.show');
 
     Route::resource('agents', AgentController::class)->except(['destroy']);
     Route::resource('agent-knowledge', AgentKnowledgeController::class)->only(['index', 'create', 'store', 'destroy']);

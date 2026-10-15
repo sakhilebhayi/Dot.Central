@@ -24,6 +24,7 @@ class IntegrationWebhookDelivery extends Model
         'occurred_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<MinesConnection, $this> */
     public function connection(): BelongsTo
     {
         return $this->belongsTo(MinesConnection::class, 'mines_connection_id');

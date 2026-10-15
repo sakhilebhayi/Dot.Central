@@ -60,11 +60,13 @@ class MinesConnection extends Model
         'last_failure_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<ControlRoom, $this> */
     public function controlRoom(): BelongsTo
     {
         return $this->belongsTo(ControlRoom::class);
     }
 
+    /** @return HasMany<IntegrationSyncRun, $this> */
     public function syncRuns(): HasMany
     {
         return $this->hasMany(IntegrationSyncRun::class);

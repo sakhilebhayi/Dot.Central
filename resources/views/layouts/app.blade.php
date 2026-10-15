@@ -67,6 +67,12 @@
                 Audit Log
             </span>
             @endcan
+            @can('view-health')
+            <a href="{{ route('health.index') }}" class="nav-item {{ request()->routeIs('health.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">monitor_heart</span>
+                Health
+            </a>
+            @endcan
             <div class="nav-section-label">AI Agents</div>
             <a href="{{ route('agents.index') }}" class="nav-item {{ request()->routeIs('agents.*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">smart_toy</span>

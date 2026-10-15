@@ -27,6 +27,7 @@ class EquipmentHourReading extends Model
         'ingested_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<Equipment, $this> */
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(Equipment::class);

@@ -29,7 +29,7 @@ final class MinesClient
      * GET /sync — delta cursor over the given scopes.
      *
      * @param  list<string>  $scopes  fleet|production|notifications|reference
-     * @return array{version:int, server_time:string, changes:array<string, list<array<string, mixed>>>, deleted:list<array{scope:string, id:int}>, has_more:bool}
+     * @return array{version:int, server_time:string, changes:array<string, list<array<string, mixed>>>, deleted:list<array<string, mixed>>, has_more:bool}
      */
     public function sync(int $since, array $scopes): array
     {

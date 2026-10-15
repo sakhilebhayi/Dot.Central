@@ -112,8 +112,14 @@ class ShellStateBar extends Component
         }
 
         if ($statuses->every(fn (string $status) => $status === 'verified')) {
-            $this->dataLink = 'Dot.Mines: '.$count.' link'.($count === 1 ? '' : 's').' verified';
-            $this->dataLinkLevel = 'ok';
+            $staleAfter = now()->subMinutes(3 * max(1, (int) config('mines.sync_interval_minutes', 5)));
+            $stale = MinesConnection::query()->whereIn('control_room_id', ControlRoom::accessibleBy(Auth::user())->pluck('id'))
+                ->where('status', 'verified')
+                ->where(fn ($q) => $q->whereNull('last_success_at')->orWhere('last_success_at', '<', $staleAfter))
+                ->exists();
+
+            $this->dataLink = 'Dot.Mines: '.$count.' link'.($count === 1 ? '' : 's').($stale ? ' stale' : ' verified');
+            $this->dataLinkLevel = $stale ? 'warn' : 'ok';
 
             return;
         }

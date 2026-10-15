@@ -60,6 +60,8 @@ class ControlRoom extends Model
 
     /**
      * Machines mirrored from Dot.Mines into this room.
+     *
+     * @return HasMany<Equipment, $this>
      */
     public function equipment(): HasMany
     {
@@ -68,6 +70,8 @@ class ControlRoom extends Model
 
     /**
      * The Dot.Mines connection (one per room), if configured.
+     *
+     * @return HasOne<MinesConnection, $this>
      */
     public function minesConnection(): HasOne
     {

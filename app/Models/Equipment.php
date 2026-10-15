@@ -67,16 +67,19 @@ class Equipment extends Model
         'retired_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<ControlRoom, $this> */
     public function controlRoom(): BelongsTo
     {
         return $this->belongsTo(ControlRoom::class);
     }
 
+    /** @return HasMany<EquipmentHourReading, $this> */
     public function hourReadings(): HasMany
     {
         return $this->hasMany(EquipmentHourReading::class);
     }
 
+    /** @return HasMany<Alert, $this> */
     public function alerts(): HasMany
     {
         return $this->hasMany(Alert::class);

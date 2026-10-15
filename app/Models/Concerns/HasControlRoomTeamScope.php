@@ -30,7 +30,7 @@ trait HasControlRoomTeamScope
     {
         static::addGlobalScope('control_room_team', function (Builder $builder): void {
             if (Auth::check() && Auth::user()->currentTeam) {
-                $teamId = Auth::user()->currentTeam->id;
+                $teamId = Auth::user()->currentTeam->getKey();
                 $builder->whereHas('controlRoom', function (Builder $q) use ($teamId): void {
                     $q->where('team_id', $teamId);
                 });

@@ -43,6 +43,7 @@ class Alert extends Model
         return $this->belongsTo(ControlRoom::class);
     }
 
+    /** @return BelongsTo<Equipment, $this> */
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(Equipment::class);

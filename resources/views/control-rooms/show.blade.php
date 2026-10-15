@@ -17,6 +17,8 @@
             @can('manage', $controlRoom)
                 <a href="{{ route('control-rooms.connection.edit', $controlRoom) }}" style="color:var(--accent);text-decoration:none;">Configure connection →</a>
             @endcan
+            <span>&middot;</span>
+            <a href="{{ route('control-rooms.equipment.index', $controlRoom) }}" style="color:var(--accent);text-decoration:none;">Equipment ({{ $controlRoom->equipment()->whereNull('retired_at')->count() }}) →</a>
         </p>
         @if (session('status'))
             <div style="margin:-1rem 0 1.5rem;color:var(--ok);font-size:0.8rem;">{{ session('status') }}</div>

@@ -133,12 +133,6 @@ parameters:
 			path: app/Models/AgentKnowledge.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Alert.php
-
-		-
 			message: '#^Method App\\Models\\Alert\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
 			identifier: return.type
 			count: 1
@@ -175,46 +169,16 @@ parameters:
 			path: app/Models/ControlRoom.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/DispatchDecision.php
-
-		-
 			message: '#^Method App\\Models\\DispatchDecision\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
 			identifier: return.type
 			count: 1
 			path: app/Models/DispatchDecision.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/MinesConnection.php
-
-		-
-			message: '#^Method App\\Models\\MinesConnection\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Models/MinesConnection.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/OperatorSession.php
-
-		-
 			message: '#^Method App\\Models\\OperatorSession\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
 			identifier: return.type
 			count: 1
 			path: app/Models/OperatorSession.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/StaleSessionProposal.php
 
 		-
 			message: '#^Method App\\Models\\StaleSessionProposal\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
@@ -359,3 +323,9 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Audits.php
+
+		-
+			message: '#^Offset ''deleted'' on array\{version\: int, server_time\: string, changes\: array\<string, list\<array\<string, mixed\>\>\>, deleted\: list\<array\<string, mixed\>\>, has_more\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Mines/MinesSynchroniser.php
