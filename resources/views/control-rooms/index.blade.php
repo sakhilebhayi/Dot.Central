@@ -55,7 +55,7 @@
                     <thead>
                         <tr style="border-bottom:1px solid var(--divider);">
                             <th style="padding:0.75rem 1.5rem;text-align:left;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Name</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Mines Site</th>
+                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Dot.Mines</th>
                             <th style="padding:0.75rem 1rem;text-align:left;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Status</th>
                             <th style="padding:0.75rem 1rem;text-align:left;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Decisions</th>
                             <th style="padding:0.75rem 1rem;text-align:left;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Alerts</th>
@@ -66,7 +66,7 @@
                         @foreach($controlRooms as $room)
                         <tr style="border-bottom:1px solid var(--divider);">
                             <td style="padding:1rem 1.5rem;font-family:'Syne',sans-serif;font-weight:700;color:var(--text-primary);">{{ $room->name }}</td>
-                            <td style="padding:1rem;color:var(--text-secondary);font-size:0.8rem;">{{ $room->mines_site_ref ?? '—' }}</td>
+                            <td style="padding:1rem;color:var(--text-secondary);font-size:0.8rem;">@if($room->minesConnection) team #{{ $room->minesConnection->mines_team_id ?? '—' }} · {{ $room->minesConnection->status }} @else not connected @endif</td>
                             <td style="padding:1rem;">
                                 @if($room->is_active)
                                     <span style="color:#22c55e;font-size:0.75rem;font-weight:700;">Active</span>

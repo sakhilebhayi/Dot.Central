@@ -23,6 +23,7 @@ class ControlRoomController extends Controller
         $this->authorize('viewAny', ControlRoom::class);
 
         $controlRooms = ControlRoom::accessibleBy($request->user())
+            ->with('minesConnection')
             ->withCount(['dispatchDecisions', 'alerts', 'operatorSessions'])
             ->latest()
             ->get();
@@ -50,17 +51,15 @@ class ControlRoomController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', ControlRoom::class);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'mines_site_ref' => ['nullable', 'string', 'max:255'],
         ]);
-
-        $this->authorize('create', ControlRoom::class);
 
         $controlRoom = $request->user()->currentTeam->controlRooms()->create([
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']).'-'.Str::random(6),
-            'mines_site_ref' => $validated['mines_site_ref'] ?? null,
         ]);
 
         $controlRoom->users()->attach($request->user());
@@ -73,6 +72,7 @@ class ControlRoomController extends Controller
         $this->authorize('view', $controlRoom);
 
         $controlRoom->load([
+            'minesConnection',
             'dispatchDecisions' => fn ($q) => $q->latest('decided_at')->limit(20),
             'alerts' => fn ($q) => $q->latest('triggered_at')->limit(20),
             'operatorSessions' => fn ($q) => $q->latest('started_at')->limit(20),
@@ -108,13 +108,11 @@ class ControlRoomController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'mines_site_ref' => ['nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $controlRoom->update([
             'name' => $validated['name'],
-            'mines_site_ref' => $validated['mines_site_ref'] ?? null,
             'is_active' => $request->boolean('is_active'),
         ]);
 

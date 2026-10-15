@@ -25,7 +25,6 @@ class MiningDispatchSeeder extends Seeder
         $controlRoom = ControlRoom::factory()->create([
             'team_id' => $team->id,
             'name' => 'Demo Control Room',
-            'mines_site_ref' => 'demo-site',
         ]);
 
         $operator = User::first() ?? User::factory()->create();

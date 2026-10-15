@@ -9,6 +9,7 @@ use App\Http\Controllers\ControlRoomController;
 use App\Http\Controllers\ControlRoomMemberController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DispatchDecisionController;
+use App\Http\Controllers\MinesConnectionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
 use App\Http\Controllers\StaleSessionProposalController;
@@ -76,6 +77,11 @@ Route::middleware([
         ->name('control-rooms.members.store');
     Route::delete('control-rooms/{controlRoom}/members/{user}', [ControlRoomMemberController::class, 'destroy'])
         ->name('control-rooms.members.destroy');
+
+    Route::get('control-rooms/{controlRoom}/connection', [MinesConnectionController::class, 'edit'])
+        ->name('control-rooms.connection.edit');
+    Route::put('control-rooms/{controlRoom}/connection', [MinesConnectionController::class, 'update'])
+        ->name('control-rooms.connection.update');
 
     Route::post('control-rooms/{controlRoom}/dispatch-decisions', [DispatchDecisionController::class, 'store'])
         ->name('control-rooms.dispatch-decisions.store');

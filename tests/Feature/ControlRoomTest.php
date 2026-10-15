@@ -49,7 +49,6 @@ class ControlRoomTest extends TestCase
 
         $response = $this->actingAs($user)->post('/control-rooms', [
             'name' => 'New Site Control Room',
-            'mines_site_ref' => 'north-pit',
         ]);
 
         $this->assertDatabaseHas('control_rooms', [

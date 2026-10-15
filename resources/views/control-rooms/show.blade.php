@@ -6,10 +6,21 @@
             <a href="{{ route('control-rooms.edit', $controlRoom) }}" style="font-size:0.75rem;color:var(--text-muted);text-decoration:none;">Edit →</a>
             @endcan
         </div>
-        <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 2rem;">
-            Mines site: {{ $controlRoom->mines_site_ref ?? '—' }} &middot;
-            {{ $controlRoom->is_active ? 'Active' : 'Inactive' }}
+        <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 2rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+            <span>{{ $controlRoom->is_active ? 'Active' : 'Inactive' }}</span>
+            <span>&middot;</span>
+            @if($controlRoom->minesConnection)
+                <span>Dot.Mines: team #{{ $controlRoom->minesConnection->mines_team_id ?? '—' }} · <span class="dot-badge dot-badge-accent">{{ $controlRoom->minesConnection->status }}</span></span>
+            @else
+                <span>Dot.Mines: not connected</span>
+            @endif
+            @can('manage', $controlRoom)
+                <a href="{{ route('control-rooms.connection.edit', $controlRoom) }}" style="color:var(--accent);text-decoration:none;">Configure connection →</a>
+            @endcan
         </p>
+        @if (session('status'))
+            <div style="margin:-1rem 0 1.5rem;color:#22c55e;font-size:0.8rem;">{{ session('status') }}</div>
+        @endif
 
         @if($pendingProposals->isNotEmpty())
         <div style="background:var(--card-bg);border:1px solid #f59e0b;border-radius:0.875rem;padding:1.25rem;margin-bottom:1.5rem;">

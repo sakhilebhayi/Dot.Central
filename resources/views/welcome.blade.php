@@ -268,7 +268,7 @@
                     <div class="grid sm:grid-cols-2 gap-x-10">
                         @php
                             $dispatch = [
-                                ['title' => 'Control rooms', 'body' => 'Team-scoped tenant root. Carries a mines_site_ref pointer to a Dot.Mines site — a plain string today, not a live integration.'],
+                                ['title' => 'Control rooms', 'body' => 'Team-scoped tenant root. Each room maps to one Dot.Mines team through an encrypted connection; live synchronisation is the next increment.'],
                                 ['title' => 'Dispatch decisions', 'body' => 'Assign, reroute, hold, or stagger — the four workflow types, recorded in sequence per control room.'],
                                 ['title' => 'Alerts', 'body' => 'Severity-ranked threshold and sentinel trips, with a trigger and clear timestamp.'],
                                 ['title' => 'Operator sessions', 'body' => 'Shift-level staffing context per control room — deliberately no individual performance fields.'],

@@ -12,12 +12,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Tenant root of the mining-dispatch domain. Maps 1:1 to a Dot.Mines site
- * (via mines_site_ref — a plain external reference, not a live integration)
- * and is scoped to a Jetstream team, matching this repo's existing tenancy
- * pattern. HasTeamScope makes that scoping automatic at the query layer
+ * Tenant root of the control-room domain (one room = one site). Maps to
+ * one Dot.Mines team through its MinesConnection and is scoped to a
+ * Jetstream team, matching this repo's existing tenancy pattern. HasTeamScope makes that scoping automatic at the query layer
  * instead of depending on every controller remembering belongsToTeam().
  */
 class ControlRoom extends Model
@@ -26,7 +26,7 @@ class ControlRoom extends Model
     use Auditable, HasFactory, HasTeamScope;
 
     protected $fillable = [
-        'team_id', 'name', 'slug', 'mines_site_ref', 'is_active',
+        'team_id', 'name', 'slug', 'is_active',
     ];
 
     protected $casts = [
@@ -56,6 +56,14 @@ class ControlRoom extends Model
     public function staleSessionProposals(): HasMany
     {
         return $this->hasMany(StaleSessionProposal::class);
+    }
+
+    /**
+     * The Dot.Mines connection (one per room), if configured.
+     */
+    public function minesConnection(): HasOne
+    {
+        return $this->hasOne(MinesConnection::class);
     }
 
     /**

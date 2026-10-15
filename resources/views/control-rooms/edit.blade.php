@@ -13,10 +13,6 @@
                 <x-input id="name" name="name" type="text" class="mt-1 block w-full" value="{{ old('name', $controlRoom->name) }}" required autofocus />
             </div>
 
-            <div style="margin-bottom:1rem;">
-                <x-label for="mines_site_ref" value="Dot.Mines Site Reference" />
-                <x-input id="mines_site_ref" name="mines_site_ref" type="text" class="mt-1 block w-full" value="{{ old('mines_site_ref', $controlRoom->mines_site_ref) }}" />
-            </div>
 
             <div style="margin-bottom:1.5rem;">
                 <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;color:var(--text-secondary);">
