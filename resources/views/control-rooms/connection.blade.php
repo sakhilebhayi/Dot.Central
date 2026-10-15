@@ -36,7 +36,7 @@
 
             <div>
                 <x-label for="api_token" value="{{ $connection && $connection->api_token ? 'API token (leave blank to keep the stored token)' : 'API token' }}" />
-                <x-input id="api_token" name="api_token" type="password" autocomplete="off" class="mt-1 block w-full" value="" {{ $connection && $connection->api_token ? '' : 'required' }} />
+                <x-input id="api_token" name="api_token" type="password" autocomplete="new-password" class="mt-1 block w-full" value="" :required="! ($connection && $connection->api_token)" />
             </div>
 
             <div>

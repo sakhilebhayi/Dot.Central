@@ -40,7 +40,10 @@ class MinesConnectionTest extends TestCase
         $owner = User::factory()->withPersonalTeam()->create();
         $room = ControlRoom::factory()->for($owner->currentTeam)->create();
 
-        $this->actingAs($owner)->get(route('control-rooms.connection.edit', $room))->assertOk();
+        $this->actingAs($owner)->get(route('control-rooms.connection.edit', $room))
+            ->assertOk()
+            ->assertSee('name="api_token"', false)
+            ->assertSee('required', false);
 
         $response = $this->actingAs($owner)->put(route('control-rooms.connection.update', $room), [
             'base_url' => 'http://127.0.0.1:8010/',
@@ -93,7 +96,9 @@ class MinesConnectionTest extends TestCase
         MinesConnection::factory()->for($room)->create(['api_token' => 'super-secret-token']);
 
         $this->actingAs($owner)->get(route('control-rooms.connection.edit', $room))
-            ->assertOk()->assertDontSee('super-secret-token');
+            ->assertOk()
+            ->assertSee('name="api_token"', false)
+            ->assertDontSee('super-secret-token');
         $this->actingAs($owner)->get(route('control-rooms.show', $room))
             ->assertOk()->assertDontSee('super-secret-token');
     }
