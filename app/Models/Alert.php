@@ -24,18 +24,27 @@ class Alert extends Model
 
     public const SEVERITIES = ['info', 'warning', 'critical'];
 
+    public const SOURCES = ['manual', 'dot_mines', 'system'];
+
     protected $fillable = [
-        'control_room_id', 'severity', 'title', 'description',
-        'triggered_at', 'cleared_at',
+        'control_room_id', 'source', 'external_id', 'severity', 'priority', 'equipment_id',
+        'title', 'description', 'metadata', 'triggered_at', 'source_triggered_at', 'cleared_at',
     ];
 
     protected $casts = [
         'triggered_at' => 'datetime',
+        'source_triggered_at' => 'datetime',
         'cleared_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     public function controlRoom(): BelongsTo
     {
         return $this->belongsTo(ControlRoom::class);
+    }
+
+    public function equipment(): BelongsTo
+    {
+        return $this->belongsTo(Equipment::class);
     }
 }

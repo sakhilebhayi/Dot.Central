@@ -59,6 +59,14 @@ class ControlRoom extends Model
     }
 
     /**
+     * Machines mirrored from Dot.Mines into this room.
+     */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(Equipment::class);
+    }
+
+    /**
      * The Dot.Mines connection (one per room), if configured.
      */
     public function minesConnection(): HasOne
