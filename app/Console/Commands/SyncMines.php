@@ -25,7 +25,7 @@ class SyncMines extends Command
 
         foreach ($connections as $connection) {
             if ($this->option('now')) {
-                $run = $synchroniser->run($connection, 'manual');
+                $run = $synchroniser->run($connection, 'manual')->refresh();
                 $this->line("Connection {$connection->id}: {$run->status} (machines {$run->fetched_machines}, upserted {$run->upserted}, retired {$run->retired}, alerts {$run->alerts_upserted})".($run->error_message ? " — {$run->error_message}" : ''));
             } else {
                 SyncMinesConnection::dispatch($connection->id, 'schedule');

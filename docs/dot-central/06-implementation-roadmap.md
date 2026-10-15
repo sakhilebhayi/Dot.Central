@@ -2,7 +2,7 @@
 
 Each increment is built on a feature branch, test-first, and is complete only when its acceptance criteria below are met and the matrix row cites evidence. Phases map to the brief §10.
 
-## Increment 1 — Foundation (brief Phase 3)
+## Increment 1 — Foundation (brief Phase 3) — **done 2026-10-15**, plus the control-room shell restyle (`11-operator-experience.md` §6)
 Scope: F-01, F-02, F-04, F-05, F-24 (part), F-03 (model only).
 - Replace demo mine name with neutral fixtures; test asserting no prohibited names in seeders/views/tests.
 - Jetstream roles operator/supervisor/manager/administrator; policies for ControlRoom, Alert, Shift, Incident, Task, Exception; `control_room_user` assignment; `EnsureControlRoomAccess` middleware; tests for each role × action and cross-team denial.
@@ -11,7 +11,7 @@ Scope: F-01, F-02, F-04, F-05, F-24 (part), F-03 (model only).
 - Front end: move the authenticated shell to `@vite`, delete CDN script tags and the duplicate Jetstream menu, consolidate Tailwind v3 config to the shell's tokens.
 Acceptance: full suite green; pint clean; phpstan not worse than baseline (baseline file added); browser check of shell and admin pages.
 
-## Increment 2 — Dot.Mines integration (Phase 3/5)
+## Increment 2 — Dot.Mines integration (Phase 3/5) — **done 2026-10-15** (F-09 awaiting a public callback for live proof; see `04-dot-mines-integration.md` §8)
 Scope: F-06, F-07, F-08, F-09, F-10.
 - `MinesClient` with `Http::fake` contract tests from OpenAPI shapes; `SyncRun` job; `equipment`, `equipment_telemetry` (latest + history of what we fetched), `integration_sync_runs`, `integration_webhook_deliveries`.
 - Freshness evaluator unit tests for every row of the state table.

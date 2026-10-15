@@ -65,8 +65,8 @@ class MinesSynchroniserTest extends TestCase
         Http::fake([
             'mines.test/api/v1/user' => Http::response(['id' => 2, 'name' => 'Demo', 'email' => 'demo@example.test', 'current_team_id' => 2]),
             'mines.test/api/v1/sync?since=0*' => Http::response(['version' => 5, 'server_time' => now()->toIso8601String(), 'changes' => ['fleet' => [$this->fleetRow(7, 'HT-07', 'active', 4), $this->fleetRow(8, 'HT-08', 'idle', 5)], 'production' => [], 'reference' => [['id' => 3, 'name' => 'North Pit', 'status' => 'active', 'sync_version' => 2]]], 'deleted' => [], 'has_more' => true]),
-            'mines.test/api/v1/sync?since=5*' => Http::response(['version' => 9, 'server_time' => now()->toIso8601String(), 'changes' => ['fleet' => [$this->fleetRow(9, 'EX-09', 'maintenance', 9)], 'production' => [], 'reference' => []], 'deleted' => [['scope' => 'fleet', 'id' => 8]], 'has_more' => false]),
-            'mines.test/api/v1/machines?*' => Http::response($this->paginated([$this->machineResource(7, 'HT-07'), $this->machineResource(9, 'EX-09', 'maintenance')])),
+            'mines.test/api/v1/sync?since=5*' => Http::response(['version' => 9, 'server_time' => now()->toIso8601String(), 'changes' => ['fleet' => [$this->fleetRow(9, 'EX-09', 'maintenance', 9)], 'production' => [], 'reference' => []], 'deleted' => [['entity_type' => 'machines', 'entity_id' => 8, 'sync_version' => 9]], 'has_more' => false]),
+            'mines.test/api/v1/machines?*' => Http::response($this->paginated([$this->machineResource(7, 'HT-07'), array_diff_key($this->machineResource(9, 'EX-09', 'maintenance'), ['mine_area' => 1])])),
             'mines.test/api/v1/alerts?*' => Http::response($this->paginated([
                 ['id' => 99, 'type' => 'fuel', 'title' => 'Low fuel', 'description' => 'Fuel at 8%', 'priority' => 'high', 'status' => 'active', 'machine_id' => 7, 'mine_area_id' => 3, 'triggered_at' => '2026-10-15T09:00:00+00:00', 'acknowledged_at' => null, 'resolved_at' => null, 'acknowledged_by' => null, 'resolved_by' => null, 'metadata' => ['external_id' => 'bell:123'], 'created_at' => '2026-10-15T09:00:00+00:00', 'updated_at' => '2026-10-15T09:00:00+00:00'],
             ])),
@@ -92,6 +92,7 @@ class MinesSynchroniserTest extends TestCase
         $this->assertSame('active', $ht07->mines_status);
         $this->assertSame('B50E', $ht07->model);
         $this->assertSame('North Pit', $ht07->mine_area_name);
+        $this->assertSame('North Pit', Equipment::where('mines_machine_id', 9)->firstOrFail()->mine_area_name, 'area learned from the reference scope names machines whose resource lacks mine_area');
         $this->assertSame('2026-10-15 09:57:30', $ht07->location_recorded_at->format('Y-m-d H:i:s'));
         $this->assertSame('2026-10-15 09:57:30', $ht07->last_heard_at->format('Y-m-d H:i:s'));
         $this->assertSame('2026-10-15 09:58:00', $ht07->last_seen_at->format('Y-m-d H:i:s'));

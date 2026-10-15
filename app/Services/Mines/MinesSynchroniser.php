@@ -26,6 +26,9 @@ final class MinesSynchroniser
     /** @var array<string, string> Dot.Mines alert priority → Dot.Central severity */
     private const SEVERITY = ['critical' => 'critical', 'high' => 'warning', 'medium' => 'warning', 'low' => 'info'];
 
+    /** @var array<int, string> mine area id → name, learned from the reference scope during a run */
+    private array $areaNames = [];
+
     public function __construct(
         private readonly MinesClientFactory $clients,
         private readonly Audits $audits,
@@ -87,13 +90,12 @@ final class MinesSynchroniser
 
         do {
             $page = $this->withRateLimitRetry(fn () => $client->sync($since, self::SCOPES));
-            $areas = [];
-
             foreach ($page['changes']['reference'] ?? [] as $area) {
                 if (isset($area['id'])) {
-                    $areas[(int) $area['id']] = (string) ($area['name'] ?? '');
+                    $this->areaNames[(int) $area['id']] = (string) ($area['name'] ?? '');
                 }
             }
+            $areas = $this->areaNames;
 
             foreach ($page['changes']['fleet'] ?? [] as $row) {
                 if (! isset($row['id'])) {
@@ -104,11 +106,16 @@ final class MinesSynchroniser
                 $run->fetched_machines++;
             }
 
+            // Tombstones are {entity_type: "machines", entity_id, sync_version}
+            // (verified live 2026-10-15); the older {scope, id} form is also accepted.
             foreach ($page['deleted'] ?? [] as $tombstone) {
-                if (($tombstone['scope'] ?? null) === 'fleet' && isset($tombstone['id'])) {
+                $isMachine = ($tombstone['entity_type'] ?? null) === 'machines' || ($tombstone['scope'] ?? null) === 'fleet';
+                $machineId = $tombstone['entity_id'] ?? $tombstone['id'] ?? null;
+
+                if ($isMachine && $machineId !== null) {
                     $retired = Equipment::withoutGlobalScopes()
                         ->where('control_room_id', $connection->control_room_id)
-                        ->where('mines_machine_id', (int) $tombstone['id'])
+                        ->where('mines_machine_id', (int) $machineId)
                         ->whereNull('retired_at')
                         ->update(['retired_at' => now(), 'last_synced_at' => now()]);
                     $run->retired += $retired;
@@ -224,7 +231,7 @@ final class MinesSynchroniser
             'registration_number' => $resource['registration_number'] ?? $equipment->registration_number,
             'mines_status' => (string) ($resource['status'] ?? $equipment->mines_status ?? 'unknown'),
             'mine_area_id' => $resource['mine_area_id'] ?? $equipment->mine_area_id,
-            'mine_area_name' => $area['name'] ?? $equipment->mine_area_name,
+            'mine_area_name' => $area['name'] ?? $this->areaNames[(int) ($resource['mine_area_id'] ?? 0)] ?? $equipment->mine_area_name,
             'capacity' => $resource['capacity'] ?? $equipment->capacity,
             'fuel_capacity' => $resource['fuel_capacity'] ?? $equipment->fuel_capacity,
             'latitude' => $location['latitude'] ?? $equipment->latitude,
@@ -460,6 +467,7 @@ final class MinesSynchroniser
         $run->status = $status;
         $run->finished_at = now();
         $run->save();
+        $run->refresh(); // database defaults (counters) become real values for the audit row
 
         if ($status !== 'skipped') {
             $this->audits->record(

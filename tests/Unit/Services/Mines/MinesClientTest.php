@@ -29,7 +29,7 @@ class MinesClientTest extends TestCase
             'version' => 42,
             'server_time' => '2026-10-15T10:00:00+00:00',
             'changes' => ['fleet' => [['id' => 7, 'name' => 'HT-07', 'machine_type' => 'haul_truck', 'status' => 'active', 'allocation_state' => null, 'latitude' => -26.1, 'longitude' => 28.2, 'fuel_level' => 61.5, 'engine_hours' => null, 'payload' => null, 'last_seen_at' => '2026-10-15T09:58:00+00:00', 'sync_version' => 41]]],
-            'deleted' => [['scope' => 'fleet', 'id' => 3]],
+            'deleted' => [['entity_type' => 'machines', 'entity_id' => 3, 'sync_version' => 41]],
             'has_more' => false,
         ])]);
 
@@ -38,7 +38,7 @@ class MinesClientTest extends TestCase
         $this->assertSame(42, $result['version']);
         $this->assertFalse($result['has_more']);
         $this->assertSame('HT-07', $result['changes']['fleet'][0]['name']);
-        $this->assertSame([['scope' => 'fleet', 'id' => 3]], $result['deleted']);
+        $this->assertSame([['entity_type' => 'machines', 'entity_id' => 3, 'sync_version' => 41]], $result['deleted']);
 
         Http::assertSent(function (Request $request): bool {
             return $request->url() === 'http://mines.test/api/v1/sync?since=10&scopes=fleet%2Cproduction'
