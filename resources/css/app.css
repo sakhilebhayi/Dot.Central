@@ -235,6 +235,7 @@
 .dot-panels--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dot-panels--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dot-panels--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dot-panels--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .dot-panels--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .dot-panels--7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .dot-panels--split { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
@@ -347,7 +348,7 @@ select.dot-select option, select.dot-input option { background: var(--panel); co
 .sidebar.is-open::after { content: ''; position: fixed; inset: 0 0 0 var(--nav-w); background: rgba(0, 0, 0, 0.5); }
 
 @media (max-width: 1100px) {
-    .dot-panels--4, .dot-panels--6, .dot-panels--7 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dot-panels--4, .dot-panels--5, .dot-panels--6, .dot-panels--7 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dot-panels--3, .dot-panels--split, .dot-split { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
@@ -360,7 +361,7 @@ select.dot-select option, select.dot-input option { background: var(--panel); co
     .dot-page { padding: 1.1rem 1rem 2.5rem; }
 }
 @media (max-width: 620px) {
-    .dot-panels--4, .dot-panels--6, .dot-panels--7, .dot-panels--2 { grid-template-columns: minmax(0, 1fr); }
+    .dot-panels--4, .dot-panels--5, .dot-panels--6, .dot-panels--7, .dot-panels--2 { grid-template-columns: minmax(0, 1fr); }
     .statebar__detail { display: none; }
     .dot-readout__value { font-size: 1.5rem; }
 }

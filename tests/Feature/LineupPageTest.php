@@ -2,17 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\FleetBoard;
 use App\Livewire\Lineup;
+use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
+use App\Models\EquipmentStatusEvent;
 use App\Models\LineupAllocation;
 use App\Models\MinesConnection;
+use App\Models\OperationalException;
 use App\Models\Operator;
 use App\Models\Shift;
 use App\Models\ShiftType;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Support\RoleClass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -113,5 +118,26 @@ class LineupPageTest extends TestCase
         $this->actingAs($this->manager)->get(route('shifts.lineup', $this->shift))->assertOk()->assertSee('Shift Line-up')->assertDontSee('Confirm line-up')->assertDontSee('New face');
 
         Livewire::actingAs($this->manager)->test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm')->set('faceForm.material', 'Coal')->call('saveFace')->assertSee('SH-04');
+    }
+
+    public function test_the_fleet_board_shows_availability_line_up_state_and_issues_per_machine(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator);
+        $service->place($this->shift, $face, $this->truck, $this->operator);
+        $service->assignOperator($this->shift, $this->truck, Operator::withoutGlobalScopes()->firstOrFail(), $this->operator);
+        $dozer = Equipment::factory()->for($this->room)->create(['name' => 'DZ-01', 'role_class' => RoleClass::SUPPORT, 'mines_status' => 'maintenance', 'last_heard_at' => now()]);
+        EquipmentStatusEvent::create(['equipment_id' => $dozer->id, 'field' => 'mines_status', 'from_value' => 'active', 'to_value' => 'maintenance', 'observed_at' => '2026-10-15 09:00:00', 'source' => 'sync']);
+        Alert::factory()->for($this->room)->create(['severity' => 'warning', 'title' => 'Hydraulic pressure low', 'equipment_id' => $this->truck->id]);
+        OperationalException::factory()->for($this->room)->create(['shift_id' => $this->shift->id, 'equipment_id' => $this->loader->id, 'rule_code' => 'LU-10', 'title' => 'EX-01 is on Face 1 with no operator', 'raised_by' => 'SUPERVISOR']);
+
+        $page = Livewire::test(FleetBoard::class, ['controlRoom' => $this->room]);
+        $page->assertSee('Available for operating')->assertSee('Face 1 — Coal')->assertSee('Operator One')->assertSee('alert: Hydraulic pressure low')->assertSee('LU-10 EX-01 is on Face 1 with no operator')->assertSee('down: Dot.Mines: maintenance')->assertSee('no operator');
+        $this->assertSame(2, $page->viewData('availability')['available']);
+        $this->assertSame(1, $page->viewData('availability')['down']);
+
+        $page->set('filter', 'available')->assertSee('HT-01')->assertDontSee('DZ-01');
+        $page->set('filter', 'free')->assertDontSee('HT-01')->assertSee('Every machine has a place or a reason.');
     }
 }
