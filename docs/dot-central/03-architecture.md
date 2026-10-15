@@ -53,6 +53,8 @@ Dot.Central's tenant key for Dot.Mines data is the control room; every mirrored 
 `shifts`, `shift_handovers`, `alerts` (reworked), `alert_events` (ack/assign/escalate/resolve trail), `exceptions`, `exception_approvals`, `incidents` (downtime/operational events), `incident_reasons` (catalogue, per team), `tasks`, `audit_log`, `metric_definitions` (catalogue of displayed metrics with definition/unit/source). Existing `dispatch_decisions`, `operator_sessions`, `stale_session_proposals` are kept and re-homed under the control room's "Coordination" area.
 
 ### 3.3 Presentation
+The operator experience (shell, interaction contract, visual language, screen-by-screen translation of the prototype) is specified in `11-operator-experience.md`; every screen from Increment 3 is judged against its §8 acceptance questions. Note that the current shell's type, accent and floating-card styling must change to the control-room language in that document before the live surfaces are built.
+
 Plain controllers + Blade for CRUD (repo convention); **Livewire for live surfaces** (overview, fleet board, map, alert queue, health) with `wire:poll` as the baseline and Reverb broadcast as the upgrade once the front end is on Vite. One shell: control-room navigation grouped as *Operate* (Overview, Fleet, Map, Alerts, Shift), *Control* (Exceptions, Approvals, Incidents, Tasks), *Information* (Reports, Equipment, Data quality, Health), *Administration* (Rooms, Connections, Catalogues, Users, Audit), plus the existing *AI Agents* section.
 
 ## 4. Data flow
