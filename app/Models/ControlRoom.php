@@ -86,6 +86,14 @@ class ControlRoom extends Model
         return $this->hasMany(ProductionRecord::class);
     }
 
+    /** The room's display timezone: its Dot.Mines connection's, else UTC. */
+    public function timezone(): string
+    {
+        $connection = $this->minesConnection;
+
+        return $connection instanceof MinesConnection ? $connection->timezone : 'UTC';
+    }
+
     public function settings(): RoomSettings
     {
         return ControlRoomSetting::for($this);

@@ -15,6 +15,7 @@ use App\Http\Controllers\MinesConnectionController;
 use App\Http\Controllers\MinesWebhookController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
+use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\StaleSessionProposalController;
 use App\Models\Agent;
 use App\Models\AgentSkill;
@@ -75,6 +76,21 @@ Route::middleware([
     Route::get('/health', [IntegrationHealthController::class, 'index'])->name('health.index');
     Route::post('/health/connections/{connection}/sync', [IntegrationHealthController::class, 'sync'])->name('health.sync');
     Route::post('/health/connections/{connection}/test', [IntegrationHealthController::class, 'test'])->name('health.test');
+
+    Route::get('control-rooms/{controlRoom}/shifts', [ShiftController::class, 'index'])->name('control-rooms.shifts.index');
+    Route::get('control-rooms/{controlRoom}/shifts/start', [ShiftController::class, 'start'])->name('control-rooms.shifts.start');
+    Route::post('control-rooms/{controlRoom}/shifts', [ShiftController::class, 'store'])->name('control-rooms.shifts.store');
+    Route::get('shifts/{shift}', [ShiftController::class, 'show'])->name('shifts.show');
+    Route::get('shifts/{shift}/review', [ShiftController::class, 'review'])->name('shifts.review');
+    Route::post('shifts/{shift}/close', [ShiftController::class, 'close'])->name('shifts.close');
+    Route::post('shifts/{shift}/acknowledge', [ShiftController::class, 'acknowledge'])->name('shifts.acknowledge');
+    Route::post('shifts/{shift}/approve', [ShiftController::class, 'approve'])->name('shifts.approve');
+    Route::post('shifts/{shift}/reopen', [ShiftController::class, 'reopen'])->name('shifts.reopen');
+    // Derived operational pages (Task C) — registered now so the workflow strip links resolve.
+    Route::get('control-rooms/{controlRoom}/fleet', [EquipmentController::class, 'index'])->name('control-rooms.fleet');
+    Route::get('shifts/{shift}/hours', [ShiftController::class, 'show'])->name('shifts.hours');
+    Route::get('shifts/{shift}/production', [ShiftController::class, 'show'])->name('shifts.production');
+    Route::get('shifts/{shift}/downtime', [ShiftController::class, 'show'])->name('shifts.downtime');
 
     Route::get('control-rooms/{controlRoom}/equipment', [EquipmentController::class, 'index'])->name('control-rooms.equipment.index');
     Route::get('control-rooms/{controlRoom}/equipment/{equipment}', [EquipmentController::class, 'show'])->name('control-rooms.equipment.show');

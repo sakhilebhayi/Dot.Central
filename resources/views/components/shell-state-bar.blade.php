@@ -16,10 +16,17 @@
         </span>
     </div>
     <div class="statebar__bay">
-        <a href="{{ route('control-rooms.index') }}" class="shiftpill" title="No shift is open">
-            <span class="dot-status-lamp" style="background:var(--text-faint);margin:0;"></span>
-            No open shift
+        @if($currentShift)
+        <a href="{{ route('shifts.show', $currentShift) }}" class="shiftpill shiftpill--open" title="Open shift">
+            <span class="dot-status-lamp" style="background:var(--signal);margin:0;"></span>
+            {{ $currentShift->label() }} · {{ $currentShift->status }}
         </a>
+        @else
+        <a href="{{ $startUrl ?? route('control-rooms.index') }}" class="shiftpill" title="No shift is open">
+            <span class="dot-status-lamp" style="background:var(--text-faint);margin:0;"></span>
+            No open shift — start one
+        </a>
+        @endif
     </div>
     <div class="statebar__bay">
         <span class="shiftpill" title="Dot.Mines data link">

@@ -5,6 +5,7 @@ namespace App\View\Components;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\MinesConnection;
+use App\Models\Shift;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -35,6 +36,10 @@ class ShellStateBar extends Component
 
     public string $dataLink = 'Dot.Mines: not connected';
 
+    public ?Shift $currentShift = null;
+
+    public ?string $startUrl = null;
+
     public string $dataLinkLevel = 'idle';
 
     public function __construct()
@@ -47,6 +52,9 @@ class ShellStateBar extends Component
 
         $roomIds = ControlRoom::accessibleBy($user)->pluck('id');
         $this->rooms = $roomIds->count();
+        $this->currentShift = Shift::withoutGlobalScopes()->whereIn('control_room_id', $roomIds)->current()->with('shiftType')->orderByDesc('starts_at')->first();
+        $firstRoom = $roomIds->first();
+        $this->startUrl = $firstRoom !== null ? route('control-rooms.shifts.start', $firstRoom) : null;
 
         if ($this->rooms === 0) {
             $this->level = 'idle';
