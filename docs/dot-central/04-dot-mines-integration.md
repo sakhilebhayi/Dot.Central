@@ -17,6 +17,8 @@
 
 Not available (do not build against): shifts, mine areas REST, fault-code lifecycle, telemetry push, provider cadence, per-machine stale flag, dispatch state, archived metrics, tenant discovery, machine-to-machine auth.
 
+| Geofences | `GET /api/v1/geofences` (paginated; `type` pit/stockpile/dump/facility) | `GeofenceResource`: `id, name, description, type, status, mine_area_id, coordinates, center, area_sqm, perimeter_m`. Mirrored into `geofences` every sync as the first source of face locations (`13-shift-lineup-design.md` §5). |
+
 **Not exposed (verified 2026-10-15, see `13-shift-lineup-design.md` §2):** operators and operator-to-machine assignments (models and `OperatorAssignmentService` exist in Dot.Mines; no API), machine class (only the brand in `machine_type`), mine-plan cuts/blocks, `excavator_id` ADT pairing (hidden by `MachineResource` on purpose). `/api/v1/assignments/available` and `/assignments/machines/{id}/history` are mine-*area* assignments.
 
 ## 2. Authentication and tenancy
