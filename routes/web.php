@@ -22,6 +22,7 @@ use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
 use App\Livewire\FleetBoard;
+use App\Livewire\Lineup;
 use App\Livewire\Overview;
 use App\Models\Agent;
 use App\Models\AgentSkill;
@@ -139,6 +140,7 @@ Route::middleware([
         ->name('control-rooms.alerts.store');
     Route::patch('alerts/{alert}', [AlertController::class, 'update'])
         ->name('alerts.update');
+    Route::get('shifts/{shift}/lineup', Lineup::class)->name('shifts.lineup');
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');
     Route::post('alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('alerts.acknowledge');
     Route::post('alerts/{alert}/assign', [AlertController::class, 'assign'])->name('alerts.assign');

@@ -1,8 +1,10 @@
 {{-- Workflow strip: the shift's path, with derived completion. --}}
 @php($isClosed = $shift->isClosed())
-<nav class="dot-panels dot-panels--6" aria-label="Shift workflow" style="margin-bottom:1.25rem;">
+@php($lineupConfirmed = app(\App\Services\Lineup\LineupService::class)->isConfirmed($shift))
+<nav class="dot-panels dot-panels--7" aria-label="Shift workflow" style="margin-bottom:1.25rem;">
     @foreach([
         ['Start shift', route('control-rooms.shifts.index', $controlRoom), true],
+        ['Line-up', route('shifts.lineup', $shift), $lineupConfirmed],
         ['Fleet board', route('control-rooms.fleet', $controlRoom), ($totals['by_state']['unknown'] ?? 0) === 0],
         ['Engine hours', route('shifts.hours', $shift), ($totals['with_reading'] ?? 0) === ($totals['units'] ?? -1)],
         ['Production', route('shifts.production', $shift), ($totals['loads'] ?? 0) > 0 || ($totals['production_quantity'] ?? 0) > 0],

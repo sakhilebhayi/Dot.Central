@@ -62,7 +62,7 @@ class ShiftController extends Controller
         $type = ShiftType::where('control_room_id', $controlRoom->id)->findOrFail($validated['shift_type_id']);
         $shift = $this->shifts->open($controlRoom, $type, $validated['shift_date'], $request->user());
 
-        return redirect()->route('shifts.show', $shift)->with('status', 'Shift started: '.$shift->label().'.');
+        return redirect()->route('shifts.lineup', $shift)->with('status', 'Shift started: '.$shift->label().' — now build the line-up.');
     }
 
     public function show(Request $request, Shift $shift): View
