@@ -133,4 +133,19 @@ class MinesWebhookTest extends TestCase
         $this->assertNull(Alert::where('external_id', '100')->firstOrFail()->equipment_id, 'a failed fetch leaves the alert unlinked until the next sync');
         $this->assertSame(1, Equipment::withoutGlobalScopes()->count());
     }
+
+    public function test_operator_events_update_who_dot_mines_has_on_the_machine(): void
+    {
+        $connection = $this->connection();
+        $equipment = Equipment::factory()->for($connection->controlRoom)->create(['mines_machine_id' => 7]);
+        $assigned = ['id' => 55, 'operator_id' => 3, 'machine_id' => 7, 'shift' => 'day', 'assigned_at' => '2026-10-15T06:00:00+00:00', 'unassigned_at' => null, 'reason' => null, 'was_override' => false, 'override_reason' => null];
+
+        $this->deliver($connection, 'operator.assigned', $assigned)->assertOk()->assertJson(['status' => 'applied']);
+        $this->assertSame(3, $equipment->fresh()->mines_operator_id);
+
+        $this->deliver($connection, 'operator.unassigned', ['unassigned_at' => '2026-10-15T18:00:00+00:00', 'reason' => 'End of shift'] + $assigned, ['delivery' => 'd-2'])->assertOk()->assertJson(['status' => 'applied']);
+        $this->assertNull($equipment->fresh()->mines_operator_id);
+
+        $this->deliver($connection, 'operator.assigned', ['machine_id' => 999] + $assigned, ['delivery' => 'd-3'])->assertOk()->assertJson(['status' => 'ignored']);
+    }
 }

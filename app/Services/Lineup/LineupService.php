@@ -15,6 +15,9 @@ use App\Models\ShiftLineup;
 use App\Models\ShiftOperatorAssignment;
 use App\Models\User;
 use App\Services\Audits;
+use App\Services\Mines\Exceptions\MinesException;
+use App\Services\Mines\Exceptions\MinesRefused;
+use App\Services\Mines\MinesClientFactory;
 use App\Support\RoleClass;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -28,13 +31,13 @@ use Illuminate\Validation\ValidationException;
  *
  * Refusals carry the prototype's codes as LU-xx in a ValidationException.
  *
- * @phpstan-type PoolRow array{equipment: Equipment, role_class: string, state: string, placements: Collection<int, LineupAllocation>, placement: LineupAllocation|null, standby: LineupStandby|null, down: array{cause: string, since: Carbon|null}|null, assignment: ShiftOperatorAssignment|null, operator: Operator|null}
+ * @phpstan-type PoolRow array{equipment: Equipment, role_class: string, state: string, placements: Collection<int, LineupAllocation>, placement: LineupAllocation|null, standby: LineupStandby|null, down: array{cause: string, since: Carbon|null}|null, assignment: ShiftOperatorAssignment|null, operator: Operator|null, mines_operator: Operator|null}
  */
 final class LineupService
 {
     public const STOPPED = ['offline', 'maintenance'];
 
-    public function __construct(private readonly Audits $audits, private readonly LocationCatalogue $locations) {}
+    public function __construct(private readonly Audits $audits, private readonly LocationCatalogue $locations, private readonly MinesClientFactory $clients) {}
 
     // ---- state -----------------------------------------------------------------------------------------------
 
@@ -153,10 +156,11 @@ final class LineupService
         }
         $standbys = LineupStandby::withoutGlobalScopes()->with('reason')->where('shift_id', $shift->id)->whereNull('to_at')->get()->keyBy('equipment_id');
         $assignments = ShiftOperatorAssignment::withoutGlobalScopes()->with('operator')->where('shift_id', $shift->id)->whereNull('to_at')->get()->keyBy('equipment_id');
+        $minesOperators = Operator::withoutGlobalScopes()->where('control_room_id', $shift->control_room_id)->whereIn('mines_operator_id', $units->pluck('mines_operator_id')->filter()->all())->get()->keyBy('mines_operator_id');
 
         $rows = [];
         foreach ($units as $unit) {
-            $rows[] = $this->poolRow($unit, $at, $allocations[$unit->id] ?? [], $standbys->get($unit->id), $assignments->get($unit->id));
+            $rows[] = $this->poolRow($unit, $at, $allocations[$unit->id] ?? [], $standbys->get($unit->id), $assignments->get($unit->id), $unit->mines_operator_id !== null ? $minesOperators->get($unit->mines_operator_id) : null);
         }
 
         return collect($rows);
@@ -166,7 +170,7 @@ final class LineupService
      * @param  list<LineupAllocation>  $placements
      * @return PoolRow
      */
-    private function poolRow(Equipment $unit, Carbon $at, array $placements, mixed $standby, mixed $assignment): array
+    private function poolRow(Equipment $unit, Carbon $at, array $placements, mixed $standby, mixed $assignment, mixed $minesOperator = null): array
     {
         $placements = collect($placements);
         $down = $this->downAt($unit, $at);
@@ -183,6 +187,7 @@ final class LineupService
             'down' => $down,
             'assignment' => $assignment,
             'operator' => $assignment?->operator,
+            'mines_operator' => $minesOperator instanceof Operator ? $minesOperator : null,
         ];
     }
 
@@ -439,16 +444,59 @@ final class LineupService
             $this->refuse('LU-04', $operator->name().' is already the operator of '.$elsewhere->equipment?->name.' on this shift. One person cannot operate two machines at once. Choose "Move operator" if they moved to '.$unit->name.'.');
         }
 
+        // Dot.Mines' verdict comes first: a refusal must leave the line-up untouched.
+        $push = $this->pushAssignment($shift, $unit, $operator);
+
         $planning = $this->isPlanning($shift);
         foreach (array_filter([$current, $elsewhere]) as $row) {
             $planning ? $row->delete() : $row->fill(['to_at' => $at, 'ended_by' => $user->id])->save();
         }
         $this->lineup($shift)->save();
 
-        return ShiftOperatorAssignment::create([
+        $assignment = ShiftOperatorAssignment::create([
             'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'equipment_id' => $unit->id, 'operator_id' => $operator->id,
-            'from_at' => $at, 'assigned_by' => $user->id,
+            'from_at' => $at, 'assigned_by' => $user->id, 'pushed_to_source' => $push['pushed'], 'push_note' => $push['note'],
         ]);
+
+        if ($push['resource'] !== null) {
+            $unit->forceFill(['mines_operator_id' => $operator->mines_operator_id, 'mines_operator_assignment_id' => isset($push['resource']['id']) ? (int) $push['resource']['id'] : null, 'mines_operator_assigned_at' => now(), 'mines_operator_shift' => $push['resource']['shift'] ?? null])->save();
+        }
+
+        return $assignment;
+    }
+
+    /**
+     * Dot.Mines is the compliance authority for who may drive what: when the
+     * operator and the machine are both known there, the assignment goes
+     * through its eligibility gate before anything changes locally. A refusal
+     * surfaces the blockers (LU-04); an outage lets the local assignment stand
+     * with a note, and the next sync shows Dot.Mines' view.
+     *
+     * @return array{pushed: bool, note: string, resource: array<string, mixed>|null}
+     */
+    private function pushAssignment(Shift $shift, Equipment $unit, Operator $operator): array
+    {
+        $connection = $shift->controlRoom->minesConnection;
+
+        if ($operator->mines_operator_id === null) {
+            return ['pushed' => false, 'note' => 'not in Dot.Mines: added locally', 'resource' => null];
+        }
+        if ($connection === null || ! $connection->isUsable()) {
+            return ['pushed' => false, 'note' => 'Dot.Mines connection not usable', 'resource' => null];
+        }
+        if ($unit->mines_operator_id === $operator->mines_operator_id) {
+            return ['pushed' => true, 'note' => 'already current in Dot.Mines', 'resource' => null];
+        }
+
+        try {
+            $resource = $this->clients->for($connection)->assignOperator($unit->mines_machine_id, $operator->mines_operator_id, strtolower((string) $shift->shiftType?->code) ?: null);
+
+            return ['pushed' => true, 'note' => 'pushed to Dot.Mines', 'resource' => $resource];
+        } catch (MinesRefused $e) {
+            $this->refuse('LU-04', 'Dot.Mines refused '.$operator->name().' on '.$unit->name.': '.implode(' ', $e->messages).' Fix the operator\'s credentials in Dot.Mines, or have a supervisor override it there.');
+        } catch (MinesException $e) {
+            return ['pushed' => false, 'note' => 'Dot.Mines not updated: '.$e->getMessage(), 'resource' => null];
+        }
     }
 
     public function clearOperator(Shift $shift, Equipment $unit, User $user): void
@@ -459,6 +507,16 @@ final class LineupService
             return;
         }
         $this->isPlanning($shift) ? $current->delete() : $current->fill(['to_at' => $this->changeAt($shift), 'ended_by' => $user->id])->save();
+
+        $connection = $shift->controlRoom->minesConnection;
+        if ($current->pushed_to_source && $connection !== null && $connection->isUsable() && $unit->mines_operator_id !== null) {
+            try {
+                $this->clients->for($connection)->unassignOperator($unit->mines_machine_id, 'Cleared on the control-room line-up');
+                $unit->forceFill(['mines_operator_id' => null, 'mines_operator_assignment_id' => null, 'mines_operator_assigned_at' => null, 'mines_operator_shift' => null])->save();
+            } catch (MinesException) {
+                // best effort; the next sync shows Dot.Mines' view
+            }
+        }
     }
 
     // ---- copy / fill -----------------------------------------------------------------------------------------
@@ -539,7 +597,7 @@ final class LineupService
         return ['faces' => count($proposal['faces']), 'placed' => $placed, 'operators' => $this->fillOperators($shift, $user), 'skipped' => $skipped];
     }
 
-    /** Fill empty operator fields from the previous shift; machines down or on standby, and people already assigned, are left alone. */
+    /** Fill empty operator fields: the operator Dot.Mines has on the machine now, else the previous shift's; machines down or on standby, and people already assigned, are left alone. */
     public function fillOperators(Shift $shift, User $user): int
     {
         $this->guardWritable($shift);
@@ -549,7 +607,7 @@ final class LineupService
 
         foreach ($this->pool($shift) as $row) {
             $unit = $row['equipment'];
-            $operator = $proposal['operators'][$unit->id] ?? null;
+            $operator = ($row['mines_operator'] !== null && $row['mines_operator']->is_active ? $row['mines_operator'] : null) ?? $proposal['operators'][$unit->id] ?? null;
             if ($operator === null || $row['operator'] !== null || in_array($row['state'], ['DOWN', 'STANDBY'], true) || in_array($operator->id, $taken, true)) {
                 continue;
             }

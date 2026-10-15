@@ -23,6 +23,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $machine_type
  * @property string|null $role_class
  * @property string|null $role_class_source
+ * @property int|null $mines_operator_id
+ * @property int|null $mines_operator_assignment_id
+ * @property Carbon|null $mines_operator_assigned_at
+ * @property string|null $mines_operator_shift
  * @property string|null $model
  * @property string|null $manufacturer
  * @property string|null $serial_number
@@ -69,7 +73,38 @@ class Equipment extends Model
         'first_synced_at' => 'datetime',
         'last_synced_at' => 'datetime',
         'retired_at' => 'datetime',
+        'mines_operator_id' => 'integer',
+        'mines_operator_assignment_id' => 'integer',
+        'mines_operator_assigned_at' => 'datetime',
     ];
+
+    /**
+     * Dot.Mines' canonical equipment type (App\Support\EquipmentType there)
+     * decides the role class; the heuristic only runs when Dot.Mines does not
+     * know ('other' / missing) and an administrator has not set it (I-30).
+     */
+    public function applyEquipmentType(?string $equipmentType): void
+    {
+        if ($this->role_class_source === 'manual' && $this->role_class !== null) {
+            return;
+        }
+
+        $class = match ($equipmentType) {
+            'adt', 'haul_truck' => RoleClass::HAUL,
+            'excavator', 'loader' => RoleClass::LOADER,
+            'dozer', 'grader', 'water_truck', 'drill_rig', 'support' => RoleClass::SUPPORT,
+            default => null,
+        };
+
+        if ($class === null) {
+            $this->applyRoleClassGuess();
+
+            return;
+        }
+
+        $this->role_class = $class;
+        $this->role_class_source = 'mines';
+    }
 
     /** Re-derive the role class unless an administrator set it. */
     public function applyRoleClassGuess(): void

@@ -13,6 +13,7 @@ use App\Models\MinesConnection;
 use App\Models\Operator;
 use App\Models\Shift;
 use App\Models\ShiftLineup;
+use App\Models\ShiftOperatorAssignment;
 use App\Models\ShiftType;
 use App\Models\Team;
 use App\Models\User;
@@ -21,6 +22,7 @@ use App\Services\RoomProvisioner;
 use App\Support\RoleClass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -277,5 +279,50 @@ class LineupServiceTest extends TestCase
         $this->assertStringContainsString('SH-04', $this->refusal(fn () => $this->service->place($this->shift, $face, $this->truck1, $this->user)));
         $this->assertStringContainsString('SH-04', $this->refusal(fn () => $this->service->assignOperator($this->shift, $this->truck1, $this->op1, $this->user)));
         $this->assertStringContainsString('SH-04', $this->refusal(fn () => $this->service->confirm($this->shift, $this->user)));
+    }
+
+    public function test_an_assignment_of_a_dot_mines_operator_is_pushed_through_its_eligibility_gate(): void
+    {
+        $this->truck1->forceFill(['mines_machine_id' => 7])->save();
+        $this->op1->forceFill(['mines_operator_id' => 3])->save();
+        Http::fake([
+            'mines.test/api/v1/machines/7/operator-assignments' => Http::sequence()
+                ->push(['data' => ['id' => 55, 'operator_id' => 3, 'machine_id' => 7, 'shift' => 'day', 'assigned_at' => now()->toIso8601String(), 'unassigned_at' => null], 'message' => 'ok'], 201)
+                ->push(['message' => 'The given data was invalid.', 'errors' => ['operator_id' => ['Operator Two holds no Articulated Dump Truck licence.']]], 422)
+                ->push(['data' => ['id' => 55, 'unassigned_at' => now()->toIso8601String()], 'message' => 'ok']),
+        ]);
+
+        $assignment = $this->service->assignOperator($this->shift, $this->truck1, $this->op1, $this->user);
+        $this->assertTrue($assignment->pushed_to_source);
+        $this->assertSame('pushed to Dot.Mines', $assignment->push_note);
+        $this->assertSame(3, $this->truck1->fresh()->mines_operator_id);
+
+        $this->op2->forceFill(['mines_operator_id' => 4])->save();
+        $message = $this->refusal(fn () => $this->service->assignOperator($this->shift, $this->truck1, $this->op2, $this->user));
+        $this->assertStringContainsString('LU-04', $message);
+        $this->assertStringContainsString('holds no Articulated Dump Truck licence', $message);
+        $this->assertSame($this->op1->id, $this->service->pool($this->shift)->keyBy(fn ($r) => $r['equipment']->name)['HT-01']['operator']->id, 'a refused push leaves the previous operator in place');
+
+        $local = Operator::factory()->for($this->room)->create(['first_name' => 'Local', 'last_name' => 'Only']);
+        $this->service->assignOperator($this->shift, $this->truck2, $local, $this->user);
+        $this->assertSame('not in Dot.Mines: added locally', ShiftOperatorAssignment::withoutGlobalScopes()->where('equipment_id', $this->truck2->id)->whereNull('to_at')->firstOrFail()->push_note);
+
+        $this->service->clearOperator($this->shift, $this->truck1, $this->user);
+        Http::assertSent(fn ($r) => $r->method() === 'DELETE' && str_ends_with($r->url(), '/api/v1/machines/7/operator-assignments'));
+        $this->assertNull($this->truck1->fresh()->mines_operator_id);
+    }
+
+    public function test_fill_operators_prefers_who_dot_mines_has_on_the_machine_now(): void
+    {
+        $this->op1->forceFill(['mines_operator_id' => 3])->save();
+        $this->truck1->forceFill(['mines_operator_id' => 3, 'mines_operator_assignment_id' => 55])->save();
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $this->service->place($this->shift, $face, $this->truck1, $this->user);
+
+        $this->assertSame(1, $this->service->fillOperators($this->shift, $this->user));
+        $row = $this->service->pool($this->shift)->keyBy(fn ($r) => $r['equipment']->name)['HT-01'];
+        $this->assertSame($this->op1->id, $row['operator']->id);
+        $this->assertSame($this->op1->id, $row['mines_operator']->id);
+        $this->assertSame('already current in Dot.Mines', $row['assignment']->push_note);
     }
 }

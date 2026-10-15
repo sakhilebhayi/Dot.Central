@@ -28,6 +28,7 @@ final class WebhookApplier
             'machine.offline' => $this->offline($connection, $data),
             'geofence.entered', 'geofence.exited' => $this->geofence($connection, $data),
             'maintenance.predicted' => $this->maintenance($connection, $data),
+            'operator.assigned', 'operator.unassigned' => isset($data['id'], $data['machine_id'], $data['operator_id']) && $this->synchroniser->applyOperatorAssignment($connection, $data) ? 'applied' : 'ignored',
             default => 'ignored',
         };
     }

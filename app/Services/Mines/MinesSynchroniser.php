@@ -9,6 +9,7 @@ use App\Models\Geofence;
 use App\Models\IntegrationSyncRun;
 use App\Models\MineArea;
 use App\Models\MinesConnection;
+use App\Models\Operator;
 use App\Models\ProductionRecord;
 use App\Services\Audits;
 use App\Services\Mines\Exceptions\CredentialRejected;
@@ -25,7 +26,7 @@ use Throwable;
  */
 final class MinesSynchroniser
 {
-    public const SCOPES = ['fleet', 'production', 'reference'];
+    public const SCOPES = ['fleet', 'production', 'reference', 'operators', 'operator_assignments'];
 
     /** @var array<string, string> Dot.Mines alert priority → Dot.Central severity */
     private const SEVERITY = ['critical' => 'critical', 'high' => 'warning', 'medium' => 'warning', 'low' => 'info'];
@@ -117,9 +118,25 @@ final class MinesSynchroniser
 
             $this->upsertProduction($connection, is_array($page['changes']['production'] ?? null) ? $page['changes']['production'] : []);
 
+            foreach ($page['changes']['operators'] ?? [] as $row) {
+                if (isset($row['id'])) {
+                    $this->upsertOperator($connection, $row);
+                }
+            }
+            foreach ($page['changes']['operator_assignments'] ?? [] as $row) {
+                if (isset($row['id'], $row['machine_id'], $row['operator_id'])) {
+                    $this->applyOperatorAssignment($connection, $row);
+                }
+            }
+
             // Tombstones are {entity_type: "machines", entity_id, sync_version}
             // (verified live 2026-10-15); the older {scope, id} form is also accepted.
             foreach ($page['deleted'] ?? [] as $tombstone) {
+                if (($tombstone['entity_type'] ?? null) === 'operators' && isset($tombstone['entity_id'])) {
+                    // Dot.Mines removed the person; keep the row for history, stop offering them.
+                    Operator::withoutGlobalScopes()->where('control_room_id', $connection->control_room_id)->where('mines_operator_id', (int) $tombstone['entity_id'])->update(['is_active' => false, 'last_synced_at' => now()]);
+                }
+
                 $isMachine = ($tombstone['entity_type'] ?? null) === 'machines' || ($tombstone['scope'] ?? null) === 'fleet';
                 $machineId = $tombstone['entity_id'] ?? $tombstone['id'] ?? null;
 
@@ -179,7 +196,7 @@ final class MinesSynchroniser
             $equipment->first_synced_at = now();
         }
 
-        $equipment->applyRoleClassGuess();
+        $equipment->applyEquipmentType(isset($row['equipment_type']) ? (string) $row['equipment_type'] : null);
         $equipment->recomputeLastHeard();
         $equipment->save();
         $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
@@ -297,12 +314,71 @@ final class MinesSynchroniser
             $equipment->first_synced_at = now();
         }
 
-        $equipment->applyRoleClassGuess();
+        $equipment->applyEquipmentType(isset($resource['equipment_type']) ? (string) $resource['equipment_type'] : null);
         $equipment->recomputeLastHeard();
         $equipment->save();
         $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
 
         return $equipment;
+    }
+
+    /**
+     * Mirror one Dot.Mines operator. A person an administrator already added
+     * by employee number is linked, not duplicated.
+     *
+     * @param  array<string, mixed>  $row  operators sync row or OperatorResource
+     */
+    public function upsertOperator(MinesConnection $connection, array $row): Operator
+    {
+        $operator = Operator::withoutGlobalScopes()->where('control_room_id', $connection->control_room_id)->where('mines_operator_id', (int) $row['id'])->first()
+            ?? Operator::withoutGlobalScopes()->where('control_room_id', $connection->control_room_id)->where('employee_number', (string) ($row['employee_number'] ?? ''))->first()
+            ?? new Operator(['control_room_id' => $connection->control_room_id]);
+
+        $operator->fill([
+            'mines_operator_id' => (int) $row['id'],
+            'employee_number' => (string) ($row['employee_number'] ?? $operator->employee_number ?? ('M-'.$row['id'])),
+            'first_name' => (string) ($row['first_name'] ?? $operator->first_name ?? ''),
+            'last_name' => (string) ($row['last_name'] ?? $operator->last_name ?? ''),
+            'preferred_name' => $row['preferred_name'] ?? $operator->preferred_name,
+            'employment_status' => $row['employment_status'] ?? $operator->employment_status,
+            'is_active' => ($row['employment_status'] ?? 'active') === 'active',
+            'last_synced_at' => now(),
+        ])->save();
+
+        return $operator;
+    }
+
+    /**
+     * What Dot.Mines says about who is on a machine now. An open row sets the
+     * machine's current operator; a closed row clears it when it is the one
+     * recorded. Used by the sync scope and the operator.* webhooks.
+     *
+     * @param  array<string, mixed>  $row  operator_assignments sync row or OperatorAssignmentResource
+     */
+    public function applyOperatorAssignment(MinesConnection $connection, array $row): bool
+    {
+        $equipment = Equipment::withoutGlobalScopes()->where('control_room_id', $connection->control_room_id)->where('mines_machine_id', (int) $row['machine_id'])->first();
+
+        if ($equipment === null) {
+            return false;
+        }
+
+        if (($row['unassigned_at'] ?? null) === null) {
+            $equipment->forceFill([
+                'mines_operator_id' => (int) $row['operator_id'],
+                'mines_operator_assignment_id' => (int) $row['id'],
+                'mines_operator_assigned_at' => isset($row['assigned_at']) ? Carbon::parse($row['assigned_at']) : now(),
+                'mines_operator_shift' => $row['shift'] ?? null,
+            ])->save();
+
+            return true;
+        }
+
+        if ($equipment->mines_operator_assignment_id === (int) $row['id'] || ($equipment->mines_operator_assignment_id === null && $equipment->mines_operator_id === (int) $row['operator_id'])) {
+            $equipment->forceFill(['mines_operator_id' => null, 'mines_operator_assignment_id' => null, 'mines_operator_assigned_at' => null, 'mines_operator_shift' => null])->save();
+        }
+
+        return true;
     }
 
     /** Mirror the team's geofences; ones no longer listed are retired, never deleted. */

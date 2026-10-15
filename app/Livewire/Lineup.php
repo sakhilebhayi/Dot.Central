@@ -199,7 +199,7 @@ class Lineup extends Component
             }
             $operator = Operator::withoutGlobalScopes()->where('control_room_id', $this->shift->control_room_id)->findOrFail((int) $operatorId);
             try {
-                $service->assignOperator($this->shift, $unit, $operator, auth()->user(), $move);
+                $assignment = $service->assignOperator($this->shift, $unit, $operator, auth()->user(), $move);
             } catch (ValidationException $e) {
                 $message = $e->errors()['lineup'][0] ?? '';
                 if (str_contains($message, 'Move operator')) {
@@ -207,7 +207,7 @@ class Lineup extends Component
                 }
                 throw $e;
             }
-            $this->notice = $operator->name().' operates '.$unit->name.'.';
+            $this->notice = $operator->name().' operates '.$unit->name.'.'.($assignment->push_note !== null ? ' ('.$assignment->push_note.')' : '');
         });
     }
 

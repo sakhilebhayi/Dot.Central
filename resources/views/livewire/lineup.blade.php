@@ -119,6 +119,7 @@
                                                 <option value="">— operator —</option>
                                                 @foreach($operators as $o)<option value="{{ $o->id }}" @selected($p && $p['operator']?->id === $o->id)>{{ $o->label() }}</option>@endforeach
                                             </select>
+                                            @if($p && $p['mines_operator'] !== null && $p['mines_operator']->id !== ($p['operator']?->id))<div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">Dot.Mines has {{ $p['mines_operator']->name() }} on this machine</div>@endif
                                         @else
                                             {{ $p['operator']?->label() ?? '—' }}
                                         @endif

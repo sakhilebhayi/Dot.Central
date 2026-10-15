@@ -4,6 +4,7 @@ namespace App\Services\Mines;
 
 use App\Services\Mines\Exceptions\CredentialRejected;
 use App\Services\Mines\Exceptions\MalformedResponse;
+use App\Services\Mines\Exceptions\MinesRefused;
 use App\Services\Mines\Exceptions\MinesUnavailable;
 use App\Services\Mines\Exceptions\RateLimited;
 use Illuminate\Http\Client\ConnectionException;
@@ -194,6 +195,51 @@ final class MinesClient
         return $this->decode($this->send(fn (PendingRequest $r) => $r->post($this->url($path))), $path);
     }
 
+    /**
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function postJson(string $path, array $body): array
+    {
+        return $this->decode($this->send(fn (PendingRequest $r) => $r->post($this->url($path), $body)), $path);
+    }
+
+    /**
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function deleteJson(string $path, array $body = []): array
+    {
+        return $this->decode($this->send(fn (PendingRequest $r) => $r->delete($this->url($path), $body)), $path);
+    }
+
+    /**
+     * POST /machines/{id}/operator-assignments — put an operator on a machine
+     * through Dot.Mines' eligibility gate; blockers arrive as MinesRefused.
+     *
+     * @return array<string, mixed> the OperatorAssignmentResource
+     */
+    public function assignOperator(int $machineId, int $operatorId, ?string $shift = null, ?string $overrideReason = null): array
+    {
+        $data = $this->postJson('machines/'.$machineId.'/operator-assignments', array_filter(['operator_id' => $operatorId, 'shift' => $shift, 'override_reason' => $overrideReason], fn ($v) => $v !== null));
+        $this->require($data, ['data'], 'assign operator');
+
+        return $data['data'];
+    }
+
+    /**
+     * DELETE /machines/{id}/operator-assignments — end the current stretch.
+     *
+     * @return array<string, mixed>
+     */
+    public function unassignOperator(int $machineId, ?string $reason = null): array
+    {
+        $data = $this->deleteJson('machines/'.$machineId.'/operator-assignments', $reason !== null ? ['reason' => $reason] : []);
+        $this->require($data, ['data'], 'unassign operator');
+
+        return $data['data'];
+    }
+
     private function url(string $path): string
     {
         return rtrim($this->baseUrl, '/').'/api/v1/'.ltrim($path, '/');
@@ -235,6 +281,13 @@ final class MinesClient
 
         if ($status === 404) {
             throw new MalformedResponse('Dot.Mines has no such resource (HTTP 404).', 404);
+        }
+
+        if ($status === 422) {
+            $errors = $response->json('errors');
+            $messages = is_array($errors) ? array_values(array_map('strval', array_merge(...array_map(fn ($m) => is_array($m) ? $m : [$m], array_values($errors))))) : [(string) ($response->json('message') ?? 'request refused')];
+
+            throw new MinesRefused($messages !== [] ? $messages : ['request refused']);
         }
 
         if (! $response->successful()) {

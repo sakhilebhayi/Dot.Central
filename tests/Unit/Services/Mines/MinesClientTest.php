@@ -4,6 +4,7 @@ namespace Tests\Unit\Services\Mines;
 
 use App\Services\Mines\Exceptions\CredentialRejected;
 use App\Services\Mines\Exceptions\MalformedResponse;
+use App\Services\Mines\Exceptions\MinesRefused;
 use App\Services\Mines\Exceptions\MinesUnavailable;
 use App\Services\Mines\Exceptions\RateLimited;
 use App\Services\Mines\MinesClient;
@@ -133,5 +134,30 @@ class MinesClientTest extends TestCase
         Http::fake(['mines.test/api/v1/sync*' => Http::response('<html>login</html>', 200, ['Content-Type' => 'text/html'])]);
         $this->expectException(MalformedResponse::class);
         $this->client()->sync(0, ['fleet']);
+    }
+
+    public function test_operator_assignments_post_and_delete_and_a_refusal_carries_the_blockers(): void
+    {
+        Http::fake([
+            'mines.test/api/v1/machines/7/operator-assignments' => Http::sequence()
+                ->push(['data' => ['id' => 55, 'operator_id' => 3, 'machine_id' => 7, 'shift' => 'day', 'assigned_at' => '2026-10-15T18:00:00+00:00', 'unassigned_at' => null], 'message' => 'Operator assigned successfully'], 201)
+                ->push(['message' => 'The given data was invalid.', 'errors' => ['operator_id' => ['Operator One holds no Articulated Dump Truck licence.', 'Operator One has no current medical.']]], 422)
+                ->push(['data' => ['id' => 55, 'operator_id' => 3, 'machine_id' => 7, 'unassigned_at' => '2026-10-15T19:00:00+00:00', 'reason' => 'End of shift'], 'message' => 'Operator unassigned successfully']),
+        ]);
+
+        $assignment = $this->client()->assignOperator(7, 3, 'day');
+        $this->assertSame(55, $assignment['id']);
+        Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/api/v1/machines/7/operator-assignments') && $r['operator_id'] === 3 && $r['shift'] === 'day');
+
+        try {
+            $this->client()->assignOperator(7, 3);
+            $this->fail('a 422 must be a typed refusal');
+        } catch (MinesRefused $e) {
+            $this->assertSame(['Operator One holds no Articulated Dump Truck licence.', 'Operator One has no current medical.'], $e->messages);
+        }
+
+        $ended = $this->client()->unassignOperator(7, 'End of shift');
+        $this->assertSame('End of shift', $ended['reason']);
+        Http::assertSent(fn (Request $r) => $r->method() === 'DELETE' && str_ends_with($r->url(), '/api/v1/machines/7/operator-assignments'));
     }
 }

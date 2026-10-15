@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $preferred_name
  * @property string|null $tag_id
  * @property bool $is_active
+ * @property string|null $employment_status
  */
 class Operator extends Model
 {
@@ -30,7 +31,12 @@ class Operator extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['is_active' => 'boolean', 'mines_operator_id' => 'integer'];
+    protected $casts = ['is_active' => 'boolean', 'mines_operator_id' => 'integer', 'last_synced_at' => 'datetime'];
+
+    public function isFromDotMines(): bool
+    {
+        return $this->mines_operator_id !== null;
+    }
 
     /** @return BelongsTo<ControlRoom, $this> */
     public function controlRoom(): BelongsTo
