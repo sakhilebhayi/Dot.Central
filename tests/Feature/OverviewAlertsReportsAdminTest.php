@@ -150,7 +150,7 @@ class OverviewAlertsReportsAdminTest extends TestCase
         $this->actingAs($this->owner)->post(route('control-rooms.admin.reasons', $this->room), ['code' => 'CRUSHER', 'name' => 'Waiting on crusher', 'category' => 'OPERATIONAL_DELAY'])->assertRedirect();
         $this->assertDatabaseHas('downtime_reasons', ['control_room_id' => $this->room->id, 'code' => 'CRUSHER']);
 
-        $this->actingAs($this->owner)->post(route('control-rooms.admin.settings', $this->room), ['offline_minutes' => 45, 'stale_minutes' => 60, 'idle_minutes_threshold' => 240, 'zero_loads_hours' => 5, 'classify_after_minutes' => 60, 'unack_minutes' => 15, 'engine_hours_budget' => 10, 'reason' => 'Site standard'])->assertRedirect();
+        $this->actingAs($this->owner)->post(route('control-rooms.admin.settings', $this->room), ['offline_minutes' => 45, 'stale_minutes' => 60, 'idle_minutes_threshold' => 240, 'zero_loads_hours' => 5, 'classify_after_minutes' => 60, 'unack_minutes' => 15, 'engine_hours_budget' => 10, 'trucks_per_loader' => 8, 'reason' => 'Site standard'])->assertRedirect();
         $this->assertSame(45, $this->room->settings()->get('offline_minutes'));
         $this->assertDatabaseHas('audit_log', ['entity_type' => ControlRoom::class, 'entity_id' => $this->room->id, 'action' => 'updated', 'reason' => 'Site standard']);
 

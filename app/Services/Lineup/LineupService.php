@@ -143,28 +143,47 @@ final class LineupService
         $at = $this->refTime($shift);
         $units = Equipment::withoutGlobalScopes()->where('control_room_id', $shift->control_room_id)->whereNull('retired_at')->orderBy('name')->get();
         $faces = $this->faces($shift)->keyBy('id');
-        $allocations = LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->whereNull('to_at')->get()->filter(fn (LineupAllocation $a) => $faces->has($a->lineup_face_id))->each(fn (LineupAllocation $a) => $a->setRelation('face', $faces[$a->lineup_face_id]))->groupBy('equipment_id');
+        /** @var array<int, list<LineupAllocation>> $allocations */
+        $allocations = [];
+        foreach (LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->whereNull('to_at')->get() as $allocation) {
+            if ($faces->has($allocation->lineup_face_id)) {
+                $allocation->setRelation('face', $faces[$allocation->lineup_face_id]);
+                $allocations[$allocation->equipment_id][] = $allocation;
+            }
+        }
         $standbys = LineupStandby::withoutGlobalScopes()->with('reason')->where('shift_id', $shift->id)->whereNull('to_at')->get()->keyBy('equipment_id');
         $assignments = ShiftOperatorAssignment::withoutGlobalScopes()->with('operator')->where('shift_id', $shift->id)->whereNull('to_at')->get()->keyBy('equipment_id');
 
-        return $units->toBase()->map(function (Equipment $unit) use ($at, $allocations, $standbys, $assignments): array {
-            $placements = $allocations->get($unit->id, collect())->filter(fn ($a): bool => $a instanceof LineupAllocation)->values();
-            $down = $this->downAt($unit, $at);
-            $standby = $standbys->get($unit->id);
-            $assignment = $assignments->get($unit->id);
+        $rows = [];
+        foreach ($units as $unit) {
+            $rows[] = $this->poolRow($unit, $at, $allocations[$unit->id] ?? [], $standbys->get($unit->id), $assignments->get($unit->id));
+        }
 
-            return [
-                'equipment' => $unit,
-                'role_class' => $unit->role_class ?? RoleClass::SUPPORT,
-                'state' => $down !== null ? 'DOWN' : ($placements->isNotEmpty() ? 'PLACED' : ($standby !== null ? 'STANDBY' : 'FREE')),
-                'placements' => $placements,
-                'placement' => $placements->first(),
-                'standby' => $standby,
-                'down' => $down,
-                'assignment' => $assignment,
-                'operator' => $assignment?->operator,
-            ];
-        })->values();
+        return collect($rows);
+    }
+
+    /**
+     * @param  list<LineupAllocation>  $placements
+     * @return PoolRow
+     */
+    private function poolRow(Equipment $unit, Carbon $at, array $placements, mixed $standby, mixed $assignment): array
+    {
+        $placements = collect($placements);
+        $down = $this->downAt($unit, $at);
+        $standby = $standby instanceof LineupStandby ? $standby : null;
+        $assignment = $assignment instanceof ShiftOperatorAssignment ? $assignment : null;
+
+        return [
+            'equipment' => $unit,
+            'role_class' => $unit->role_class ?? RoleClass::SUPPORT,
+            'state' => $down !== null ? 'DOWN' : ($placements->isNotEmpty() ? 'PLACED' : ($standby !== null ? 'STANDBY' : 'FREE')),
+            'placements' => $placements,
+            'placement' => $placements->first(),
+            'standby' => $standby,
+            'down' => $down,
+            'assignment' => $assignment,
+            'operator' => $assignment?->operator,
+        ];
     }
 
     /** @return array<string, int> */

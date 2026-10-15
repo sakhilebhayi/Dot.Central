@@ -271,6 +271,12 @@ parameters:
 			path: app/Services/Audits.php
 
 		-
+			message: '#^Method App\\Services\\Lineup\\LineupService\:\:pool\(\) should return Illuminate\\Support\\Collection\<int, array\{equipment\: App\\Models\\Equipment, role_class\: string, state\: string, placements\: Illuminate\\Support\\Collection\<int, App\\Models\\LineupAllocation\>, placement\: App\\Models\\LineupAllocation\|null, standby\: App\\Models\\LineupStandby\|null, down\: array\{cause\: string, since\: Illuminate\\Support\\Carbon\|null\}\|null, assignment\: App\\Models\\ShiftOperatorAssignment\|null, \.\.\.\}\> but returns Illuminate\\Support\\Collection\<int, array\{equipment\: App\\Models\\Equipment, role_class\: string, state\: string, placements\: Illuminate\\Support\\Collection\<int, App\\Models\\LineupAllocation\>, placement\: App\\Models\\LineupAllocation\|null, standby\: App\\Models\\LineupStandby\|null, down\: array\{cause\: string, since\: Illuminate\\Support\\Carbon\|null\}\|null, assignment\: App\\Models\\ShiftOperatorAssignment\|null, \.\.\.\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Lineup/LineupService.php
+
+		-
 			message: '#^Offset ''deleted'' on array\{version\: int, server_time\: string, changes\: array\<string, list\<array\<string, mixed\>\>\>, deleted\: list\<array\<string, mixed\>\>, has_more\: bool\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
