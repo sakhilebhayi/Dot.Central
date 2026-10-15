@@ -23,6 +23,11 @@ Not available (do not build against): shifts, mine areas REST, fault-code lifecy
 | Operator assignments | `POST /api/v1/machines/{id}/operator-assignments` {operator_id, shift?, override_reason?} (201; 422 with the eligibility blockers under `errors.operator_id`), `DELETE …/operator-assignments` {reason?}; sync scope `operator_assignments`; webhooks `operator.assigned`, `operator.unassigned`; **same branch** | `OperatorAssignmentResource`: `id, operator_id, machine_id, shift, assigned_at, unassigned_at, reason, was_override, override_reason` (+ operator and machine summaries). Goes through `OperatorAssignmentService`, so Dot.Mines' compliance gate applies to API callers. Needs `update_machines`. |
 | Equipment type | `equipment_type` on `MachineResource` and the `fleet` sync scope; **same branch** | `App\Support\EquipmentType::normalise(machine_type)`: adt, haul_truck, excavator, dozer, loader, grader, water_truck, drill_rig, support, other. Dot.Central maps it to the line-up role class (`role_class_source = mines`); `other` falls back to the heuristic. |
 
+| Liveness, engine hours, units | `last_heard_at`, `provider_cadence_seconds`, `stale`, `operating_hours`, `operating_hours_recorded_at`, `fuel_level_unit` on `MachineResource` and the `fleet` scope; **same branch (2026-10-15)** | Dot.Central prefers Dot.Mines' last-heard clock, learns the cadence on the connection, stores the hour-meter reading as a metric row and the fuel unit per machine (`ProviderFactsSyncTest`). |
+| Provider alert time | `source_triggered_at` on `AlertResource` and in `alert.triggered` webhooks; **same branch** | Stored as `alerts.source_triggered_at`; `triggered_at` remains the Dot.Mines ingest time. |
+| Local webhook targets | `WEBHOOKS_ALLOW_PRIVATE_URLS=true` on a non-production Dot.Mines; **same branch** | First end-to-end delivery verified 2026-10-15 (`operator.unassigned`, HTTP 200). |
+| Token path | `php artisan integration:mint-token {email} {team} --name=`; **same branch** | Warns about every permission the member's role lacks and about a different current team; the token is printed once. |
+
 **Still not exposed:** mine-plan cuts/blocks, `excavator_id` ADT pairing (hidden by `MachineResource` on purpose). `/api/v1/assignments/available` and `/assignments/machines/{id}/history` are mine-*area* assignments.
 
 ## 2. Authentication and tenancy
