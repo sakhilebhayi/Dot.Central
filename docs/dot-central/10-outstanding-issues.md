@@ -1,0 +1,22 @@
+# Dot.Central — Outstanding Issues Register
+
+| # | Item | Type | Impact | Owner / next step |
+|---|---|---|---|---|
+| I-01 | Dot.Mines has no machine-to-machine auth; Dot.Central must store a human-minted Sanctum token per control room (D1). | Dependency | Operational risk if the minting user leaves a team or switches current team via the API. | Ecosystem: define a service-account or client-credentials mechanism in Dot.Mines. Until then: document the minting procedure, monitor 401/403, alert on credential failure. |
+| I-02 | Dot.Mines exposes no site entity; tenant = team. | Decision | `mines_site_ref` is meaningless. | Adopt `mines_team_id` (D1). Confirm with owner. |
+| I-03 | Provider cadence, `lastHeardAt`, dispatch state and stale flags are not exposed by Dot.Mines API. | Dependency | Dot.Central must configure cadence per connection and recompute freshness. | Request a `fleet-state` endpoint in Dot.Mines (future). |
+| I-04 | Engine hours on `MachineResource` are dead columns; `/sync` reads `total_hours` (null). Real hours are `machine_metrics.operating_hours`. | Dependency | Extra API calls per machine; rate budget. | Use metrics endpoint; request `operating_hours` on the machine resource / sync scope in Dot.Mines. |
+| I-05 | Webhooks reject private/loopback URLs. | Environment | Cannot receive real webhooks in local dev. | Verify receiver with signed fixtures; use a public tunnel for end-to-end tests. |
+| I-06 | `fuel_level` is percent from Bell but treated as litres elsewhere in Dot.Mines; `speed` not provided by Bell. | Data | Unit ambiguity; no movement inference possible from speed. | Store as reported with unit flag per connection; show "position only". Raise in Dot.Mines. |
+| I-07 | Dot.Mines alert `triggered_at` is ingest time, not OEM time. | Data | Timelines are approximate. | Display as "received by Dot.Mines at"; raise in Dot.Mines. |
+| I-08 | Ecosystem SSO relies on a shared database; locally the apps use separate databases; the handoff controller is untested; token in query string. | Security | SSO unverified. | Add test; confirm production topology; consider POST-based handoff in the hub. |
+| I-09 | Dot.Mines repo contains a customer name in `wiki.md`, `tests/Unit/BellServiceTest.php` and a test fixture name. | Compliance (outside this repo) | Not in Dot.Central; noted for the Dot.Mines owner. | Dot.Mines maintainers. |
+| I-10 | Dot.Central seed/test data used a real mine name and Dot.Brain narrative alert titles. | Compliance | Fixed in Increment 1. | Verify with the no-prohibited-names test. |
+| I-11 | Front end on CDN Tailwind/Alpine; `package.json` mixes Tailwind v3 and the v4 Vite plugin; empty `app.js`. | Technical debt | Blocks Echo/real-time and charts. | Increment 1. |
+| I-12 | `add_team_id_to_agents_table` NOT NULL FK without default fails on a DB with existing agents. | Technical debt | Deployment risk. | Fix in Increment 1 with a backfill step. |
+| I-13 | PHPStan 53 errors, no baseline. | Technical debt | CI noise. | Add baseline in Increment 1; fix relation generics progressively. |
+| I-14 | New dependency needed for the map (Leaflet) — requires owner approval per repo rules (D6). | Decision | Map blocked until approved. | Owner. |
+| I-15 | Shift ownership (D2), manual production capture (D3), line-up module (D4), AI command centre placement (D5) — decisions proposed, not confirmed. | Decision | Shapes Increments 5–6. | Owner confirmation. |
+| I-16 | Dot.Brain's view of Dot.Central (events, knowledge packs, named worked example) is aspirational and unverified. | Documentation | Not a requirement source. | Leave to Dot.Brain maintainers; Dot.Central will not emit DKP packs in this build. |
+| I-17 | No scheduler/queue worker verified in deployment; integration sync requires both. | Deployment | Sync will not run without `schedule:run` and `queue:work`. | Increment 8 deployment docs. |
+| I-18 | Reconciliation of manual tallies vs telemetry cycles (from the source study) is not built; reason codes/thresholds would need to be configurable. | Scope | Depends on D3. | Revisit after D3. |
