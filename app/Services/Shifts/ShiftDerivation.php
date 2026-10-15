@@ -2,6 +2,7 @@
 
 namespace App\Services\Shifts;
 
+use App\Models\DowntimeClassification;
 use App\Models\Equipment;
 use App\Models\EquipmentMetric;
 use App\Models\EquipmentStatusEvent;
@@ -10,6 +11,7 @@ use App\Models\Shift;
 use App\Services\Mines\FreshnessEvaluator;
 use App\Support\EquipmentState;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -122,6 +124,48 @@ final class ShiftDerivation
         }
 
         return $minutes;
+    }
+
+    /**
+     * Observed stoppage intervals (offline / maintenance) for every machine
+     * in the window, newest first, each with its classification if any.
+     *
+     * @return Collection<int, array{equipment: Equipment, cause: string, started_at: Carbon, ended_at: Carbon|null, minutes: int, open: bool, classification: DowntimeClassification|null}>
+     */
+    public function stoppages(Shift $shift): Collection
+    {
+        $start = $shift->starts_at;
+        $end = $shift->effectiveEnd();
+        $stopped = ['offline', 'maintenance'];
+        $equipmentIds = Equipment::withoutGlobalScopes()->where('control_room_id', $shift->control_room_id)->pluck('id');
+        $classifications = DowntimeClassification::withoutGlobalScopes()->with('reason')->whereIn('equipment_id', $equipmentIds)->where('started_at', '<', $end)->get();
+        $rows = collect();
+
+        foreach (Equipment::withoutGlobalScopes()->whereIn('id', $equipmentIds)->orderBy('name')->get() as $unit) {
+            $before = EquipmentStatusEvent::where('equipment_id', $unit->id)->where('field', 'mines_status')->where('observed_at', '<=', $start)->orderByDesc('observed_at')->first();
+            $events = EquipmentStatusEvent::where('equipment_id', $unit->id)->where('field', 'mines_status')->where('observed_at', '>', $start)->where('observed_at', '<=', $end)->orderBy('observed_at')->get();
+            $current = $before?->to_value;
+            $cursor = $start->copy();
+
+            $emit = function (string $cause, $from, $to, bool $open) use (&$rows, $unit, $classifications): void {
+                $match = $classifications->first(fn ($c) => $c->equipment_id === $unit->id && $c->started_at->lessThanOrEqualTo($to ?? now()) && ($c->ended_at === null || $c->ended_at->greaterThanOrEqualTo($from)));
+                $rows->push(['equipment' => $unit, 'cause' => $cause, 'started_at' => $from, 'ended_at' => $open ? null : $to, 'minutes' => (int) $from->diffInMinutes($to, true), 'open' => $open, 'classification' => $match]);
+            };
+
+            foreach ($events as $event) {
+                if (in_array($current, $stopped, true)) {
+                    $emit($current, $cursor, $event->observed_at, false);
+                }
+                $current = $event->to_value;
+                $cursor = $event->observed_at->copy();
+            }
+
+            if (in_array($current, $stopped, true)) {
+                $emit($current, $cursor, $end, ! $shift->isClosed());
+            }
+        }
+
+        return $rows->sortByDesc('started_at')->values();
     }
 
     /**

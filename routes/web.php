@@ -16,7 +16,9 @@ use App\Http\Controllers\MinesWebhookController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
 use App\Http\Controllers\ShiftController;
+use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
+use App\Livewire\FleetBoard;
 use App\Models\Agent;
 use App\Models\AgentSkill;
 use App\Models\AgentUsageLog;
@@ -86,11 +88,11 @@ Route::middleware([
     Route::post('shifts/{shift}/acknowledge', [ShiftController::class, 'acknowledge'])->name('shifts.acknowledge');
     Route::post('shifts/{shift}/approve', [ShiftController::class, 'approve'])->name('shifts.approve');
     Route::post('shifts/{shift}/reopen', [ShiftController::class, 'reopen'])->name('shifts.reopen');
-    // Derived operational pages (Task C) — registered now so the workflow strip links resolve.
-    Route::get('control-rooms/{controlRoom}/fleet', [EquipmentController::class, 'index'])->name('control-rooms.fleet');
-    Route::get('shifts/{shift}/hours', [ShiftController::class, 'show'])->name('shifts.hours');
-    Route::get('shifts/{shift}/production', [ShiftController::class, 'show'])->name('shifts.production');
-    Route::get('shifts/{shift}/downtime', [ShiftController::class, 'show'])->name('shifts.downtime');
+    Route::get('control-rooms/{controlRoom}/fleet', FleetBoard::class)->name('control-rooms.fleet');
+    Route::get('shifts/{shift}/hours', [ShiftPagesController::class, 'hours'])->name('shifts.hours');
+    Route::get('shifts/{shift}/production', [ShiftPagesController::class, 'production'])->name('shifts.production');
+    Route::get('shifts/{shift}/downtime', [ShiftPagesController::class, 'downtime'])->name('shifts.downtime');
+    Route::post('shifts/{shift}/downtime/classify', [ShiftPagesController::class, 'classify'])->name('shifts.downtime.classify');
 
     Route::get('control-rooms/{controlRoom}/equipment', [EquipmentController::class, 'index'])->name('control-rooms.equipment.index');
     Route::get('control-rooms/{controlRoom}/equipment/{equipment}', [EquipmentController::class, 'show'])->name('control-rooms.equipment.show');
