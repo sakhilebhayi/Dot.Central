@@ -44,6 +44,8 @@ class ControlRoomController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', ControlRoom::class);
+
         return view('control-rooms.create');
     }
 
@@ -54,7 +56,7 @@ class ControlRoomController extends Controller
             'mines_site_ref' => ['nullable', 'string', 'max:255'],
         ]);
 
-        abort_unless($request->user()->currentTeam, 403, 'You need a team before creating a control room.');
+        $this->authorize('create', ControlRoom::class);
 
         $controlRoom = $request->user()->currentTeam->controlRooms()->create([
             'name' => $validated['name'],
@@ -67,7 +69,7 @@ class ControlRoomController extends Controller
 
     public function show(Request $request, ControlRoom $controlRoom): View
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('view', $controlRoom);
 
         $controlRoom->load([
             'dispatchDecisions' => fn ($q) => $q->latest('decided_at')->limit(20),
@@ -87,14 +89,14 @@ class ControlRoomController extends Controller
 
     public function edit(Request $request, ControlRoom $controlRoom): View
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('update', $controlRoom);
 
         return view('control-rooms.edit', compact('controlRoom'));
     }
 
     public function update(Request $request, ControlRoom $controlRoom): RedirectResponse
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('update', $controlRoom);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -113,22 +115,10 @@ class ControlRoomController extends Controller
 
     public function destroy(Request $request, ControlRoom $controlRoom): RedirectResponse
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('delete', $controlRoom);
 
         $controlRoom->delete();
 
         return redirect()->route('control-rooms.index');
-    }
-
-    /**
-     * MVP-level tenancy guard: a control room may only be viewed/modified by
-     * a member of the team it belongs to.
-     */
-    protected function authorizeAccess(Request $request, ControlRoom $controlRoom): void
-    {
-        abort_unless(
-            $request->user()->belongsToTeam($controlRoom->team),
-            403
-        );
     }
 }

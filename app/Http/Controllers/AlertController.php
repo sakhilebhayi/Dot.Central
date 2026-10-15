@@ -16,7 +16,7 @@ class AlertController extends Controller
 {
     public function store(Request $request, ControlRoom $controlRoom): RedirectResponse
     {
-        abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
+        $this->authorize('create', [Alert::class, $controlRoom]);
 
         $validated = $request->validate([
             'severity' => ['required', 'string', 'in:'.implode(',', Alert::SEVERITIES)],
@@ -38,8 +38,8 @@ class AlertController extends Controller
 
     public function update(Request $request, Alert $alert): RedirectResponse
     {
+        $this->authorize('update', $alert);
         $controlRoom = $alert->controlRoom;
-        abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
 
         // MVP-only action: mark an alert cleared.
         $alert->update(['cleared_at' => now()]);
@@ -49,8 +49,8 @@ class AlertController extends Controller
 
     public function destroy(Request $request, Alert $alert): RedirectResponse
     {
+        $this->authorize('delete', $alert);
         $controlRoom = $alert->controlRoom;
-        abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
 
         $alert->delete();
 

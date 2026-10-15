@@ -9,6 +9,7 @@ use App\Actions\Jetstream\DeleteUser;
 use App\Actions\Jetstream\InviteTeamMember;
 use App\Actions\Jetstream\RemoveTeamMember;
 use App\Actions\Jetstream\UpdateTeamName;
+use App\Support\Role;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Jetstream\Jetstream;
 
@@ -40,22 +41,18 @@ class JetstreamServiceProvider extends ServiceProvider
 
     /**
      * Configure the roles and permissions that are available within the application.
+     *
+     * The control-room roles are the only roles; application policies decide
+     * what each may do (App\Policies\*), these permission keys only feed
+     * Jetstream's own team UI and API-token scoping.
      */
     protected function configurePermissions(): void
     {
         Jetstream::defaultApiTokenPermissions(['read']);
 
-        Jetstream::role('admin', 'Administrator', [
-            'create',
-            'read',
-            'update',
-            'delete',
-        ])->description('Administrator users can perform any action.');
-
-        Jetstream::role('editor', 'Editor', [
-            'read',
-            'create',
-            'update',
-        ])->description('Editor users have the ability to read, create, and update.');
+        foreach (Role::cases() as $role) {
+            Jetstream::role($role->value, $role->label(), $role->permissions())
+                ->description($role->description());
+        }
     }
 }

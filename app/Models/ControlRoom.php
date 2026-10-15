@@ -53,4 +53,13 @@ class ControlRoom extends Model
     {
         return $this->hasMany(StaleSessionProposal::class);
     }
+
+    /**
+     * Whether the user may see this room. Managers and administrators see
+     * every room of the team; other members see rooms they belong to.
+     */
+    public function isAccessibleBy(User $user): bool
+    {
+        return $user->belongsToTeam($this->team);
+    }
 }

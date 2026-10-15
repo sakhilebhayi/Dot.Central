@@ -19,8 +19,9 @@ class AgentsTeamIdMigrationTest extends TestCase
 
     public function test_existing_agents_are_backfilled_with_the_first_team(): void
     {
-        // Roll back agent_knowledge tables and the team_id column.
-        Artisan::call('migrate:rollback', ['--step' => 2, '--force' => true]);
+        // Roll back the agent_knowledge tables, then the team_id column.
+        Artisan::call('migrate:rollback', ['--path' => 'database/migrations/2026_08_10_000002_create_agent_knowledge_tables.php', '--force' => true]);
+        Artisan::call('migrate:rollback', ['--path' => 'database/migrations/2026_08_10_000001_add_team_id_to_agents_table.php', '--force' => true]);
         $this->assertFalse(Schema::hasColumn('agents', 'team_id'));
 
         $userId = DB::table('users')->insertGetId([

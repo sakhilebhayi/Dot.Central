@@ -17,16 +17,16 @@ class UpdateTeamMemberRoleTest extends TestCase
         $this->actingAs($user = User::factory()->withPersonalTeam()->create());
 
         $user->currentTeam->users()->attach(
-            $otherUser = User::factory()->create(), ['role' => 'admin']
+            $otherUser = User::factory()->create(), ['role' => 'administrator']
         );
 
         Livewire::test(TeamMemberManager::class, ['team' => $user->currentTeam])
             ->set('managingRoleFor', $otherUser)
-            ->set('currentRole', 'editor')
+            ->set('currentRole', 'operator')
             ->call('updateRole');
 
         $this->assertTrue($otherUser->fresh()->hasTeamRole(
-            $user->currentTeam->fresh(), 'editor'
+            $user->currentTeam->fresh(), 'operator'
         ));
     }
 
@@ -35,19 +35,19 @@ class UpdateTeamMemberRoleTest extends TestCase
         $user = User::factory()->withPersonalTeam()->create();
 
         $user->currentTeam->users()->attach(
-            $otherUser = User::factory()->create(), ['role' => 'admin']
+            $otherUser = User::factory()->create(), ['role' => 'administrator']
         );
 
         $this->actingAs($otherUser);
 
         Livewire::test(TeamMemberManager::class, ['team' => $user->currentTeam])
             ->set('managingRoleFor', $otherUser)
-            ->set('currentRole', 'editor')
+            ->set('currentRole', 'operator')
             ->call('updateRole')
             ->assertStatus(403);
 
         $this->assertTrue($otherUser->fresh()->hasTeamRole(
-            $user->currentTeam->fresh(), 'admin'
+            $user->currentTeam->fresh(), 'administrator'
         ));
     }
 }

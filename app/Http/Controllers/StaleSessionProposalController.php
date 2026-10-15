@@ -9,16 +9,15 @@ use Illuminate\Http\Request;
 /**
  * Resolves a StaleSessionProposal (opened by central:scan-stale-sessions
  * when an active operator session has logged no dispatch activity for a
- * while). Mirrors AlertController/OperatorSessionController's exact
- * authorization shape -- any team member, the same bar
- * OperatorSessionController::update() already uses to end a shift.
+ * while). Resolving a proposal is a supervisory action
+ * (StaleSessionProposalPolicy@resolve).
  */
 class StaleSessionProposalController extends Controller
 {
     public function end(Request $request, StaleSessionProposal $staleSessionProposal): RedirectResponse
     {
+        $this->authorize('resolve', $staleSessionProposal);
         $controlRoom = $staleSessionProposal->controlRoom;
-        abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
 
         $staleSessionProposal->operatorSession->update(['ended_at' => now()]);
         $staleSessionProposal->update([
@@ -32,8 +31,8 @@ class StaleSessionProposalController extends Controller
 
     public function dismiss(Request $request, StaleSessionProposal $staleSessionProposal): RedirectResponse
     {
+        $this->authorize('resolve', $staleSessionProposal);
         $controlRoom = $staleSessionProposal->controlRoom;
-        abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
 
         $staleSessionProposal->update([
             'status' => 'dismissed',

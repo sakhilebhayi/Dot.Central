@@ -16,7 +16,7 @@ class DispatchDecisionController extends Controller
 {
     public function store(Request $request, ControlRoom $controlRoom): RedirectResponse
     {
-        abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
+        $this->authorize('create', [DispatchDecision::class, $controlRoom]);
 
         $validated = $request->validate([
             'workflow_type' => ['required', 'string', 'in:'.implode(',', DispatchDecision::WORKFLOW_TYPES)],
@@ -39,8 +39,8 @@ class DispatchDecisionController extends Controller
 
     public function destroy(Request $request, DispatchDecision $dispatchDecision): RedirectResponse
     {
+        $this->authorize('delete', $dispatchDecision);
         $controlRoom = $dispatchDecision->controlRoom;
-        abort_unless($request->user()->belongsToTeam($controlRoom->team), 403);
 
         $dispatchDecision->delete();
 
