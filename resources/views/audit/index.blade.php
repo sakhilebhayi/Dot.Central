@@ -3,7 +3,7 @@
     <div style="padding:2rem 2.5rem;">
         <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
             <div>
-                <h1 style="font-family:'Syne',sans-serif;font-size:1.625rem;font-weight:800;color:var(--text-primary);margin:0 0 0.25rem;">Audit Log</h1>
+                <h1 style="font-family:var(--font-display);font-size:1.625rem;font-weight:800;color:var(--text-primary);margin:0 0 0.25rem;">Audit Log</h1>
                 <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Append-only record of every operational change: who, when, what changed, and why.</p>
             </div>
             @can('export', \App\Models\AuditEntry::class)
@@ -34,7 +34,7 @@
         <div class="dot-card" style="overflow:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:0.78rem;">
                 <thead>
-                    <tr style="text-align:left;color:var(--text-muted);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;">
+                    <tr style="text-align:left;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;">
                         <th style="padding:0.75rem 1rem;">When</th>
                         <th style="padding:0.75rem 1rem;">Who</th>
                         <th style="padding:0.75rem 1rem;">Control room</th>
@@ -53,7 +53,7 @@
                                 <span class="dot-badge" style="background:var(--btn-ghost-bg);color:var(--text-muted);">system</span>
                             @else
                                 {{ $entry->user?->name ?? '—' }}
-                                <div style="font-size:0.65rem;color:var(--text-muted);">{{ $entry->user_role ?? '' }}</div>
+                                <div style="font-size:0.75rem;color:var(--text-muted);">{{ $entry->user_role ?? '' }}</div>
                             @endif
                         </td>
                         <td style="padding:0.6rem 1rem;">{{ $entry->controlRoom?->name ?? '—' }}</td>
@@ -62,7 +62,7 @@
                         <td style="padding:0.6rem 1rem;max-width:420px;">
                             @if($entry->changes)
                                 @foreach($entry->changes as $field => $change)
-                                    <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--text-secondary);">
+                                    <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-secondary);">
                                         <span style="color:var(--text-muted);">{{ $field }}</span>:
                                         @if(is_array($change) && array_key_exists('old', $change))
                                             @if($change['old'] !== null)<s style="color:var(--text-faint);">{{ is_scalar($change['old']) ? $change['old'] : json_encode($change['old']) }}</s> → @endif{{ is_scalar($change['new']) || $change['new'] === null ? ($change['new'] ?? '—') : json_encode($change['new']) }}

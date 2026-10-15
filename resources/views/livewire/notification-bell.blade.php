@@ -11,9 +11,9 @@
     @if($open)
     <div style="position:absolute;top:calc(100% + 8px);right:0;width:320px;max-height:420px;overflow-y:auto;background:var(--card-bg);border:1px solid var(--card-border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.35);z-index:50;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:0.85rem 1rem;border-bottom:1px solid var(--divider);">
-            <span style="font-family:'Syne',sans-serif;font-size:12.5px;font-weight:700;color:var(--text-primary);">Notifications</span>
+            <span style="font-family:var(--font-display);font-size:12.5px;font-weight:700;color:var(--text-primary);">Notifications</span>
             @if($this->unreadCount > 0)
-                <button wire:click="markAllAsRead" style="background:none;border:none;color:#22c55e;font-size:11px;font-weight:600;cursor:pointer;padding:0;">Mark all read</button>
+                <button wire:click="markAllAsRead" style="background:none;border:none;color:var(--ok);font-size:11px;font-weight:600;cursor:pointer;padding:0;">Mark all read</button>
             @endif
         </div>
 
@@ -39,7 +39,7 @@
         @endif
 
         <div style="padding:0.6rem 1rem;border-top:1px solid var(--divider);text-align:center;">
-            <a href="{{ route('notifications.index') }}" style="font-size:11px;color:#7dd3fc;text-decoration:none;font-weight:600;">View all</a>
+            <a href="{{ route('notifications.index') }}" style="font-size:11px;color:var(--info);text-decoration:none;font-weight:600;">View all</a>
         </div>
     </div>
     @endif

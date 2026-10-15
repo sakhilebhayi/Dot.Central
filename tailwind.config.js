@@ -4,6 +4,7 @@ import typography from '@tailwindcss/typography';
 
 /** @type {import('tailwindcss').Config} */
 export default {
+    darkMode: 'class',
     content: [
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
         './vendor/laravel/jetstream/**/*.blade.php',
@@ -14,9 +15,9 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter', ...defaultTheme.fontFamily.sans],
-                display: ['Syne', ...defaultTheme.fontFamily.sans],
-                mono: ['JetBrains Mono', ...defaultTheme.fontFamily.mono],
+                sans: ['IBM Plex Sans', ...defaultTheme.fontFamily.sans],
+                display: ['IBM Plex Sans Condensed', 'IBM Plex Sans', ...defaultTheme.fontFamily.sans],
+                mono: ['IBM Plex Mono', ...defaultTheme.fontFamily.mono],
             },
         },
     },

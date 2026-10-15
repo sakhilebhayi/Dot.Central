@@ -1,6 +1,6 @@
 <x-app-layout>
     <div style="padding:2rem 2.5rem;max-width:520px;">
-        <h1 style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--text-primary);margin:0 0 1.5rem;">Edit Control Room</h1>
+        <h1 style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;color:var(--text-primary);margin:0 0 1.5rem;">Edit Control Room</h1>
 
         <x-validation-errors class="mb-4" />
 
