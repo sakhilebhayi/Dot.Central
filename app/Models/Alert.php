@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasControlRoomTeamScope;
 use Database\Factories\AlertFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Alert extends Model
 {
     /** @use HasFactory<AlertFactory> */
-    use HasControlRoomTeamScope, HasFactory;
+    use Auditable, HasControlRoomTeamScope, HasFactory;
 
     public const SEVERITIES = ['info', 'warning', 'critical'];
 

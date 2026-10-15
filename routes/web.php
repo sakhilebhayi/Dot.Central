@@ -3,6 +3,7 @@
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\AgentKnowledgeController;
 use App\Http\Controllers\AlertController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\EcosystemAuthController;
 use App\Http\Controllers\ControlRoomController;
 use App\Http\Controllers\ControlRoomMemberController;
@@ -62,6 +63,7 @@ Route::middleware([
     })->name('dashboard');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
 
     Route::resource('agents', AgentController::class)->except(['destroy']);
     Route::resource('agent-knowledge', AgentKnowledgeController::class)->only(['index', 'create', 'store', 'destroy']);

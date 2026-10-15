@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasTeamScope;
 use App\Support\Role;
 use Database\Factories\ControlRoomFactory;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ControlRoom extends Model
 {
     /** @use HasFactory<ControlRoomFactory> */
-    use HasFactory, HasTeamScope;
+    use Auditable, HasFactory, HasTeamScope;
 
     protected $fillable = [
         'team_id', 'name', 'slug', 'mines_site_ref', 'is_active',

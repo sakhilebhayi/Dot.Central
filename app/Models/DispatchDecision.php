@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasControlRoomTeamScope;
 use Database\Factories\DispatchDecisionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,7 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class DispatchDecision extends Model
 {
     /** @use HasFactory<DispatchDecisionFactory> */
-    use HasControlRoomTeamScope, HasFactory;
+    use Auditable, HasControlRoomTeamScope, HasFactory;
 
     public const WORKFLOW_TYPES = ['assign', 'reroute', 'hold', 'stagger'];
 

@@ -72,9 +72,10 @@ class User extends Authenticatable
             return null;
         }
 
-        $key = $this->teamRole($team)?->key;
+        $membership = $team->users()->whereKey($this->id)->first()?->membership;
+        $key = $membership?->role;
 
-        return $key === null ? null : Role::tryFrom($key);
+        return is_string($key) ? Role::tryFrom($key) : null;
     }
 
     /**

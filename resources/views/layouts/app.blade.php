@@ -138,6 +138,13 @@
                 <span class="material-symbols-rounded nav-icon">satellite_alt</span>
                 Control Rooms
             </a>
+            @can('viewAny', \App\Models\AuditEntry::class)
+            <div class="nav-section-label">Control</div>
+            <a href="{{ route('audit.index') }}" class="nav-item {{ request()->routeIs('audit.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">history</span>
+                Audit Log
+            </a>
+            @endcan
             <div class="sidebar-divider" style="margin:10px 0;"></div>
             <a href="{{ route('notifications.index') }}" class="nav-item {{ request()->routeIs('notifications.*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">notifications</span>
