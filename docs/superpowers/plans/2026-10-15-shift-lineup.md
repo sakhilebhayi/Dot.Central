@@ -39,3 +39,7 @@ Files: `FleetBoard` (+ line-up state, operator, issues, filters), view, tests in
 ### Task L: Live verification and docs
 - [ ] Live: sync, start shift, copy/confirm line-up, availability board; screenshots.
 - [ ] Docs: 05 matrix (F-29 → Done, F-32 operators, F-33 availability), 06 roadmap, 10 issues (I-28, I-29), 04 spec (operators not in API), wiki 0.16.0, memory.
+
+---
+
+**Status 2026-10-15:** Tasks G–L done (commits c3c990d, 54f4341, 3268dc3, 0d62cbf, 459a0a6, aa0f2fc and the docs commit). Live-verified on the pilot room against the local Dot.Mines. Open: I-28, I-29, I-30, D6.

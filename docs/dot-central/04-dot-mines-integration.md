@@ -17,6 +17,8 @@
 
 Not available (do not build against): shifts, mine areas REST, fault-code lifecycle, telemetry push, provider cadence, per-machine stale flag, dispatch state, archived metrics, tenant discovery, machine-to-machine auth.
 
+**Not exposed (verified 2026-10-15, see `13-shift-lineup-design.md` §2):** operators and operator-to-machine assignments (models and `OperatorAssignmentService` exist in Dot.Mines; no API), machine class (only the brand in `machine_type`), mine-plan cuts/blocks, `excavator_id` ADT pairing (hidden by `MachineResource` on purpose). `/api/v1/assignments/available` and `/assignments/machines/{id}/history` are mine-*area* assignments.
+
 ## 2. Authentication and tenancy
 - Sanctum personal access token, `Authorization: Bearer`, abilities checked per verb (`read` for GET, `update` for POST ack/resolve). Minted by a human in Dot.Mines (`/user/api-tokens`). Tenant = the token user's `current_team_id`; `POST /api/v1/user/team/{id}` switches it (mutates the user). **Dot.Central must mint one token per control room from a user whose current team is that mine and must never switch teams through the API.**
 - **Pushing alert actions back** (`POST /alerts/{id}/acknowledge|resolve`) is additionally gated by Dot.Mines' `AlertPolicy`: the token's user must hold a Dot.Mines role on that team that grants `acknowledge_alerts` / `resolve_alerts` (the team `admin` role grants all). Token abilities alone are not enough; a user without such a role gets HTTP 403 (verified 2026-10-15, see §8 and I-23).

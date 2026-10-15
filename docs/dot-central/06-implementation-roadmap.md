@@ -43,6 +43,9 @@ Scope: F-20..F-22. Result: six reports with CSV + GENERATE audit, data-quality p
 - Metric catalogue; production view from Dot.Mines daily records (source tagged); shift comparison; CSV export with GENERATE audit; data-quality page.
 Acceptance: calculations unit-tested; no fabricated figures; "no data" states.
 
+## Increment 6b — Shift set-up and line-up (owner instruction 2026-10-15) — **done 2026-10-15**
+Scope: F-29, F-32, F-33 (`13-shift-lineup-design.md`). Result: log in → Start Shift (outstanding items from the previous shift) → Line-up (faces, click-to-place, operator per machine, standby reasons, checks, confirm) → everything else follows; fleet board shows availability and issues per machine. Not built: arrival/departure corrections and material splits (I-29); operators from Dot.Mines (I-28).
+
 ## Increment 7 — Real-time and resilience (Phase 5)
 Scope: F-23; retries/backoff review; stale indicators everywhere; recovery runbook.
 Acceptance: Reverb broadcasting configured, Echo on Vite, event-driven refresh of overview/alerts; failure injection tests.

@@ -200,7 +200,7 @@
                         <h3 class="dot-readout__label" style="margin:0.5rem 0 0.3rem;">{{ RoleClass::label($class) }}s ({{ $byClass[$class]->count() }})</h3>
                         <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
                             @foreach($byClass[$class] as $p)
-                                <button type="button" class="dot-btn dot-btn-sm {{ $p['state'] === 'PLACED' ? 'dot-btn-primary' : 'dot-btn-ghost' }}" style="{{ $p['state'] === 'DOWN' ? 'border-color:var(--bad);color:var(--bad);' : ($p['state'] === 'STANDBY' ? 'opacity:.6;' : '') }}" @disabled(! $editable) wire:click="place({{ $p['equipment']->id }})" title="{{ $p['down']['cause'] ?? ($p['placement']?->face?->label() ?? ($p['standby']?->reason?->name ?? 'free')) }}">
+                                <button type="button" class="dot-btn dot-btn-sm {{ $p['state'] === 'PLACED' ? 'dot-btn-primary' : 'dot-btn-ghost' }}" style="{{ $p['state'] === 'DOWN' ? 'border-color:var(--bad);color:var(--bad);' : ($p['state'] === 'STANDBY' ? 'opacity:.6;' : '') }}" @disabled(! $editable) wire:click="place({{ $p['equipment']->id }})" aria-label="{{ $p['equipment']->name }} ({{ strtolower($p['state']) }}) — put on the target face" title="{{ $p['down']['cause'] ?? ($p['placement']?->face?->label() ?? ($p['standby']?->reason?->name ?? 'free')) }}">
                                     {{ $p['equipment']->name }} <small style="font-weight:400;opacity:.8;">{{ $p['state'] === 'PLACED' ? 'face '.$p['placements']->map(fn ($a) => $a->face->seq)->implode('+') : strtolower($p['state']) }}</small>
                                 </button>
                             @endforeach
