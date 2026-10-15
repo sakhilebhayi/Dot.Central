@@ -56,6 +56,21 @@
                 Control Rooms
             </a>
             <div class="nav-section-label">Control</div>
+            @php($navCounts = app(\App\View\Components\ShellStateBar::class))
+            <a href="{{ route('exceptions.index') }}" class="nav-item {{ request()->routeIs('exceptions.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">rule</span>
+                Exceptions
+                @if($navCounts->openExceptions > 0)<span class="nav-count nav-count--bad">{{ $navCounts->openExceptions }}</span>@endif
+            </a>
+            <a href="{{ route('approvals.index') }}" class="nav-item {{ request()->routeIs('approvals.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">fact_check</span>
+                Approvals
+                @if($navCounts->awaitingApproval > 0)<span class="nav-count nav-count--warn">{{ $navCounts->awaitingApproval }}</span>@endif
+            </a>
+            <a href="{{ route('quality.index') }}" class="nav-item {{ request()->routeIs('quality.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">verified</span>
+                Data Quality
+            </a>
             @can('viewAny', \App\Models\AuditEntry::class)
             <a href="{{ route('audit.index') }}" class="nav-item {{ request()->routeIs('audit.*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">history</span>

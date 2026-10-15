@@ -5,6 +5,7 @@ namespace App\View\Components;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\MinesConnection;
+use App\Models\OperationalException;
 use App\Models\Shift;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -38,6 +39,10 @@ class ShellStateBar extends Component
 
     public ?Shift $currentShift = null;
 
+    public int $openExceptions = 0;
+
+    public int $awaitingApproval = 0;
+
     public ?string $startUrl = null;
 
     public string $dataLinkLevel = 'idle';
@@ -52,6 +57,8 @@ class ShellStateBar extends Component
 
         $roomIds = ControlRoom::accessibleBy($user)->pluck('id');
         $this->rooms = $roomIds->count();
+        $this->openExceptions = OperationalException::withoutGlobalScopes()->whereIn('control_room_id', $roomIds)->where('status', 'OPEN')->count();
+        $this->awaitingApproval = OperationalException::withoutGlobalScopes()->whereIn('control_room_id', $roomIds)->awaitingDecision()->count();
         $this->currentShift = Shift::withoutGlobalScopes()->whereIn('control_room_id', $roomIds)->current()->with('shiftType')->orderByDesc('starts_at')->first();
         $firstRoom = $roomIds->first();
         $this->startUrl = $firstRoom !== null ? route('control-rooms.shifts.start', $firstRoom) : null;

@@ -10,6 +10,7 @@ use App\Http\Controllers\ControlRoomMemberController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\ExceptionController;
 use App\Http\Controllers\IntegrationHealthController;
 use App\Http\Controllers\MinesConnectionController;
 use App\Http\Controllers\MinesWebhookController;
@@ -74,6 +75,16 @@ Route::middleware([
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
+
+    Route::get('/exceptions', [ExceptionController::class, 'index'])->name('exceptions.index');
+    Route::get('/approvals', [ExceptionController::class, 'approvals'])->name('approvals.index');
+    Route::get('/quality', [ExceptionController::class, 'quality'])->name('quality.index');
+    Route::post('/exceptions/{exception}/explain', [ExceptionController::class, 'explain'])->name('exceptions.explain');
+    Route::post('/exceptions/{exception}/approve', [ExceptionController::class, 'approve'])->name('exceptions.approve');
+    Route::post('/exceptions/{exception}/reject', [ExceptionController::class, 'reject'])->name('exceptions.reject');
+    Route::post('/exceptions/{exception}/dismiss', [ExceptionController::class, 'dismiss'])->name('exceptions.dismiss');
+    Route::post('/exceptions/{exception}/resolve', [ExceptionController::class, 'resolve'])->name('exceptions.resolve');
+    Route::post('/shifts/{shift}/rerun', [ExceptionController::class, 'rerun'])->name('shifts.rerun');
 
     Route::get('/health', [IntegrationHealthController::class, 'index'])->name('health.index');
     Route::post('/health/connections/{connection}/sync', [IntegrationHealthController::class, 'sync'])->name('health.sync');

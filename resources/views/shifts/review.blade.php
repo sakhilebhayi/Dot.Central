@@ -22,6 +22,7 @@
                     </form>
                     @endcan
                 @else
+                    @can('close', $shift)<form method="POST" action="{{ route('shifts.rerun', $shift) }}">@csrf<button type="submit" class="dot-btn dot-btn-ghost">Re-run validation</button></form>@endcan
                     <a href="{{ route('shifts.show', $shift) }}" class="dot-btn dot-btn-ghost">Shift operations</a>
                 @endif
             </div>
@@ -100,7 +101,7 @@
                     <div class="dot-panel__head"><h2 class="dot-panel__title">Blocking items</h2></div>
                     <div class="dot-panel__body">
                         @foreach($blocking as $item)
-                            <div class="dot-msg dot-msg--critical"><div class="dot-msg__title"><span class="dot-msg__code">{{ $item['code'] }}</span> {{ $item['title'] }}</div></div>
+                            <div class="dot-msg dot-msg--critical"><div class="dot-msg__title"><span class="dot-msg__code">{{ $item['code'] }}</span> {{ $item['title'] }}</div><div class="dot-msg__fix">→ <a href="{{ route('exceptions.index', ['shift' => $shift->id, 'sev' => 'CRITICAL']) }}" style="color:var(--signal);">Explain it on Exceptions</a></div></div>
                         @endforeach
                     </div>
                 </div>

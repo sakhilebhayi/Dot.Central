@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\EvaluateRules;
 use App\Console\Commands\RefreshMinesHours;
 use App\Console\Commands\ScanStaleSessions;
 use App\Console\Commands\SyncMines;
@@ -32,3 +33,8 @@ Schedule::command(RefreshMinesHours::class)
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->onOneServer();
+
+// Rules also run after every sync; this is the backstop for rooms whose
+// connection is paused and for time-based rules (unacknowledged alerts,
+// overrun shifts).
+Schedule::command(EvaluateRules::class)->everyFiveMinutes()->withoutOverlapping()->onOneServer();

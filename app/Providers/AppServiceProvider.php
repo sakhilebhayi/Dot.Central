@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use App\Models\Team;
 use App\Models\User;
-use App\Services\Shifts\NoShiftBlockers;
+use App\Services\Rules\ExceptionShiftBlockers;
 use App\Services\Shifts\ShiftBlockers;
 use App\Support\Role;
 use Illuminate\Support\Facades\Gate;
@@ -17,7 +17,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(ShiftBlockers::class, NoShiftBlockers::class);
+        $this->app->bind(ShiftBlockers::class, ExceptionShiftBlockers::class);
     }
 
     /**

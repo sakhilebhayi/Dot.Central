@@ -11,6 +11,6 @@ use Illuminate\Support\Collection;
  */
 interface ShiftBlockers
 {
-    /** @return Collection<int, array{code: string, title: string}> */
+    /** @return Collection<int, mixed> rows shaped {code, title} */
     public function blocking(Shift $shift): Collection;
 }

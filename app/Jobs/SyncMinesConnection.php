@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\MinesConnection;
 use App\Services\Mines\MinesSynchroniser;
+use App\Services\Rules\RuleEngine;
+use App\Services\Shifts\ShiftService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -36,5 +38,8 @@ class SyncMinesConnection implements ShouldBeUnique, ShouldQueue
         }
 
         $synchroniser->run($connection, $this->trigger);
+
+        $room = $connection->controlRoom;
+        app(RuleEngine::class)->evaluate($room, app(ShiftService::class)->current($room));
     }
 }
