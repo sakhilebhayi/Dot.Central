@@ -151,6 +151,9 @@ Route::middleware([
     Route::post('control-rooms/{controlRoom}/admin/reasons', [ControlRoomAdminController::class, 'storeReason'])->name('control-rooms.admin.reasons');
     Route::post('control-rooms/{controlRoom}/admin/reasons/{reason}/toggle', [ControlRoomAdminController::class, 'toggleReason'])->name('control-rooms.admin.reasons.toggle');
     Route::post('control-rooms/{controlRoom}/admin/settings', [ControlRoomAdminController::class, 'updateSettings'])->name('control-rooms.admin.settings');
+    Route::post('control-rooms/{controlRoom}/admin/operators', [ControlRoomAdminController::class, 'storeOperator'])->name('control-rooms.admin.operators');
+    Route::post('control-rooms/{controlRoom}/admin/operators/{operator}/toggle', [ControlRoomAdminController::class, 'toggleOperator'])->name('control-rooms.admin.operators.toggle');
+    Route::post('control-rooms/{controlRoom}/admin/equipment/{equipment}/role', [ControlRoomAdminController::class, 'updateEquipmentRole'])->name('control-rooms.admin.equipment-role');
     Route::delete('alerts/{alert}', [AlertController::class, 'destroy'])
         ->name('alerts.destroy');
 

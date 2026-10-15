@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ControlRoom;
 use App\Models\DowntimeReason;
+use App\Models\Equipment;
+use App\Models\Operator;
 use App\Models\ShiftType;
 use App\Services\Audits;
+use App\Support\RoleClass;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -32,6 +35,9 @@ class ControlRoomAdminController extends Controller
             'settings' => $controlRoom->settings()->all(),
             'settingKeys' => self::SETTING_KEYS,
             'categories' => DowntimeReason::CATEGORIES,
+            'operators' => $controlRoom->operators()->orderBy('last_name')->orderBy('first_name')->get(),
+            'equipment' => $controlRoom->equipment()->whereNull('retired_at')->orderBy('name')->get(),
+            'roleClasses' => RoleClass::LABELS,
         ]);
     }
 
@@ -80,6 +86,44 @@ class ControlRoomAdminController extends Controller
         $reason->update(['is_active' => ! $reason->is_active]);
 
         return redirect(route('control-rooms.admin', $controlRoom).'#reasons')->with('status', $reason->name.($reason->is_active ? ' activated.' : ' deactivated.'));
+    }
+
+    public function storeOperator(Request $request, ControlRoom $controlRoom): RedirectResponse
+    {
+        $this->authorize('manage', $controlRoom);
+        $validated = $request->validate([
+            'employee_number' => ['required', 'string', 'max:32', Rule::unique('operators', 'employee_number')->where('control_room_id', $controlRoom->id)],
+            'first_name' => ['required', 'string', 'max:64'],
+            'last_name' => ['required', 'string', 'max:64'],
+            'preferred_name' => ['nullable', 'string', 'max:64'],
+            'tag_id' => ['nullable', 'string', 'max:64'],
+        ]);
+        $controlRoom->operators()->create($validated);
+
+        return redirect(route('control-rooms.admin', $controlRoom).'#operators')->with('status', 'Operator added.');
+    }
+
+    public function toggleOperator(Request $request, ControlRoom $controlRoom, Operator $operator): RedirectResponse
+    {
+        $this->authorize('manage', $controlRoom);
+        abort_unless($operator->control_room_id === $controlRoom->id, 404);
+        $operator->update(['is_active' => ! $operator->is_active]);
+
+        return redirect(route('control-rooms.admin', $controlRoom).'#operators')->with('status', $operator->name().($operator->is_active ? ' activated.' : ' deactivated.'));
+    }
+
+    /** The role class is room configuration over a mirrored row, so it is audited here rather than through Auditable. */
+    public function updateEquipmentRole(Request $request, ControlRoom $controlRoom, Equipment $equipment): RedirectResponse
+    {
+        $this->authorize('manage', $controlRoom);
+        abort_unless($equipment->control_room_id === $controlRoom->id, 404);
+        $validated = $request->validate(['role_class' => ['required', Rule::in(RoleClass::ALL)], 'reason' => ['required', 'string', 'max:500']]);
+
+        $old = $equipment->role_class;
+        $equipment->forceFill(['role_class' => $validated['role_class'], 'role_class_source' => 'manual'])->save();
+        $this->audits->record('updated', $equipment, ['role_class' => ['old' => $old, 'new' => $validated['role_class']]], $validated['reason'], $controlRoom, $request->user());
+
+        return redirect(route('control-rooms.admin', $controlRoom).'#roles')->with('status', $equipment->name.' is now a '.strtolower(RoleClass::label($validated['role_class'])).'.');
     }
 
     public function updateSettings(Request $request, ControlRoom $controlRoom): RedirectResponse

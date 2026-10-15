@@ -88,6 +88,18 @@ class ControlRoom extends Model
     }
 
     /** The room's display timezone: its Dot.Mines connection's, else UTC. */
+    /** @return HasMany<Operator, $this> */
+    public function operators(): HasMany
+    {
+        return $this->hasMany(Operator::class);
+    }
+
+    /** @return HasMany<MineArea, $this> */
+    public function mineAreas(): HasMany
+    {
+        return $this->hasMany(MineArea::class);
+    }
+
     public function timezone(): string
     {
         $connection = $this->minesConnection;

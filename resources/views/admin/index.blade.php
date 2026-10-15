@@ -45,6 +45,28 @@
                 <div><x-button>Add</x-button></div>
             </form>
         </div>
+        <div class="dot-split" id="operators">
+            <div class="dot-panel dot-panel--flush">
+                <div class="dot-panel__head"><h2 class="dot-panel__title">Operators</h2><span class="dot-panel__action" style="color:var(--text-faint);">{{ $operators->count() }} on record</span></div>
+                <div class="dot-table-wrap"><table class="dot-ledger"><thead><tr><th>Employee no.</th><th>Name</th><th>Tag</th><th>Active</th><th></th></tr></thead><tbody>
+                    @forelse($operators as $o)<tr><td class="dot-ledger__key">{{ $o->employee_number }}</td><td>{{ $o->name() }}</td><td class="dot-ledger__key">{{ $o->tag_id ?? '—' }}</td><td>{{ $o->is_active ? 'yes' : 'no' }}</td><td><form method="POST" action="{{ route('control-rooms.admin.operators.toggle', [$controlRoom, $o]) }}">@csrf<button class="dot-btn dot-btn-ghost dot-btn-sm">{{ $o->is_active ? 'Deactivate' : 'Activate' }}</button></form></td></tr>@empty<tr><td colspan="5" class="dot-ledger__empty">No operators yet. The line-up needs them; Dot.Mines does not publish its operator register (issue I-28).</td></tr>@endforelse
+                </tbody></table></div>
+            </div>
+            <form method="POST" action="{{ route('control-rooms.admin.operators', $controlRoom) }}" class="dot-panel" style="display:flex;flex-direction:column;gap:0.75rem;">
+                @csrf
+                <h2 class="dot-panel__title">Add operator</h2>
+                <div><x-label for="employee_number" value="Employee number" /><x-input id="employee_number" name="employee_number" required /></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;"><div><x-label for="first_name" value="First name" /><x-input id="first_name" name="first_name" required /></div><div><x-label for="last_name" value="Last name" /><x-input id="last_name" name="last_name" required /></div></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;"><div><x-label for="preferred_name" value="Known as" /><x-input id="preferred_name" name="preferred_name" /></div><div><x-label for="tag_id" value="Tag id" /><x-input id="tag_id" name="tag_id" /></div></div>
+                <div><x-button>Add</x-button></div>
+            </form>
+        </div>
+        <div class="dot-panel dot-panel--flush" id="roles">
+            <div class="dot-panel__head"><h2 class="dot-panel__title">Equipment roles</h2><span class="dot-panel__action" style="color:var(--text-faint);">guessed from Dot.Mines model and capacity; set it here when the guess is wrong</span></div>
+            <div class="dot-table-wrap"><table class="dot-ledger"><thead><tr><th>Unit</th><th>Model</th><th>Capacity</th><th>Role</th><th>Source</th><th></th></tr></thead><tbody>
+                @forelse($equipment as $e)<tr><td class="dot-ledger__key">{{ $e->name }}</td><td>{{ trim(($e->manufacturer ?? '').' '.($e->model ?? '')) ?: '—' }}</td><td class="num">{{ $e->capacity !== null ? $e->capacity.' t' : '—' }}</td><td>{{ \App\Support\RoleClass::label($e->role_class) }}</td><td>{{ $e->role_class_source ?? '—' }}</td><td><form method="POST" action="{{ route('control-rooms.admin.equipment-role', [$controlRoom, $e]) }}" style="display:flex;gap:0.4rem;align-items:center;">@csrf<select name="role_class" class="dot-input" style="width:auto;" aria-label="Role for {{ $e->name }}">@foreach($roleClasses as $code => $label)<option value="{{ $code }}" @selected($e->role_class === $code)>{{ $label }}</option>@endforeach</select><input name="reason" class="dot-input" placeholder="Reason (audited)" required style="width:11rem;" aria-label="Reason for {{ $e->name }}" /><button class="dot-btn dot-btn-ghost dot-btn-sm">Set</button></form></td></tr>@empty<tr><td colspan="6" class="dot-ledger__empty">No machines mirrored yet.</td></tr>@endforelse
+            </tbody></table></div>
+        </div>
         <form method="POST" action="{{ route('control-rooms.admin.settings', $controlRoom) }}" class="dot-panel" id="thresholds" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
             @csrf
             <h2 class="dot-panel__title" style="grid-column:1/-1;">Rule thresholds</h2>

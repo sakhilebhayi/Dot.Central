@@ -6,6 +6,7 @@ use App\Models\Alert;
 use App\Models\Equipment;
 use App\Models\EquipmentMetric;
 use App\Models\IntegrationSyncRun;
+use App\Models\MineArea;
 use App\Models\MinesConnection;
 use App\Models\ProductionRecord;
 use App\Services\Audits;
@@ -95,6 +96,10 @@ final class MinesSynchroniser
             foreach ($page['changes']['reference'] ?? [] as $area) {
                 if (isset($area['id'])) {
                     $this->areaNames[(int) $area['id']] = (string) ($area['name'] ?? '');
+                    MineArea::withoutGlobalScopes()->updateOrCreate(
+                        ['control_room_id' => $connection->control_room_id, 'mines_area_id' => (int) $area['id']],
+                        ['name' => (string) ($area['name'] ?? ('#'.$area['id'])), 'status' => $area['status'] ?? null, 'sync_version' => isset($area['sync_version']) ? (int) $area['sync_version'] : null, 'last_synced_at' => now()],
+                    );
                 }
             }
             $areas = $this->areaNames;
@@ -172,6 +177,7 @@ final class MinesSynchroniser
             $equipment->first_synced_at = now();
         }
 
+        $equipment->applyRoleClassGuess();
         $equipment->recomputeLastHeard();
         $equipment->save();
         $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
@@ -289,6 +295,7 @@ final class MinesSynchroniser
             $equipment->first_synced_at = now();
         }
 
+        $equipment->applyRoleClassGuess();
         $equipment->recomputeLastHeard();
         $equipment->save();
         $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');

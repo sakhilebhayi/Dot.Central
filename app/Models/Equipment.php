@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasControlRoomTeamScope;
+use App\Support\RoleClass;
 use Carbon\CarbonInterface;
 use Database\Factories\EquipmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,6 +21,8 @@ use Illuminate\Support\Carbon;
  * @property int $mines_machine_id
  * @property string $name
  * @property string|null $machine_type
+ * @property string|null $role_class
+ * @property string|null $role_class_source
  * @property string|null $model
  * @property string|null $manufacturer
  * @property string|null $serial_number
@@ -67,6 +70,17 @@ class Equipment extends Model
         'last_synced_at' => 'datetime',
         'retired_at' => 'datetime',
     ];
+
+    /** Re-derive the role class unless an administrator set it. */
+    public function applyRoleClassGuess(): void
+    {
+        if ($this->role_class_source === 'manual' && $this->role_class !== null) {
+            return;
+        }
+
+        $this->role_class = RoleClass::guess($this->name, $this->model, $this->manufacturer, $this->machine_type, $this->capacity);
+        $this->role_class_source = 'auto';
+    }
 
     /** @return BelongsTo<ControlRoom, $this> */
     public function controlRoom(): BelongsTo
