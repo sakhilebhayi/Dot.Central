@@ -70,7 +70,7 @@ class LineupRulesAndHandoverTest extends TestCase
     public function test_line_up_checks_become_exceptions_and_resolve_when_fixed(): void
     {
         $service = app(LineupService::class);
-        $face = $service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator);
 
         app(RuleEngine::class)->evaluate($this->room, $this->shift);
         $codes = OperationalException::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('status', 'OPEN')->pluck('rule_code')->countBy()->all();
@@ -98,7 +98,7 @@ class LineupRulesAndHandoverTest extends TestCase
     public function test_a_machine_that_ran_but_was_never_placed_is_flagged_at_the_final_review(): void
     {
         $service = app(LineupService::class);
-        $service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator);
+        $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator);
         EquipmentMetric::factory()->for($this->truck)->create(['recorded_at' => '2026-10-15 06:10:00', 'operating_hours' => 100.0]);
         EquipmentMetric::factory()->for($this->truck)->create(['recorded_at' => '2026-10-15 17:50:00', 'operating_hours' => 104.0]);
 
@@ -111,7 +111,7 @@ class LineupRulesAndHandoverTest extends TestCase
     public function test_the_handover_carries_the_line_up_and_the_next_start_shift_shows_what_is_outstanding(): void
     {
         $service = app(LineupService::class);
-        $face = $service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator);
         $service->place($this->shift, $face, $this->truck, $this->operator);
         $op = Operator::withoutGlobalScopes()->firstOrFail();
         $service->assignOperator($this->shift, $this->truck, $op, $this->operator);
@@ -127,7 +127,7 @@ class LineupRulesAndHandoverTest extends TestCase
         $snap = $closed->fresh('handover')->handover->snapshot;
 
         $this->assertSame('CONFIRMED', $snap['lineup']['status']);
-        $this->assertSame('Face 1 — Coal · C1 / B1', $snap['lineup']['faces'][0]['label']);
+        $this->assertSame('Face 1 — Loading area 1 — Coal · C1 / B1', $snap['lineup']['faces'][0]['label']);
         $this->assertSame(['HT-01'], $snap['lineup']['faces'][0]['trucks']);
         $this->assertSame(['HT-01' => 'Operator One · E-1'], $snap['lineup']['operators']);
         $this->assertSame('DZ-01', $snap['lineup']['standby_now'][0]['name']);
@@ -136,9 +136,9 @@ class LineupRulesAndHandoverTest extends TestCase
         $this->actingAs($this->operator)->get(route('control-rooms.shifts.start', $this->room))->assertOk()
             ->assertSee('Still down at the previous end (1)')->assertSee('EX-01')->assertSee('Dot.Mines: maintenance')
             ->assertSee('On standby at the previous end (1)')->assertSee('DZ-01')
-            ->assertSee('Open exceptions carried')->assertSee('Previous faces (1)')->assertSee('Face 1 — Coal');
+            ->assertSee('Open exceptions carried')->assertSee('Previous faces (1)')->assertSee('Face 1 — Loading area 1 — Coal');
 
-        $this->actingAs($this->operator)->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->assertSee('Shift line-up')->assertSee('Face 1 — Coal · C1 / B1')->assertSee('Operator One · E-1')->assertSee('down: Dot.Mines: maintenance')->assertSee($standby->name);
+        $this->actingAs($this->operator)->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->assertSee('Shift line-up')->assertSee('Face 1 — Loading area 1 — Coal · C1 / B1')->assertSee('Operator One · E-1')->assertSee('down: Dot.Mines: maintenance')->assertSee($standby->name);
         $this->actingAs($this->operator)->get(route('shifts.show', $this->shift))->assertOk()->assertSee('Faces (line-up)')->assertSee('CONFIRMED');
         $this->actingAs($this->operator)->get('/dashboard')->assertOk()->assertSee('line-up');
     }

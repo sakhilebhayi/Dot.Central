@@ -110,6 +110,16 @@ final class MinesClient
         return $this->paginated('alerts', ['status' => 'active', 'page' => $page, 'per_page' => $perPage]);
     }
 
+    /**
+     * GET /geofences — paginated GeofenceResource (name, type, status, mine_area_id).
+     *
+     * @return array{data: list<array<string, mixed>>, meta: array{current_page: int, last_page: int, total: int}}
+     */
+    public function geofences(int $page = 1, int $perPage = 100): array
+    {
+        return $this->paginated('geofences', ['page' => $page, 'per_page' => $perPage]);
+    }
+
     /** @return array<string, mixed> */
     public function acknowledgeAlert(int $id): array
     {

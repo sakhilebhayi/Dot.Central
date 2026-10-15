@@ -103,6 +103,7 @@ class DerivedDataFoundationTest extends TestCase
                 ->push($page([$fleet('offline')], [['id' => 55, 'machine_id' => 7, 'mine_area_id' => 1, 'record_date' => '2026-10-15', 'shift' => 'day', 'quantity_produced' => '480.00', 'unit' => 'tonnes', 'status' => 'recorded', 'sync_version' => 2]])),
             'mines.test/api/v1/machines?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
             'mines.test/api/v1/alerts?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
+            'mines.test/api/v1/geofences?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
         ]);
 
         app(MinesSynchroniser::class)->run($connection, 'manual');

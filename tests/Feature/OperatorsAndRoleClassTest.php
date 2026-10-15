@@ -85,6 +85,7 @@ class OperatorsAndRoleClassTest extends TestCase
             ], 'deleted' => [], 'has_more' => false]),
             'mines.test/api/v1/machines?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
             'mines.test/api/v1/alerts?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
+            'mines.test/api/v1/geofences?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
         ]);
 
         app(MinesSynchroniser::class)->run($connection, 'manual');

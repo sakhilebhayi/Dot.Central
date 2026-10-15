@@ -70,6 +70,7 @@ class MinesSynchroniserTest extends TestCase
             'mines.test/api/v1/alerts?*' => Http::response($this->paginated([
                 ['id' => 99, 'type' => 'fuel', 'title' => 'Low fuel', 'description' => 'Fuel at 8%', 'priority' => 'high', 'status' => 'active', 'machine_id' => 7, 'mine_area_id' => 3, 'triggered_at' => '2026-10-15T09:00:00+00:00', 'acknowledged_at' => null, 'resolved_at' => null, 'acknowledged_by' => null, 'resolved_by' => null, 'metadata' => ['external_id' => 'bell:123'], 'created_at' => '2026-10-15T09:00:00+00:00', 'updated_at' => '2026-10-15T09:00:00+00:00'],
             ])),
+            'mines.test/api/v1/geofences?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
         ]);
 
         $run = app(MinesSynchroniser::class)->run($connection, 'manual');
@@ -126,6 +127,7 @@ class MinesSynchroniserTest extends TestCase
             'mines.test/api/v1/alerts?*' => Http::response($this->paginated([
                 ['id' => 99, 'type' => 'fuel', 'title' => 'Low fuel', 'description' => null, 'priority' => 'critical', 'status' => 'resolved', 'machine_id' => 7, 'mine_area_id' => null, 'triggered_at' => '2026-10-15T09:00:00+00:00', 'acknowledged_at' => null, 'resolved_at' => '2026-10-15T10:00:00+00:00', 'acknowledged_by' => null, 'resolved_by' => 2, 'metadata' => null, 'created_at' => '2026-10-15T09:00:00+00:00', 'updated_at' => '2026-10-15T10:00:00+00:00'],
             ])),
+            'mines.test/api/v1/geofences?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
         ]);
 
         $run = app(MinesSynchroniser::class)->run($connection, 'schedule');
@@ -167,6 +169,7 @@ class MinesSynchroniserTest extends TestCase
                 ->push(['version' => 1, 'server_time' => now()->toIso8601String(), 'changes' => ['fleet' => [], 'production' => [], 'reference' => []], 'deleted' => [], 'has_more' => false]),
             'mines.test/api/v1/machines?*' => Http::response($this->paginated([])),
             'mines.test/api/v1/alerts?*' => Http::response($this->paginated([])),
+            'mines.test/api/v1/geofences?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
         ]);
 
         $run = app(MinesSynchroniser::class)->run($connection, 'schedule');
@@ -196,6 +199,7 @@ class MinesSynchroniserTest extends TestCase
             'mines.test/api/v1/sync*' => Http::response(['version' => 4, 'server_time' => now()->toIso8601String(), 'changes' => ['fleet' => [$this->fleetRow(7, 'HT-07')], 'production' => [], 'reference' => []], 'deleted' => [], 'has_more' => false]),
             'mines.test/api/v1/machines?*' => Http::response($this->paginated([$this->machineResource(7, 'HT-07')])),
             'mines.test/api/v1/alerts?*' => Http::response('<html>', 200, ['Content-Type' => 'text/html']),
+            'mines.test/api/v1/geofences?*' => Http::response(['data' => [], 'links' => [], 'meta' => ['current_page' => 1, 'last_page' => 1, 'total' => 0, 'per_page' => 100, 'from' => null, 'to' => null]]),
         ]);
 
         $run = app(MinesSynchroniser::class)->run($connection, 'schedule');

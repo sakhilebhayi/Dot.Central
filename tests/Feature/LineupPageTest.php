@@ -91,12 +91,12 @@ class LineupPageTest extends TestCase
 
         $component = Livewire::test(Lineup::class, ['shift' => $this->shift])
             ->assertSee('Shift Line-up')->assertSee('Confirm line-up')->assertSee('No faces yet')
-            ->call('openFaceForm')->set('faceForm.material', 'Overburden')->set('faceForm.cut', 'c1')->set('faceForm.blocks', 'b1 b2')->set('faceForm.loader_ids', [(string) $this->loader->id])->call('saveFace')
-            ->assertSee('Face 1 — Overburden · C1 / B1 B2')->assertSee('Added Face 1')
+            ->call('openFaceForm')->set('faceForm.location', 'default:Loading area 1')->set('faceForm.material', 'Overburden')->set('faceForm.cut', 'c1')->set('faceForm.blocks', 'b1 b2')->set('faceForm.loader_ids', [(string) $this->loader->id])->call('saveFace')
+            ->assertSee('Face 1 — Loading area 1 — Overburden · C1 / B1 B2')->assertSee('Added Face 1')
             ->call('place', $this->truck->id)->assertSee('HT-01 → Face 1');
         $this->assertSame(2, LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->count());
 
-        $component->call('openFaceForm')->set('faceForm.material', 'Coal')->call('saveFace')->assertSee('Face 2 — Coal')
+        $component->call('openFaceForm')->set('faceForm.location', 'default:Loading area 2')->set('faceForm.material', 'Coal')->call('saveFace')->assertSee('Face 2 — Loading area 2 — Coal')
             ->call('place', $this->truck->id)->assertSee('LU-01')->assertSee('Move here')
             ->call('place', $this->truck->id, true, $component->get('target'))->assertSee('HT-01 → Face 2')->assertDontSee('Refused');
         $this->assertSame(1, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck->id)->whereNull('to_at')->count());
@@ -117,14 +117,14 @@ class LineupPageTest extends TestCase
     {
         $this->actingAs($this->manager)->get(route('shifts.lineup', $this->shift))->assertOk()->assertSee('Shift Line-up')->assertDontSee('Confirm line-up')->assertDontSee('New face');
 
-        Livewire::actingAs($this->manager)->test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm')->set('faceForm.material', 'Coal')->call('saveFace')->assertSee('SH-04');
+        Livewire::actingAs($this->manager)->test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm')->set('faceForm.location', 'default:Loading area 1')->set('faceForm.material', 'Coal')->call('saveFace')->assertSee('SH-04');
     }
 
     public function test_the_fleet_board_shows_availability_line_up_state_and_issues_per_machine(): void
     {
         $this->actingAs($this->operator);
         $service = app(LineupService::class);
-        $face = $service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator);
         $service->place($this->shift, $face, $this->truck, $this->operator);
         $service->assignOperator($this->shift, $this->truck, Operator::withoutGlobalScopes()->firstOrFail(), $this->operator);
         $dozer = Equipment::factory()->for($this->room)->create(['name' => 'DZ-01', 'role_class' => RoleClass::SUPPORT, 'mines_status' => 'maintenance', 'last_heard_at' => now()]);
@@ -133,7 +133,7 @@ class LineupPageTest extends TestCase
         OperationalException::factory()->for($this->room)->create(['shift_id' => $this->shift->id, 'equipment_id' => $this->loader->id, 'rule_code' => 'LU-10', 'title' => 'EX-01 is on Face 1 with no operator', 'raised_by' => 'SUPERVISOR']);
 
         $page = Livewire::test(FleetBoard::class, ['controlRoom' => $this->room]);
-        $page->assertSee('Available for operating')->assertSee('Face 1 — Coal')->assertSee('Operator One')->assertSee('alert: Hydraulic pressure low')->assertSee('LU-10 EX-01 is on Face 1 with no operator')->assertSee('down: Dot.Mines: maintenance')->assertSee('no operator');
+        $page->assertSee('Available for operating')->assertSee('Face 1 — Loading area 1 — Coal')->assertSee('Operator One')->assertSee('alert: Hydraulic pressure low')->assertSee('LU-10 EX-01 is on Face 1 with no operator')->assertSee('down: Dot.Mines: maintenance')->assertSee('no operator');
         $this->assertSame(2, $page->viewData('availability')['available']);
         $this->assertSame(1, $page->viewData('availability')['down']);
 

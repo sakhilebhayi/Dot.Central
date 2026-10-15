@@ -58,13 +58,14 @@
     @if($faceFormOpen)
         <form wire:submit="saveFace" class="dot-panel" style="margin-bottom:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;" aria-label="Face form">
             <h2 class="dot-panel__title" style="grid-column:1/-1;">{{ $editingFaceId ? 'Edit face' : 'New face / work area' }}</h2>
+            @if($locations['source'] !== 'geofence')<p class="dot-readout__context" style="grid-column:1/-1;margin:0;">{{ $locations['source'] === 'area' ? 'No geofences in Dot.Mines for this room yet, so faces are placed in its mine areas.' : 'No geofences or mine areas in Dot.Mines for this room yet, so faces use default area names; set up geofences in Dot.Mines and the list switches on the next sync.' }}</p>@endif
             <div><label class="jet-label" for="ff-kind">Type</label><select id="ff-kind" wire:model.live="faceForm.kind" class="dot-input"><option value="LOADING">Loading face — trucks are loaded here</option><option value="AREA">Work area — dozing, drilling, roads …</option></select></div>
             @if($faceForm['kind'] === 'LOADING')
                 <div><label class="jet-label" for="ff-material">Material</label><input id="ff-material" wire:model="faceForm.material" class="dot-input" placeholder="e.g. Overburden" /></div>
             @else
                 <div><label class="jet-label" for="ff-activity">Activity</label><input id="ff-activity" wire:model="faceForm.activity" class="dot-input" placeholder="e.g. Dozing" required /></div>
             @endif
-            <div><label class="jet-label" for="ff-area">Dot.Mines area</label><select id="ff-area" wire:model="faceForm.mine_area_id" class="dot-input"><option value="">—</option>@foreach($mineAreas as $area)<option value="{{ $area->id }}">{{ $area->name }}</option>@endforeach</select></div>
+            <div><label class="jet-label" for="ff-location">Where (from {{ match($locations['source']) { 'geofence' => 'Dot.Mines geofences', 'area' => 'Dot.Mines mine areas', default => 'default area names' } }})</label><select id="ff-location" wire:model="faceForm.location" class="dot-input" required><option value="">— pick a location —</option>@foreach(collect($locations['options'])->groupBy('group') as $group => $items)<optgroup label="{{ $group }}">@foreach($items as $o)<option value="{{ $o['key'] }}">{{ $o['name'] }}</option>@endforeach</optgroup>@endforeach</select></div>
             <div><label class="jet-label" for="ff-cut">Cut</label><input id="ff-cut" wire:model="faceForm.cut" class="dot-input" /></div>
             <div><label class="jet-label" for="ff-blocks">Blocks (space separated)</label><input id="ff-blocks" wire:model="faceForm.blocks" class="dot-input" /></div>
             <div><label class="jet-label" for="ff-notes">Notes</label><input id="ff-notes" wire:model="faceForm.notes" class="dot-input" /></div>

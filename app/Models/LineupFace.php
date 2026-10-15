@@ -18,6 +18,9 @@ use Illuminate\Support\Carbon;
  * @property int $seq
  * @property string $kind
  * @property int|null $mine_area_id
+ * @property string|null $location_source
+ * @property int|null $location_ref
+ * @property string|null $location_name
  * @property string|null $material
  * @property string|null $activity
  * @property string|null $cut
@@ -74,9 +77,9 @@ class LineupFace extends Model
     public function label(): string
     {
         $where = ($this->cut ? ' · '.$this->cut : '').($this->blocks ? ' / '.implode(' ', $this->blocks) : '');
-        $area = $this->mine_area_id !== null && $this->relationLoaded('mineArea') && $this->mineArea !== null ? ' @ '.$this->mineArea->name : '';
+        $location = $this->location_name !== null ? $this->location_name.' — ' : '';
 
-        return 'Face '.$this->seq.' — '.$this->what().$where.$area;
+        return 'Face '.$this->seq.' — '.$location.$this->what().$where;
     }
 
     /** Faces at the same cut sharing a block may share a loading unit. */

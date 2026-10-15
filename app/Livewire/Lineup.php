@@ -7,10 +7,10 @@ use App\Models\Equipment;
 use App\Models\LineupAllocation;
 use App\Models\LineupFace;
 use App\Models\LineupStandby;
-use App\Models\MineArea;
 use App\Models\Operator;
 use App\Models\Shift;
 use App\Services\Lineup\LineupService;
+use App\Services\Lineup\LocationCatalogue;
 use App\Services\Rules\RuleEngine;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\ValidationException;
@@ -78,7 +78,7 @@ class Lineup extends Component
         if ($faceId !== null) {
             $face = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail($faceId);
             $loaders = $face->allocations()->whereNull('to_at')->where('role', 'LOADER')->pluck('equipment_id')->all();
-            $this->faceForm = ['kind' => $face->kind, 'mine_area_id' => $face->mine_area_id, 'material' => (string) $face->material, 'activity' => (string) $face->activity, 'cut' => (string) $face->cut, 'blocks' => implode(' ', $face->blocks ?? []), 'notes' => (string) $face->notes, 'loader_ids' => array_map('strval', $loaders)];
+            $this->faceForm = ['kind' => $face->kind, 'location' => $face->location_source !== null ? $face->location_source.':'.($face->location_ref ?? $face->location_name) : '', 'material' => (string) $face->material, 'activity' => (string) $face->activity, 'cut' => (string) $face->cut, 'blocks' => implode(' ', $face->blocks ?? []), 'notes' => (string) $face->notes, 'loader_ids' => array_map('strval', $loaders)];
         }
         $this->faceFormOpen = true;
     }
@@ -94,7 +94,7 @@ class Lineup extends Component
     {
         $this->run(function (LineupService $service): void {
             $attrs = [
-                'kind' => $this->faceForm['kind'], 'mine_area_id' => $this->faceForm['mine_area_id'] !== null && $this->faceForm['mine_area_id'] !== '' ? (int) $this->faceForm['mine_area_id'] : null,
+                'kind' => $this->faceForm['kind'], 'location' => (string) ($this->faceForm['location'] ?? ''),
                 'material' => $this->faceForm['material'] ?: null, 'activity' => $this->faceForm['activity'] ?: null, 'cut' => $this->faceForm['cut'] ?: null,
                 'blocks' => preg_split('/[\s,]+/', trim((string) $this->faceForm['blocks'])) ?: [], 'notes' => $this->faceForm['notes'] ?: null,
             ];
@@ -243,7 +243,7 @@ class Lineup extends Component
         $this->changeAt = '';
     }
 
-    public function render(LineupService $service): View
+    public function render(LineupService $service, LocationCatalogue $locations): View
     {
         $this->shift->refresh();
         $room = $this->shift->controlRoom;
@@ -280,7 +280,7 @@ class Lineup extends Component
             'proposal' => $faces->isEmpty() && $this->editable() ? $service->proposal($this->shift) : null,
             'operators' => Operator::withoutGlobalScopes()->where('control_room_id', $room->id)->where('is_active', true)->orderBy('last_name')->orderBy('first_name')->get(),
             'standbyReasons' => DowntimeReason::where('control_room_id', $room->id)->where('is_active', true)->whereIn('category', LineupStandby::CATEGORIES)->orderBy('name')->get(),
-            'mineAreas' => MineArea::withoutGlobalScopes()->where('control_room_id', $room->id)->orderBy('name')->get(),
+            'locations' => $locations->options($room),
             'timezone' => $room->timezone(),
         ]);
     }
@@ -309,6 +309,6 @@ class Lineup extends Component
 
     private function resetFaceForm(): void
     {
-        $this->faceForm = ['kind' => 'LOADING', 'mine_area_id' => null, 'material' => '', 'activity' => '', 'cut' => '', 'blocks' => '', 'notes' => '', 'loader_ids' => []];
+        $this->faceForm = ['kind' => 'LOADING', 'location' => '', 'material' => '', 'activity' => '', 'cut' => '', 'blocks' => '', 'notes' => '', 'loader_ids' => []];
     }
 }

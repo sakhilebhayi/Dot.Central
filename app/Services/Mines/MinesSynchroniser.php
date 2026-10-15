@@ -5,6 +5,7 @@ namespace App\Services\Mines;
 use App\Models\Alert;
 use App\Models\Equipment;
 use App\Models\EquipmentMetric;
+use App\Models\Geofence;
 use App\Models\IntegrationSyncRun;
 use App\Models\MineArea;
 use App\Models\MinesConnection;
@@ -69,6 +70,7 @@ final class MinesSynchroniser
 
         try {
             $this->pullAlerts($client, $connection, $run);
+            $this->pullGeofences($client, $connection);
         } catch (Throwable $e) {
             $this->recordFailure($connection, $run, $e);
             $connection->forceFill(['last_success_at' => now()])->save();
@@ -301,6 +303,31 @@ final class MinesSynchroniser
         $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
 
         return $equipment;
+    }
+
+    /** Mirror the team's geofences; ones no longer listed are retired, never deleted. */
+    private function pullGeofences(MinesClient $client, MinesConnection $connection): void
+    {
+        $page = 1;
+        $perPage = (int) config('mines.page_size', 100);
+        $seen = [];
+
+        do {
+            $result = $this->withRateLimitRetry(fn () => $client->geofences($page, $perPage));
+            foreach ($result['data'] as $resource) {
+                if (! isset($resource['id'])) {
+                    continue;
+                }
+                Geofence::withoutGlobalScopes()->updateOrCreate(
+                    ['control_room_id' => $connection->control_room_id, 'mines_geofence_id' => (int) $resource['id']],
+                    ['name' => (string) ($resource['name'] ?? ('#'.$resource['id'])), 'type' => $resource['type'] ?? null, 'status' => $resource['status'] ?? null, 'mine_area_id' => $resource['mine_area_id'] ?? null, 'last_synced_at' => now(), 'retired_at' => null],
+                );
+                $seen[] = (int) $resource['id'];
+            }
+            $page++;
+        } while ($page <= $result['meta']['last_page']);
+
+        Geofence::withoutGlobalScopes()->where('control_room_id', $connection->control_room_id)->whereNotIn('mines_geofence_id', $seen)->whereNull('retired_at')->update(['retired_at' => now()]);
     }
 
     private function pullAlerts(MinesClient $client, MinesConnection $connection, IntegrationSyncRun $run): void

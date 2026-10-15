@@ -34,7 +34,7 @@ final class LineupService
 {
     public const STOPPED = ['offline', 'maintenance'];
 
-    public function __construct(private readonly Audits $audits) {}
+    public function __construct(private readonly Audits $audits, private readonly LocationCatalogue $locations) {}
 
     // ---- state -----------------------------------------------------------------------------------------------
 
@@ -207,18 +207,19 @@ final class LineupService
     // ---- faces -----------------------------------------------------------------------------------------------
 
     /**
-     * @param  array{kind?: string, mine_area_id?: int|null, material?: string|null, activity?: string|null, cut?: string|null, blocks?: list<string>|null, notes?: string|null, loader_ids?: list<int>}  $attrs
+     * @param  array{location?: string|null, kind?: string, material?: string|null, activity?: string|null, cut?: string|null, blocks?: list<string>|null, notes?: string|null, loader_ids?: list<int>}  $attrs
      */
     public function addFace(Shift $shift, array $attrs, User $user, ?string $hhmm = null): LineupFace
     {
         $this->guardWritable($shift);
         $at = $this->changeAt($shift, $hhmm);
         $this->validateFace($attrs);
+        $location = $this->locations->resolve($shift->controlRoom, $attrs['location'] ?? null);
 
         $seq = (int) LineupFace::withoutGlobalScopes()->where('shift_id', $shift->id)->max('seq') + 1;
-        $face = LineupFace::create([
+        $face = LineupFace::create($location + [
             'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'seq' => $seq,
-            'kind' => $attrs['kind'] ?? 'LOADING', 'mine_area_id' => $attrs['mine_area_id'] ?? null,
+            'kind' => $attrs['kind'] ?? 'LOADING',
             'material' => ($attrs['kind'] ?? 'LOADING') === 'LOADING' ? ($attrs['material'] ?? null) : null,
             'activity' => ($attrs['kind'] ?? 'LOADING') === 'AREA' ? ($attrs['activity'] ?? null) : null,
             'cut' => isset($attrs['cut']) && $attrs['cut'] !== '' ? strtoupper(trim($attrs['cut'])) : null,
@@ -236,7 +237,7 @@ final class LineupService
         return $face;
     }
 
-    /** @param  array{kind?: string, mine_area_id?: int|null, material?: string|null, activity?: string|null, cut?: string|null, blocks?: list<string>|null, notes?: string|null}  $attrs */
+    /** @param  array{location?: string|null, kind?: string, material?: string|null, activity?: string|null, cut?: string|null, blocks?: list<string>|null, notes?: string|null}  $attrs */
     public function editFace(LineupFace $face, array $attrs, User $user): LineupFace
     {
         $shift = $face->shift;
@@ -251,8 +252,9 @@ final class LineupService
             $this->refuse('LU-03', 'Trucks are still on '.$face->label().'. Take them off before turning it into a work area.');
         }
 
-        $face->fill([
-            'kind' => $kind, 'mine_area_id' => $attrs['mine_area_id'] ?? null,
+        $location = isset($attrs['location']) ? $this->locations->resolve($shift->controlRoom, $attrs['location']) : [];
+        $face->fill($location + [
+            'kind' => $kind,
             'material' => $kind === 'LOADING' ? ($attrs['material'] ?? null) : null,
             'activity' => $kind === 'AREA' ? ($attrs['activity'] ?? null) : null,
             'cut' => isset($attrs['cut']) && $attrs['cut'] !== '' ? strtoupper(trim($attrs['cut'])) : null,
@@ -513,7 +515,7 @@ final class LineupService
         $skipped = [];
         foreach ($proposal['faces'] as $row) {
             $source = $row['face'];
-            $face = $this->addFace($shift, ['kind' => $source->kind, 'mine_area_id' => $source->mine_area_id, 'material' => $source->material, 'activity' => $source->activity, 'cut' => $source->cut, 'blocks' => $source->blocks ?? [], 'notes' => $source->notes], $user);
+            $face = $this->addFace($shift, ['location' => $this->carriedLocation($shift, $source), 'kind' => $source->kind, 'material' => $source->material, 'activity' => $source->activity, 'cut' => $source->cut, 'blocks' => $source->blocks ?? [], 'notes' => $source->notes], $user);
             foreach (array_merge($row['loaders'], $row['trucks'], $row['support']) as $unit) {
                 if ($unit->retired_at !== null) {
                     $skipped[] = $unit->name.' (retired)';
@@ -557,6 +559,15 @@ final class LineupService
         }
 
         return $filled;
+    }
+
+    /** The previous face's location as a key in today's list; a location that no longer exists falls back to the first option. */
+    private function carriedLocation(Shift $shift, LineupFace $source): ?string
+    {
+        $options = collect($this->locations->options($shift->controlRoom)['options']);
+        $key = $source->location_source !== null ? $source->location_source.':'.($source->location_ref ?? $source->location_name) : null;
+
+        return $options->firstWhere('key', $key)['key'] ?? $options->firstWhere('name', $source->location_name)['key'] ?? $options->first()['key'] ?? null;
     }
 
     // ---- checks and confirmation ----------------------------------------------------------------------------

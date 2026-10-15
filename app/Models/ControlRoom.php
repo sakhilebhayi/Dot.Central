@@ -94,6 +94,12 @@ class ControlRoom extends Model
         return $this->hasMany(Operator::class);
     }
 
+    /** @return HasMany<Geofence, $this> */
+    public function geofences(): HasMany
+    {
+        return $this->hasMany(Geofence::class);
+    }
+
     /** @return HasMany<MineArea, $this> */
     public function mineAreas(): HasMany
     {

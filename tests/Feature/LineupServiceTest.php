@@ -100,21 +100,21 @@ class LineupServiceTest extends TestCase
 
     public function test_placing_moving_and_releasing_machines_on_a_timed_shift(): void
     {
-        $face1 = $this->service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Overburden', 'cut' => 'c1', 'blocks' => ['b2', 'b1'], 'loader_ids' => [$this->loader->id]], $this->user);
-        $this->assertSame('Face 1 — Overburden · C1 / B2 B1', $face1->label());
+        $face1 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'cut' => 'c1', 'blocks' => ['b2', 'b1'], 'loader_ids' => [$this->loader->id]], $this->user);
+        $this->assertSame('Face 1 — Loading area 1 — Overburden · C1 / B2 B1', $face1->label());
         $this->assertSame('LOADER', LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->firstOrFail()->role);
 
         $a = $this->service->place($this->shift, $face1, $this->truck1, $this->user, '10:20');
         $this->assertSame('HAUL', $a->role);
         $this->assertSame('2026-10-15 10:20:00', $a->from_at->toDateTimeString());
 
-        $face2 = $this->service->addFace($this->shift, ['kind' => 'AREA', 'activity' => 'Dozing'], $this->user);
+        $face2 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'AREA', 'activity' => 'Dozing'], $this->user);
         $this->assertStringContainsString('LU-03', $this->refusal(fn () => $this->service->place($this->shift, $face2, $this->truck2, $this->user, null, true)), 'a truck never goes to a work area');
 
         $support = $this->service->place($this->shift, $face2, $this->dozer, $this->user);
         $this->assertSame('SUPPORT', $support->role);
 
-        $face3 = $this->service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face3 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
         $message = $this->refusal(fn () => $this->service->place($this->shift, $face3, $this->truck1, $this->user));
         $this->assertStringContainsString('LU-01', $message);
         $this->assertStringContainsString('Face 1', $message);
@@ -142,8 +142,8 @@ class LineupServiceTest extends TestCase
         $this->shift->forceFill(['status' => 'CLOSED'])->save();
         $this->assertTrue($this->service->isPlanning($night));
 
-        $face1 = $this->service->addFace($night, ['kind' => 'LOADING', 'material' => 'Coal'], $this->user);
-        $face2 = $this->service->addFace($night, ['kind' => 'LOADING', 'material' => 'Softs'], $this->user);
+        $face1 = $this->service->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face2 = $this->service->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Softs'], $this->user);
         $a = $this->service->place($night, $face1, $this->truck1, $this->user, '10:20');
         $this->assertSame('2026-10-15 18:00:00', $a->from_at->toDateTimeString(), 'planning ignores the typed time');
 
@@ -158,7 +158,7 @@ class LineupServiceTest extends TestCase
     public function test_a_machine_dot_mines_reports_stopped_is_down_and_cannot_be_placed(): void
     {
         EquipmentStatusEvent::create(['equipment_id' => $this->truck2->id, 'field' => 'mines_status', 'from_value' => 'active', 'to_value' => 'maintenance', 'observed_at' => '2026-10-15 09:00:00', 'source' => 'sync']);
-        $face = $this->service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
 
         $message = $this->refusal(fn () => $this->service->place($this->shift, $face, $this->truck2, $this->user));
         $this->assertStringContainsString('LU-02', $message);
@@ -173,7 +173,7 @@ class LineupServiceTest extends TestCase
     {
         $standbyReason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'NO_OPERATOR')->firstOrFail();
         $breakdown = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'BREAKDOWN')->firstOrFail();
-        $face = $this->service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
         $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:00');
 
         $this->assertStringContainsString('LU-05', $this->refusal(fn () => $this->service->setStandby($this->shift, $this->truck1, $breakdown, $this->user)), 'breakdowns are derived, not typed');
@@ -212,10 +212,10 @@ class LineupServiceTest extends TestCase
 
     public function test_copy_from_the_previous_shift_recreates_faces_places_machines_not_down_and_fills_operators(): void
     {
-        $face = $this->service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->user);
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->user);
         $this->service->place($this->shift, $face, $this->truck1, $this->user);
         $this->service->place($this->shift, $face, $this->truck2, $this->user);
-        $area = $this->service->addFace($this->shift, ['kind' => 'AREA', 'activity' => 'Dozing'], $this->user);
+        $area = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'AREA', 'activity' => 'Dozing'], $this->user);
         $this->service->place($this->shift, $area, $this->dozer, $this->user);
         $this->service->assignOperator($this->shift, $this->truck1, $this->op1, $this->user);
         $this->service->assignOperator($this->shift, $this->loader, $this->op2, $this->user);
@@ -247,7 +247,7 @@ class LineupServiceTest extends TestCase
     {
         $this->assertStringContainsString('LU-06', $this->refusal(fn () => $this->service->confirm($this->shift, $this->user)), 'nothing to confirm');
 
-        $face = $this->service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->user);
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->user);
         $codes = $this->service->checks($this->shift)->pluck('code')->countBy()->all();
         $this->assertSame(1, $codes['LU-06'], 'loader without trucks');
         $this->assertSame(3, $codes['LU-09'], 'three free machines once the shift has started');
@@ -270,7 +270,7 @@ class LineupServiceTest extends TestCase
 
     public function test_a_closed_shift_refuses_every_change(): void
     {
-        $face = $this->service->addFace($this->shift, ['kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
         $this->shift->forceFill(['status' => 'CLOSED'])->save();
         $this->shift->refresh();
 
