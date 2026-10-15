@@ -4,11 +4,11 @@ Status values: **Done** (verified by tests and, where UI, in the browser) · **P
 
 | ID | Requirement (brief §) | Requirement source | Status 2026-10-15 | Dependency | Evidence |
 |---|---|---|---|---|---|
-| F-01 | Remove prohibited/customer names from seed, tests, placeholders | brief §2 | Partial — a real mine name in seeder/test/placeholder | — | — |
-| F-02 | Roles operator/supervisor/manager/administrator enforced in policies | §7, DC-AC-1..3 | Present/non-functional (Jetstream roles never checked) | — | — |
-| F-03 | Control room ↔ Dot.Mines connection (token, cadence, timezone) | §6 | Missing | D1 | — |
-| F-04 | Site scoping via control-room assignment | §7 DC-AC-2 | Missing | F-02 | — |
-| F-05 | Audit log, append-only, on all operational actions | §G, DC-AU-* | Missing | — | — |
+| F-01 | Remove prohibited/customer names from seed, tests, placeholders | brief §2 | **Done** 2026-10-15 | — | `ProhibitedReferencesTest` (scans app/config/database/resources/routes/tests/docs) |
+| F-02 | Roles operator/supervisor/manager/administrator enforced in policies | §7, DC-AC-1..3 | **Done** 2026-10-15 | — | `RolePermissionsTest` (22-case matrix, owner = administrator, legacy role migration), policies in `app/Policies` |
+| F-03 | Control room ↔ Dot.Mines connection (token, cadence, timezone) | §6 | Partial — model, encrypted credential, admin UI done; client/sync in Increment 2 | D1 | `MinesConnectionTest`; browser-verified save + redacted audit |
+| F-04 | Site scoping via control-room assignment | §7 DC-AC-2 | **Done** 2026-10-15 | F-02 | `ControlRoomAssignmentTest` |
+| F-05 | Audit log, append-only, on all operational actions | §G, DC-AU-* | **Done** for existing models 2026-10-15 (new models must use `Auditable`) | — | `AuditLogTest`, `AuditsTest`; browser-verified |
 | F-06 | Dot.Mines client + `/sync` delta + machine mirror with provenance | §6, DC-EQ-1 | Missing | F-03 | — |
 | F-07 | Freshness evaluator + presentation state (Operating/Idle/Offline/Stale/Unknown) | §B,C, DC-EQ-2 | Missing | F-06 | — |
 | F-08 | Engine hours from metrics with recorded_at | §B | Missing | F-06 | — |
@@ -27,7 +27,7 @@ Status values: **Done** (verified by tests and, where UI, in the browser) · **P
 | F-21 | Reports with filters, export, generation audit | §H, DC-RP-* | Missing | F-16..F-20 | — |
 | F-22 | Data quality view | DC-DQ-1 | Missing | F-15 | — |
 | F-23 | Real-time updates (poll → broadcast) | §5 | Present/non-functional (Reverb unconfigured) | Vite consolidation | — |
-| F-24 | Front-end build on Vite; remove CDN Tailwind/Alpine; one navigation | §11 | Partial | — | — |
+| F-24 | Front-end build on Vite; remove CDN Tailwind/Alpine; one navigation | §11 | **Done** 2026-10-15 (welcome page still loads Alpine from unpkg — guest page, out of scope) | — | `AppShellTest`; browser screenshots 2026-10-15 |
 | F-25 | Rule-based assistance (idle too long, missing telemetry, threshold deviations, prioritisation) | §8 | Missing | F-15 | — |
 | F-26 | Stale-session scan (existing) | — | Done (tests) | cron | `ScanStaleSessionsCommandTest` |
 | F-27 | AI-agent command centre (existing, out of scope) | — | Done (tests) | — | agent tests |

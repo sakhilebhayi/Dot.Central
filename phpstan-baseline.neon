@@ -1,0 +1,361 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Method App\\Actions\\Jetstream\\CreateTeam\:\:create\(\) should return App\\Models\\Team but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Actions/Jetstream/CreateTeam.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:each\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: mixed, Closure\(App\\Models\\Team\)\: void given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Actions/Jetstream/DeleteUser.php
+
+		-
+			message: '#^Parameter \#1 \$invitation of class Laravel\\Jetstream\\Mail\\TeamInvitation constructor expects Laravel\\Jetstream\\TeamInvitation, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Actions/Jetstream/InviteTeamMember.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Actions/Jetstream/RemoveTeamMember.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Console/Commands/ScanStaleSessions.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$team\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Console/Commands/ScanStaleSessions.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:alerts\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/ScanStaleSessions.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:dispatchDecisions\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/ScanStaleSessions.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:agentKnowledge\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/AgentController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:agents\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/AgentController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AgentController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:agentKnowledge\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/AgentKnowledgeController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AgentKnowledgeController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:allUsers\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/AlertController.php
+
+		-
+			message: '#^Parameter \#1 \$alert of class App\\Notifications\\AlertRaisedNotification constructor expects App\\Models\\Alert, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AlertController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/AuditLogController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:allUsers\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/ControlRoomController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:controlRooms\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/ControlRoomController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:allUsers\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/ControlRoomMemberController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:allUsers\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/OperatorSessionController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Agent.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/AgentKnowledge.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Alert.php
+
+		-
+			message: '#^Method App\\Models\\Alert\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/Alert.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/AuditEntry.php
+
+		-
+			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/AuditEntry.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Models/ControlRoom.php
+
+		-
+			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/ControlRoom.php
+
+		-
+			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/ControlRoom.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/DispatchDecision.php
+
+		-
+			message: '#^Method App\\Models\\DispatchDecision\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/DispatchDecision.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/MinesConnection.php
+
+		-
+			message: '#^Method App\\Models\\MinesConnection\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/MinesConnection.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/OperatorSession.php
+
+		-
+			message: '#^Method App\\Models\\OperatorSession\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/OperatorSession.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/StaleSessionProposal.php
+
+		-
+			message: '#^Method App\\Models\\StaleSessionProposal\:\:auditControlRoom\(\) should return App\\Models\\ControlRoom\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/StaleSessionProposal.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Models\\Team\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Models/Team.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model&object\{pivot\: Illuminate\\Database\\Eloquent\\Relations\\Pivot\}\:\:\$membership\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Models\\User\:\:\$appends is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$appends\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Models\\User\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Models\\User\:\:\$hidden is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$hidden\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Notifications/AlertRaisedNotification.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Notifications/AlertRaisedNotification.php
+
+		-
+			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Policies/AuditEntryPolicy.php
+
+		-
+			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Policies/ControlRoomPolicy.php
+
+		-
+			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Policies/ControlRoomPolicy.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\AgentKnowledge\:\:\$matchCount\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$content\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$model\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Parameter \#1 \$agent of method App\\Services\\AgentChatService\:\:buildSystemPrompt\(\) expects App\\Models\\Agent, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Parameter \#1 \$agent of method App\\Services\\AgentChatService\:\:mockReply\(\) expects App\\Models\\Agent, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: App\\Models\\AgentKnowledge, Closure\(App\\Models\\AgentKnowledge\)\: App\\Models\\AgentKnowledge given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/AgentChatService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Audits.php
+
+		-
+			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:roleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Audits.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>team" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Audits.php
