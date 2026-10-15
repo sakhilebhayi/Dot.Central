@@ -4,8 +4,10 @@ namespace App\Services\Mines;
 
 use App\Models\Alert;
 use App\Models\Equipment;
+use App\Models\EquipmentMetric;
 use App\Models\IntegrationSyncRun;
 use App\Models\MinesConnection;
+use App\Models\ProductionRecord;
 use App\Services\Audits;
 use App\Services\Mines\Exceptions\CredentialRejected;
 use App\Services\Mines\Exceptions\MinesException;
@@ -106,6 +108,8 @@ final class MinesSynchroniser
                 $run->fetched_machines++;
             }
 
+            $this->upsertProduction($connection, is_array($page['changes']['production'] ?? null) ? $page['changes']['production'] : []);
+
             // Tombstones are {entity_type: "machines", entity_id, sync_version}
             // (verified live 2026-10-15); the older {scope, id} form is also accepted.
             foreach ($page['deleted'] ?? [] as $tombstone) {
@@ -141,6 +145,8 @@ final class MinesSynchroniser
             'mines_machine_id' => (int) $row['id'],
         ]);
 
+        $previousStatus = $equipment->exists ? $equipment->mines_status : null;
+
         $equipment->fill([
             'name' => (string) ($row['name'] ?? $equipment->name ?? ('#'.$row['id'])),
             'machine_type' => $row['machine_type'] ?? $equipment->machine_type,
@@ -168,6 +174,42 @@ final class MinesSynchroniser
 
         $equipment->recomputeLastHeard();
         $equipment->save();
+        $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
+    }
+
+    /**
+     * Mirror the production scope: one Dot.Mines record per machine per
+     * day/shift, upserted on its id.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function upsertProduction(MinesConnection $connection, array $rows): void
+    {
+        foreach ($rows as $row) {
+            if (! isset($row['id'], $row['record_date'])) {
+                continue;
+            }
+
+            $equipmentId = isset($row['machine_id'])
+                ? Equipment::withoutGlobalScopes()->where('control_room_id', $connection->control_room_id)->where('mines_machine_id', (int) $row['machine_id'])->value('id')
+                : null;
+
+            ProductionRecord::withoutGlobalScopes()->updateOrCreate(
+                ['control_room_id' => $connection->control_room_id, 'mines_record_id' => (int) $row['id']],
+                [
+                    'equipment_id' => $equipmentId,
+                    'mines_machine_id' => $row['machine_id'] ?? null,
+                    'mine_area_id' => $row['mine_area_id'] ?? null,
+                    'record_date' => $row['record_date'],
+                    'shift' => $row['shift'] ?? null,
+                    'quantity' => isset($row['quantity_produced']) && is_numeric($row['quantity_produced']) ? (float) $row['quantity_produced'] : null,
+                    'unit' => $row['unit'] ?? null,
+                    'mines_status' => $row['status'] ?? null,
+                    'sync_version' => isset($row['sync_version']) ? (int) $row['sync_version'] : null,
+                    'last_synced_at' => now(),
+                ],
+            );
+        }
     }
 
     /**
@@ -221,6 +263,7 @@ final class MinesSynchroniser
 
         $location = is_array($resource['location'] ?? null) ? $resource['location'] : [];
         $area = is_array($resource['mine_area'] ?? null) ? $resource['mine_area'] : [];
+        $previousStatus = $equipment->exists ? $equipment->mines_status : null;
 
         $equipment->fill([
             'name' => (string) ($resource['name'] ?? $equipment->name ?? ('#'.$resource['id'])),
@@ -248,6 +291,7 @@ final class MinesSynchroniser
 
         $equipment->recomputeLastHeard();
         $equipment->save();
+        $equipment->recordTransition('mines_status', $previousStatus, $equipment->mines_status, $equipment->last_seen_at ?? now(), 'sync');
 
         return $equipment;
     }
@@ -348,7 +392,7 @@ final class MinesSynchroniser
 
         foreach ($batch as $equipment) {
             try {
-                $metric = $client->latestMetric($equipment->mines_machine_id);
+                $metrics = $client->metrics($equipment->mines_machine_id, (int) config('mines.metrics_hours_back', 24), (int) config('mines.metrics_limit', 200));
             } catch (RateLimited) {
                 break; // the budget is spent; the next run continues from the stalest
             } catch (CredentialRejected $e) {
@@ -360,7 +404,7 @@ final class MinesSynchroniser
                 continue;
             }
 
-            if ($this->applyMetric($equipment, $metric)) {
+            if ($this->applyMetrics($equipment, $metrics)) {
                 $updated++;
             }
         }
@@ -369,31 +413,65 @@ final class MinesSynchroniser
     }
 
     /**
-     * @param  array<string, mixed>|null  $metric  raw machine_metrics row
+     * Store a page of raw metric rows (newest first from Dot.Mines) and
+     * bring the machine's latest figures forward. Returns true when the
+     * machine's engine hours or fuel changed.
+     *
+     * @param  list<array<string, mixed>>  $rows
      */
-    public function applyMetric(Equipment $equipment, ?array $metric): bool
+    public function applyMetrics(Equipment $equipment, array $rows): bool
     {
-        if ($metric === null || ! isset($metric['recorded_at'])) {
+        $rows = array_values(array_filter($rows, fn (array $r) => isset($r['recorded_at'])));
+        usort($rows, fn (array $a, array $b) => strcmp((string) $a['recorded_at'], (string) $b['recorded_at']));
+
+        $lastEngine = $equipment->metrics()->whereNotNull('engine_running')->orderByDesc('recorded_at')->value('engine_running');
+        $lastEngine = $lastEngine === null ? null : (bool) $lastEngine;
+        $newest = null;
+
+        foreach ($rows as $row) {
+            $recordedAt = Carbon::parse($row['recorded_at']);
+            $raw = is_array($row['raw_data'] ?? null) ? $row['raw_data'] : [];
+            $engineRunning = array_key_exists('engine_running', $raw) && $raw['engine_running'] !== null ? (bool) $raw['engine_running'] : null;
+
+            $metric = EquipmentMetric::firstOrCreate(
+                ['equipment_id' => $equipment->id, 'recorded_at' => $recordedAt],
+                [
+                    'operating_hours' => isset($row['operating_hours']) && is_numeric($row['operating_hours']) ? (float) $row['operating_hours'] : null,
+                    'idle_hours' => isset($row['idle_hours']) && is_numeric($row['idle_hours']) ? (float) $row['idle_hours'] : null,
+                    'fuel_level' => isset($row['fuel_level']) && is_numeric($row['fuel_level']) ? (float) $row['fuel_level'] : null,
+                    'speed' => isset($row['speed']) && is_numeric($row['speed']) ? (float) $row['speed'] : null,
+                    'engine_running' => $engineRunning,
+                    'load_count' => isset($raw['load_count']) && is_numeric($raw['load_count']) ? (int) $raw['load_count'] : null,
+                    'payload_cumulative' => isset($raw['cumulative_payload']) && is_numeric($raw['cumulative_payload']) ? (float) $raw['cumulative_payload'] : null,
+                    'odometer' => isset($raw['odometer']) && is_numeric($raw['odometer']) ? (float) $raw['odometer'] : null,
+                    'ingested_at' => isset($row['created_at']) ? Carbon::parse($row['created_at']) : now(),
+                ],
+            );
+
+            if ($metric->wasRecentlyCreated && $engineRunning !== null) {
+                $equipment->recordTransition('engine_running', $lastEngine === null ? null : ($lastEngine ? 'on' : 'off'), $engineRunning ? 'on' : 'off', $recordedAt, 'metric');
+                $lastEngine = $engineRunning;
+            }
+
+            $newest = $row;
+        }
+
+        if ($newest === null) {
             return false;
         }
 
-        $recordedAt = Carbon::parse($metric['recorded_at']);
+        $recordedAt = Carbon::parse($newest['recorded_at']);
         $changed = false;
 
-        if (isset($metric['fuel_level']) && is_numeric($metric['fuel_level'])) {
-            $equipment->fuel_level = (float) $metric['fuel_level'];
+        if (isset($newest['fuel_level']) && is_numeric($newest['fuel_level'])) {
+            $equipment->fuel_level = (float) $newest['fuel_level'];
             $equipment->fuel_level_unit = 'percent';
             $changed = true;
         }
 
-        if (isset($metric['operating_hours']) && is_numeric($metric['operating_hours'])) {
-            $hours = (float) $metric['operating_hours'];
-            $equipment->engine_hours = $hours;
+        if (isset($newest['operating_hours']) && is_numeric($newest['operating_hours'])) {
+            $equipment->engine_hours = (float) $newest['operating_hours'];
             $equipment->engine_hours_recorded_at = $recordedAt;
-            $equipment->hourReadings()->firstOrCreate(
-                ['recorded_at' => $recordedAt],
-                ['hours' => $hours, 'source' => 'dot_mines.metrics', 'ingested_at' => isset($metric['created_at']) ? Carbon::parse($metric['created_at']) : now()],
-            );
             $changed = true;
         }
 

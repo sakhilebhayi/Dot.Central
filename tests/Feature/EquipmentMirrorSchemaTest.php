@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\Equipment;
-use App\Models\EquipmentHourReading;
+use App\Models\EquipmentMetric;
 use App\Models\IntegrationSyncRun;
 use App\Models\MinesConnection;
 use App\Models\User;
@@ -32,13 +32,13 @@ class EquipmentMirrorSchemaTest extends TestCase
         Equipment::factory()->for($room)->create(['mines_machine_id' => 7]);
     }
 
-    public function test_hour_readings_are_unique_per_equipment_and_time(): void
+    public function test_metrics_are_unique_per_equipment_and_time(): void
     {
-        $reading = EquipmentHourReading::factory()->create(['recorded_at' => '2026-10-15 10:00:00']);
-        $this->assertSame($reading->equipment_id, $reading->equipment->id);
+        $metric = EquipmentMetric::factory()->create(['recorded_at' => '2026-10-15 10:00:00']);
+        $this->assertSame($metric->equipment_id, $metric->equipment->id);
 
         $this->expectException(QueryException::class);
-        EquipmentHourReading::factory()->for($reading->equipment)->create(['recorded_at' => '2026-10-15 10:00:00']);
+        EquipmentMetric::factory()->for($metric->equipment)->create(['recorded_at' => '2026-10-15 10:00:00']);
     }
 
     public function test_sync_runs_belong_to_a_connection(): void

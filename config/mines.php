@@ -31,4 +31,21 @@ return [
 
     // The longest the synchroniser waits on a 429 before giving up the run.
     'max_retry_after_seconds' => (int) env('MINES_MAX_RETRY_AFTER', 60),
+
+    // Metrics history fetched per machine per refresh (one request each).
+    'metrics_hours_back' => (int) env('MINES_METRICS_HOURS_BACK', 24),
+    'metrics_limit' => (int) env('MINES_METRICS_LIMIT', 200),
+
+    // Per-room defaults; administrators override them per control room
+    // (control_room_settings). Minutes and hours are plain numbers.
+    'room_defaults' => [
+        'offline_minutes' => 30,          // EQ-01 offline during a shift
+        'stale_minutes' => 60,            // TEL-02 stale telemetry
+        'idle_minutes_threshold' => 240,  // EQ-04 idle while engine running
+        'zero_loads_hours' => 5,          // EQ-03 haul unit ran without loads
+        'classify_after_minutes' => 60,   // DT-01 stoppage left unclassified
+        'unack_minutes' => 15,            // AL-01 critical alert unacknowledged
+        'engine_hours_budget' => 10,      // reference line on the engine-hours table
+        'haul_types' => ['haul_truck', 'adt', 'truck'],
+    ],
 ];

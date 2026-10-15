@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasControlRoomTeamScope;
+use Carbon\CarbonInterface;
 use Database\Factories\EquipmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -73,10 +74,28 @@ class Equipment extends Model
         return $this->belongsTo(ControlRoom::class);
     }
 
-    /** @return HasMany<EquipmentHourReading, $this> */
-    public function hourReadings(): HasMany
+    /** @return HasMany<EquipmentMetric, $this> */
+    public function metrics(): HasMany
     {
-        return $this->hasMany(EquipmentHourReading::class);
+        return $this->hasMany(EquipmentMetric::class);
+    }
+
+    /** @return HasMany<EquipmentStatusEvent, $this> */
+    public function statusEvents(): HasMany
+    {
+        return $this->hasMany(EquipmentStatusEvent::class);
+    }
+
+    /**
+     * Record an observed transition of a Dot.Mines fact, once per change.
+     */
+    public function recordTransition(string $field, ?string $from, ?string $to, CarbonInterface $observedAt, string $source): void
+    {
+        if ($from === $to) {
+            return;
+        }
+
+        $this->statusEvents()->create(['field' => $field, 'from_value' => $from, 'to_value' => $to, 'observed_at' => $observedAt, 'source' => $source]);
     }
 
     /** @return HasMany<Alert, $this> */

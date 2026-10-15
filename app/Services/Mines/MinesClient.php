@@ -76,12 +76,28 @@ final class MinesClient
      */
     public function latestMetric(int $machineId): ?array
     {
-        $data = $this->get('machines/'.$machineId.'/metrics', ['limit' => 1]);
-        $this->require($data, ['data'], 'metrics');
-
-        $rows = is_array($data['data']) ? array_values($data['data']) : [];
+        $rows = $this->metrics($machineId, null, 1);
 
         return $rows === [] ? null : $rows[0];
+    }
+
+    /**
+     * GET /machines/{id}/metrics — raw machine_metrics rows, newest first,
+     * optionally bounded to the last N hours (max 720) and a row limit (max 1000).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function metrics(int $machineId, ?int $hoursBack = null, int $limit = 200): array
+    {
+        $query = ['limit' => max(1, min(1000, $limit))];
+        if ($hoursBack !== null) {
+            $query['hours_back'] = max(1, min(720, $hoursBack));
+        }
+
+        $data = $this->get('machines/'.$machineId.'/metrics', $query);
+        $this->require($data, ['data'], 'metrics');
+
+        return is_array($data['data']) ? array_values(array_filter($data['data'], 'is_array')) : [];
     }
 
     /**

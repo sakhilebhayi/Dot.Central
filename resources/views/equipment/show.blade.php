@@ -24,10 +24,10 @@
                 <div class="dot-panel__head"><h2 class="dot-panel__title">Engine-hour readings</h2><span class="dot-panel__action" style="color:var(--text-faint);">{{ $readings->count() }} kept</span></div>
                 <div class="dot-table-wrap">
                     <table class="dot-ledger">
-                        <thead><tr><th>Recorded (provider)</th><th class="num">Hours</th><th>Source</th><th>Ingested</th></tr></thead>
+                        <thead><tr><th>Recorded (provider)</th><th class="num">Hours</th><th class="num">Idle h</th><th class="num">Loads</th><th>Engine</th><th>Source</th></tr></thead>
                         <tbody>
                         @forelse($readings as $reading)
-                            <tr><td class="dot-ledger__key">{{ Format::stamp($reading->recorded_at, $timezone) }}</td><td class="num">{{ Format::number($reading->hours) }}</td><td>{{ $reading->source }}</td><td class="dot-ledger__key">{{ Format::stamp($reading->ingested_at, $timezone) }}</td></tr>
+                            <tr><td class="dot-ledger__key">{{ Format::stamp($reading->recorded_at, $timezone) }}</td><td class="num">{{ Format::number($reading->operating_hours) }}</td><td class="num">{{ Format::number($reading->idle_hours) }}</td><td class="num">{{ Format::integer($reading->load_count) }}</td><td>{{ $reading->engine_running === null ? '—' : ($reading->engine_running ? 'running' : 'off') }}</td><td>dot_mines.metrics</td></tr>
                         @empty
                             <tr><td colspan="4" class="dot-ledger__empty">No readings fetched yet.</td></tr>
                         @endforelse

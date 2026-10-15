@@ -54,7 +54,7 @@ class EquipmentController extends Controller
             'connection' => $connection,
             'equipment' => $equipment,
             'evaluation' => $evaluation,
-            'readings' => $equipment->hourReadings()->latest('recorded_at')->limit(50)->get(),
+            'readings' => $equipment->metrics()->latest('recorded_at')->limit(50)->get(),
             'alerts' => $equipment->alerts()->latest('triggered_at')->limit(20)->get(),
             'timezone' => $connection === null ? 'UTC' : $connection->timezone,
         ]);

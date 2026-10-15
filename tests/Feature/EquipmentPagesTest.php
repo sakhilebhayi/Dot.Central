@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ControlRoom;
 use App\Models\Equipment;
-use App\Models\EquipmentHourReading;
+use App\Models\EquipmentMetric;
 use App\Models\MinesConnection;
 use App\Models\Team;
 use App\Models\User;
@@ -49,8 +49,8 @@ class EquipmentPagesTest extends TestCase
         $room = ControlRoom::factory()->for($owner->currentTeam)->create();
         MinesConnection::factory()->for($room)->verified()->create();
         $equipment = Equipment::factory()->for($room)->heard(60)->create(['name' => 'HT-07', 'model' => 'B50E', 'serial_number' => 'SN7']);
-        EquipmentHourReading::factory()->for($equipment)->create(['hours' => 1200.0, 'recorded_at' => now()->subHour()]);
-        EquipmentHourReading::factory()->for($equipment)->create(['hours' => 1201.5, 'recorded_at' => now()->subMinutes(5)]);
+        EquipmentMetric::factory()->for($equipment)->create(['operating_hours' => 1200.0, 'recorded_at' => now()->subHour()]);
+        EquipmentMetric::factory()->for($equipment)->create(['operating_hours' => 1201.5, 'recorded_at' => now()->subMinutes(5)]);
 
         $this->actingAs($owner)->get(route('control-rooms.equipment.show', [$room, $equipment]))
             ->assertOk()

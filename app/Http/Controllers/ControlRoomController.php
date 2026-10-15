@@ -6,6 +6,7 @@ use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\DispatchDecision;
 use App\Models\OperatorSession;
+use App\Services\RoomProvisioner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -63,6 +64,7 @@ class ControlRoomController extends Controller
         ]);
 
         $controlRoom->users()->attach($request->user());
+        app(RoomProvisioner::class)->provision($controlRoom);
 
         return redirect()->route('control-rooms.show', $controlRoom);
     }

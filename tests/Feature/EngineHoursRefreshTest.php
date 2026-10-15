@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ControlRoom;
 use App\Models\Equipment;
-use App\Models\EquipmentHourReading;
+use App\Models\EquipmentMetric;
 use App\Models\MinesConnection;
 use App\Services\Mines\MinesSynchroniser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -56,7 +56,7 @@ class EngineHoursRefreshTest extends TestCase
         $this->assertSame('2026-10-15 10:00:00', $never->engine_hours_recorded_at->format('Y-m-d H:i:s'));
         $this->assertSame(40.0, $never->fuel_level);
         $this->assertSame('2026-10-15 10:00:00', $never->last_heard_at->format('Y-m-d H:i:s'));
-        $this->assertSame(1, $never->hourReadings()->count());
+        $this->assertSame(1, $never->metrics()->count());
         $this->assertSame(88.0, $old->refresh()->engine_hours);
     }
 
@@ -70,7 +70,8 @@ class EngineHoursRefreshTest extends TestCase
 
         $this->assertSame(0, $updated);
         $this->assertSame(500.0, $equipment->refresh()->engine_hours);
-        $this->assertSame(0, EquipmentHourReading::count());
+        $this->assertSame(1, EquipmentMetric::count(), 'the row is kept for history, with null hours');
+        $this->assertNull(EquipmentMetric::first()->operating_hours);
     }
 
     public function test_a_repeated_reading_is_not_inserted_twice(): void
@@ -83,7 +84,7 @@ class EngineHoursRefreshTest extends TestCase
         $equipment->refresh()->update(['engine_hours_recorded_at' => null]);
         app(MinesSynchroniser::class)->refreshEngineHours($connection);
 
-        $this->assertSame(1, EquipmentHourReading::count());
+        $this->assertSame(1, EquipmentMetric::count());
     }
 
     public function test_a_rate_limit_stops_the_batch_but_keeps_what_was_saved(): void

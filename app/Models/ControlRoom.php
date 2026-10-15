@@ -68,6 +68,29 @@ class ControlRoom extends Model
         return $this->hasMany(Equipment::class);
     }
 
+    /** @return HasMany<ShiftType, $this> */
+    public function shiftTypes(): HasMany
+    {
+        return $this->hasMany(ShiftType::class)->orderBy('sort');
+    }
+
+    /** @return HasMany<DowntimeReason, $this> */
+    public function downtimeReasons(): HasMany
+    {
+        return $this->hasMany(DowntimeReason::class)->orderBy('name');
+    }
+
+    /** @return HasMany<ProductionRecord, $this> */
+    public function productionRecords(): HasMany
+    {
+        return $this->hasMany(ProductionRecord::class);
+    }
+
+    public function settings(): RoomSettings
+    {
+        return ControlRoomSetting::for($this);
+    }
+
     /**
      * The Dot.Mines connection (one per room), if configured.
      *
