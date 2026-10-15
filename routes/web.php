@@ -10,6 +10,7 @@ use App\Http\Controllers\ControlRoomMemberController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\MinesConnectionController;
+use App\Http\Controllers\MinesWebhookController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
 use App\Http\Controllers\StaleSessionProposalController;
@@ -23,6 +24,9 @@ use Illuminate\Support\Str;
 use Laravel\Jetstream\Jetstream;
 
 Route::get('/auth/ecosystem', [EcosystemAuthController::class, 'handle'])->name('ecosystem.auth');
+
+// Signed deliveries from Dot.Mines (no session; verified by HMAC, see MinesWebhookController).
+Route::post('/webhooks/mines/{connection}', MinesWebhookController::class)->name('webhooks.mines');
 Route::get('/', function () {
     return view('welcome');
 });

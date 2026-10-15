@@ -318,6 +318,90 @@ final class MinesSynchroniser
     }
 
     /**
+     * Engine hours live in Dot.Mines metrics (operating_hours), one call per
+     * machine, so they are refreshed in small batches inside the rate budget:
+     * machines never read first, then the stalest. Returns how many changed.
+     */
+    public function refreshEngineHours(MinesConnection $connection): int
+    {
+        if (! $connection->isUsable()) {
+            return 0;
+        }
+
+        $client = $this->clients->for($connection);
+        $batch = Equipment::withoutGlobalScopes()
+            ->where('control_room_id', $connection->control_room_id)
+            ->whereNull('retired_at')
+            ->orderByRaw('engine_hours_recorded_at IS NOT NULL')
+            ->orderBy('engine_hours_recorded_at')
+            ->limit(max(1, (int) config('mines.hours_batch', 20)))
+            ->get();
+
+        $updated = 0;
+
+        foreach ($batch as $equipment) {
+            try {
+                $metric = $client->latestMetric($equipment->mines_machine_id);
+            } catch (RateLimited) {
+                break; // the budget is spent; the next run continues from the stalest
+            } catch (CredentialRejected $e) {
+                $connection->forceFill(['status' => 'credential_invalid', 'last_failure_at' => now(), 'last_error' => $e->getMessage()])->save();
+                break;
+            } catch (MinesException $e) {
+                $connection->forceFill(['last_failure_at' => now(), 'last_error' => $e->getMessage()])->save();
+
+                continue;
+            }
+
+            if ($this->applyMetric($equipment, $metric)) {
+                $updated++;
+            }
+        }
+
+        return $updated;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $metric  raw machine_metrics row
+     */
+    public function applyMetric(Equipment $equipment, ?array $metric): bool
+    {
+        if ($metric === null || ! isset($metric['recorded_at'])) {
+            return false;
+        }
+
+        $recordedAt = Carbon::parse($metric['recorded_at']);
+        $changed = false;
+
+        if (isset($metric['fuel_level']) && is_numeric($metric['fuel_level'])) {
+            $equipment->fuel_level = (float) $metric['fuel_level'];
+            $equipment->fuel_level_unit = 'percent';
+            $changed = true;
+        }
+
+        if (isset($metric['operating_hours']) && is_numeric($metric['operating_hours'])) {
+            $hours = (float) $metric['operating_hours'];
+            $equipment->engine_hours = $hours;
+            $equipment->engine_hours_recorded_at = $recordedAt;
+            $equipment->hourReadings()->firstOrCreate(
+                ['recorded_at' => $recordedAt],
+                ['hours' => $hours, 'source' => 'dot_mines.metrics', 'ingested_at' => isset($metric['created_at']) ? Carbon::parse($metric['created_at']) : now()],
+            );
+            $changed = true;
+        }
+
+        if (! $changed) {
+            return false;
+        }
+
+        $equipment->recomputeLastHeard();
+        $equipment->last_synced_at = now();
+        $equipment->save();
+
+        return true;
+    }
+
+    /**
      * @template T
      *
      * @param  callable(): T  $call
