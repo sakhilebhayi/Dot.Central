@@ -5,6 +5,7 @@ use App\Http\Controllers\AgentKnowledgeController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\EcosystemAuthController;
+use App\Http\Controllers\ControlRoomAdminController;
 use App\Http\Controllers\ControlRoomController;
 use App\Http\Controllers\ControlRoomMemberController;
 use App\Http\Controllers\ConversationController;
@@ -16,10 +17,12 @@ use App\Http\Controllers\MinesConnectionController;
 use App\Http\Controllers\MinesWebhookController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
 use App\Livewire\FleetBoard;
+use App\Livewire\Overview;
 use App\Models\Agent;
 use App\Models\AgentSkill;
 use App\Models\AgentUsageLog;
@@ -51,7 +54,9 @@ Route::middleware([
     config('jetstream.auth_session'),
     'verified',
 ])->group(function () {
-    Route::get('/dashboard', function () {
+    Route::get('/dashboard', Overview::class)->name('dashboard');
+
+    Route::get('/agent-hub', function () {
         // Agent/AgentSkill are the ecosystem-wide agent catalog (no owner
         // column at all) and are intentionally never scoped. Conversation/
         // Message/AgentUsageLog carry HasUserScope/HasConversationUserScope,
@@ -71,7 +76,7 @@ Route::middleware([
             'totalAgents', 'activeAgents', 'totalConversations', 'totalMessages',
             'totalTokens', 'totalSkills', 'agents', 'skills'
         ));
-    })->name('dashboard');
+    })->name('agents.hub');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
@@ -134,6 +139,18 @@ Route::middleware([
         ->name('control-rooms.alerts.store');
     Route::patch('alerts/{alert}', [AlertController::class, 'update'])
         ->name('alerts.update');
+    Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');
+    Route::post('alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('alerts.acknowledge');
+    Route::post('alerts/{alert}/assign', [AlertController::class, 'assign'])->name('alerts.assign');
+    Route::post('alerts/{alert}/escalate', [AlertController::class, 'escalate'])->name('alerts.escalate');
+    Route::post('alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
+    Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    Route::get('control-rooms/{controlRoom}/admin', [ControlRoomAdminController::class, 'index'])->name('control-rooms.admin');
+    Route::post('control-rooms/{controlRoom}/admin/shift-types', [ControlRoomAdminController::class, 'storeShiftType'])->name('control-rooms.admin.shift-types');
+    Route::post('control-rooms/{controlRoom}/admin/shift-types/{shiftType}/toggle', [ControlRoomAdminController::class, 'toggleShiftType'])->name('control-rooms.admin.shift-types.toggle');
+    Route::post('control-rooms/{controlRoom}/admin/reasons', [ControlRoomAdminController::class, 'storeReason'])->name('control-rooms.admin.reasons');
+    Route::post('control-rooms/{controlRoom}/admin/reasons/{reason}/toggle', [ControlRoomAdminController::class, 'toggleReason'])->name('control-rooms.admin.reasons.toggle');
+    Route::post('control-rooms/{controlRoom}/admin/settings', [ControlRoomAdminController::class, 'updateSettings'])->name('control-rooms.admin.settings');
     Route::delete('alerts/{alert}', [AlertController::class, 'destroy'])
         ->name('alerts.destroy');
 

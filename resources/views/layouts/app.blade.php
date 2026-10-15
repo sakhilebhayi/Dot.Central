@@ -51,9 +51,13 @@
                 <span class="material-symbols-rounded nav-icon">space_dashboard</span>
                 Overview
             </a>
-            <a href="{{ route('control-rooms.index') }}" class="nav-item {{ request()->routeIs('control-rooms.*') ? 'active' : '' }}">
+            <a href="{{ route('control-rooms.index') }}" class="nav-item {{ request()->routeIs('control-rooms.*') && ! request()->routeIs('control-rooms.admin*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">settings_input_antenna</span>
                 Control Rooms
+            </a>
+            <a href="{{ route('alerts.index') }}" class="nav-item {{ request()->routeIs('alerts.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">campaign</span>
+                Alerts
             </a>
             <div class="nav-section-label">Control</div>
             @php($navCounts = app(\App\View\Components\ShellStateBar::class))
@@ -88,8 +92,13 @@
                 Health
             </a>
             @endcan
+            <div class="nav-section-label">Information</div>
+            <a href="{{ route('reports.index') }}" class="nav-item {{ request()->routeIs('reports.*') ? 'active' : '' }}">
+                <span class="material-symbols-rounded nav-icon">summarize</span>
+                Reports
+            </a>
             <div class="nav-section-label">AI Agents</div>
-            <a href="{{ route('agents.index') }}" class="nav-item {{ request()->routeIs('agents.*') ? 'active' : '' }}">
+            <a href="{{ route('agents.hub') }}" class="nav-item {{ request()->routeIs('agents.*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">smart_toy</span>
                 Agents
             </a>

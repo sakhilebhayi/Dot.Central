@@ -16,6 +16,8 @@
             @endif
             @can('manage', $controlRoom)
                 <a href="{{ route('control-rooms.connection.edit', $controlRoom) }}" style="color:var(--accent);text-decoration:none;">Configure connection →</a>
+                <span>&middot;</span>
+                <a href="{{ route('control-rooms.admin', $controlRoom) }}" style="color:var(--accent);text-decoration:none;">Administration →</a>
             @endcan
             <span>&middot;</span>
             <a href="{{ route('control-rooms.equipment.index', $controlRoom) }}" style="color:var(--accent);text-decoration:none;">Equipment ({{ $controlRoom->equipment()->whereNull('retired_at')->count() }}) →</a>
@@ -88,6 +90,7 @@
             <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:0.875rem;padding:1.25rem;">
                 <h2 style="font-family:var(--font-display);font-size:0.95rem;font-weight:700;color:var(--text-primary);margin:0 0 1rem;">Alerts</h2>
 
+                @can('create', [\App\Models\Alert::class, $controlRoom])
                 <form method="POST" action="{{ route('control-rooms.alerts.store', $controlRoom) }}" onsubmit="var b=this.querySelector('button[type=submit]');setTimeout(function(){b.disabled=true;b.innerText='Raising…';},0);" style="margin-bottom:1.25rem;display:flex;flex-direction:column;gap:0.5rem;">
                     @csrf
                     <select name="severity" required style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:0.4rem;padding:0.45rem 0.6rem;font-size:0.78rem;">
@@ -99,6 +102,7 @@
                     <input type="datetime-local" name="triggered_at" required value="{{ now()->format('Y-m-d\TH:i') }}" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:0.4rem;padding:0.45rem 0.6rem;font-size:0.78rem;" />
                     <button type="submit" class="dot-btn dot-btn-primary">Raise Alert</button>
                 </form>
+                @endcan
 
                 @forelse($controlRoom->alerts as $alert)
                     <div style="border-top:1px solid var(--divider);padding:0.6rem 0;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">

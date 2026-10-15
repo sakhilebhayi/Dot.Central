@@ -33,6 +33,12 @@ class AppServiceProvider extends ServiceProvider
             return $team instanceof Team && $user->hasAnyRoleOn($team, Role::Supervisor, Role::Manager, Role::Administrator);
         });
 
+        Gate::define('export-reports', function (User $user): bool {
+            $team = $user->currentTeam;
+
+            return $team instanceof Team && $user->hasAnyRoleOn($team, Role::Supervisor, Role::Manager, Role::Administrator);
+        });
+
         Gate::define('act-on-health', function (User $user): bool {
             $team = $user->currentTeam;
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,6 +18,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class DowntimeReason extends Model
 {
+    use Auditable;
+
     public const CATEGORIES = ['BREAKDOWN', 'PLANNED_MAINTENANCE', 'STANDBY', 'NO_OPERATOR', 'OPERATIONAL_DELAY', 'WEATHER', 'BLASTING', 'OFFSITE', 'SAFETY', 'OTHER'];
 
     protected $guarded = ['id'];

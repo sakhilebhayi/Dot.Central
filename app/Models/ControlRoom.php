@@ -33,6 +33,7 @@ class ControlRoom extends Model
         'is_active' => 'boolean',
     ];
 
+    /** @return BelongsTo<Team, $this> */
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);

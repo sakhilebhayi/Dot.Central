@@ -114,7 +114,7 @@ class ControlRoomTest extends TestCase
         $teammate = User::factory()->create();
         $team->users()->attach($teammate, ['role' => 'operator']);
         $raiser = User::factory()->create();
-        $team->users()->attach($raiser, ['role' => 'operator']);
+        $team->users()->attach($raiser, ['role' => 'supervisor']);
         $raiser->switchTeam($team);
 
         $controlRoom = ControlRoom::factory()->for($team)->create();

@@ -29,13 +29,15 @@ class RolePermissionsTest extends TestCase
     {
         return [
             'operator can view room' => ['operator', 'get', 'control-rooms.show', 200],
-            'operator can create alert' => ['operator', 'post', 'control-rooms.alerts.store', 302],
+            'operator cannot raise a manual alert' => ['operator', 'post', 'control-rooms.alerts.store', 403],
+            'supervisor can raise a manual alert' => ['supervisor', 'post', 'control-rooms.alerts.store', 302],
             'operator can create decision' => ['operator', 'post', 'control-rooms.dispatch-decisions.store', 302],
             'operator can start session' => ['operator', 'post', 'control-rooms.operator-sessions.store', 302],
             'operator cannot delete alert' => ['operator', 'delete', 'alerts.destroy', 403],
             'operator cannot update room' => ['operator', 'put', 'control-rooms.update', 403],
             'operator cannot delete room' => ['operator', 'delete', 'control-rooms.destroy', 403],
             'operator cannot create room' => ['operator', 'post', 'control-rooms.store', 403],
+            'operator can clear alert' => ['operator', 'patch', 'alerts.update', 302],
             'supervisor can clear alert' => ['supervisor', 'patch', 'alerts.update', 302],
             'supervisor can delete alert' => ['supervisor', 'delete', 'alerts.destroy', 302],
             'supervisor can end session' => ['supervisor', 'patch', 'operator-sessions.update', 302],

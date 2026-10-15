@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Database\Factories\ShiftTypeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
 class ShiftType extends Model
 {
     /** @use HasFactory<ShiftTypeFactory> */
-    use HasFactory;
+    use Auditable, HasFactory;
 
     protected $guarded = ['id'];
 
