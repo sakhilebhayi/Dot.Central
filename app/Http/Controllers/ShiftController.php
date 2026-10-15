@@ -146,7 +146,7 @@ class ShiftController extends Controller
         $this->authorize('view', $shift);
 
         $review = $shift->isClosed() ? null : $this->shifts->review($shift);
-        $units = $review['units'] ?? $shift->unitSummaries()->with('equipment')->get()->map(fn ($s) => $s->toArray() + ['equipment' => $s->equipment]);
+        $units = $review['units'] ?? $shift->unitSummaries()->with('equipment')->get()->map(fn ($s) => ['equipment' => $s->equipment] + $s->toArray());
 
         return view('shifts.review', [
             'shift' => $shift->fresh(['handover', 'shiftType']),

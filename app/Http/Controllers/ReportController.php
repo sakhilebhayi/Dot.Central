@@ -79,7 +79,7 @@ class ReportController extends Controller
     private function units(Shift $shift): array
     {
         $units = $shift->isClosed() && $shift->unitSummaries()->exists()
-            ? $shift->unitSummaries()->with('equipment')->get()->map(fn ($s) => $s->toArray() + ['equipment' => $s->equipment])
+            ? $shift->unitSummaries()->with('equipment')->get()->map(fn ($s) => ['equipment' => $s->equipment] + $s->toArray())
             : $this->derivation->unitSummaries($shift);
 
         return [$units->values()->all(), $shift->label()];

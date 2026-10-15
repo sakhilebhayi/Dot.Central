@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ControlRoom;
+use App\Models\Equipment;
 use App\Models\MinesConnection;
 use App\Models\Shift;
 use App\Models\ShiftHandover;
@@ -11,6 +12,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\RoomProvisioner;
 use App\Services\Shifts\ShiftBlockers;
+use App\Services\Shifts\ShiftService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -132,5 +134,19 @@ class ShiftLifecycleTest extends TestCase
         $this->actingAs($this->operator)->get(route('shifts.review', $shift))->assertOk()->assertSee('End Shift Review')->assertSee('Close shift and issue handover');
         $this->actingAs($this->operator)->get(route('control-rooms.shifts.index', $this->room))->assertOk()->assertSee('OPEN');
         $this->actingAs($this->operator)->get('/dashboard')->assertOk()->assertSee('Day shift');
+    }
+
+    /** Regression: after close, the review page and the reports read the stored unit summaries, whose toArray() already carries the equipment relation as an array. */
+    public function test_the_review_page_and_reports_render_for_a_closed_shift(): void
+    {
+        $day = ShiftType::where('control_room_id', $this->room->id)->where('code', 'DAY')->firstOrFail();
+        $shift = Shift::factory()->for($this->room)->for($day, 'shiftType')->create(['shift_date' => '2026-10-15', 'starts_at' => '2026-10-15 06:00:00', 'ends_at' => '2026-10-15 18:00:00', 'status' => 'OPEN']);
+        $truck = Equipment::factory()->for($this->room)->create(['name' => 'HT-77', 'mines_status' => 'active', 'last_heard_at' => now()]);
+        app(ShiftService::class)->close($shift, 'Handover notes', $this->operator);
+        $this->assertSame(1, $shift->unitSummaries()->count());
+
+        $this->actingAs($this->operator)->get(route('shifts.review', $shift))->assertOk()->assertSee('Shift Handover')->assertSee($truck->name);
+        $this->actingAs($this->operator)->get(route('reports.index', ['r' => 'hours', 'shift' => $shift->id]))->assertOk()->assertSee($truck->name);
+        $this->actingAs($this->operator)->get(route('reports.index', ['r' => 'shift', 'shift' => $shift->id]))->assertOk();
     }
 }
