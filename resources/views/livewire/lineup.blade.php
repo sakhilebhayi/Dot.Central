@@ -94,7 +94,7 @@
                     <div class="dot-panel__head" style="cursor:pointer;" wire:click="setTarget({{ $face->id }})" role="button" tabindex="0" title="Click to send machines to this face" aria-pressed="{{ $target === $face->id ? 'true' : 'false' }}">
                         <div>
                             <h2 class="dot-panel__title">{{ $face->label() }}</h2>
-                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif{{ $target === $face->id ? ' · ◀ machines you click go here' : '' }}</div>
+                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
                         </div>
                         @if($editable)
                             <div style="display:flex;gap:0.4rem;align-items:center;" wire:click.stop>
@@ -125,7 +125,7 @@
                                         @endif
                                     </td>
                                     <td class="dot-ledger__key">{{ $a->from_at->equalTo($shift->starts_at) ? 'shift start' : Format::stamp($a->from_at, $timezone) }}</td>
-                                    <td>@if($editable)<span style="display:flex;gap:0.3rem;">@unless($planning)<input wire:model="releaseReason.{{ $a->id }}" class="dot-input" placeholder="why?" style="width:7rem;" aria-label="Reason to take {{ $p['equipment']->name ?? '' }} off" />@endunless<button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="release({{ $a->id }})" title="Take {{ $p['equipment']->name ?? '' }} off this face">✕</button></span>@endif</td>
+                                    <td>@if($editable)<span style="display:flex;gap:0.3rem;">@unless($planning)<input wire:model="releaseReason.{{ $a->id }}" class="dot-input" placeholder="why?" style="width:7rem;" aria-label="Reason to take {{ $p['equipment']->name ?? '' }} off" />@endunless<button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="release({{ $a->id }})" title="Take {{ $p['equipment']->name ?? '' }} off this face">Remove</button></span>@endif</td>
                                 </tr>
                             @empty
                                 <tr><td colspan="5" class="dot-ledger__empty">No machines yet — click machines in the fleet panel.</td></tr>

@@ -8,8 +8,8 @@
 @section('message', "That's on us, not you — an unexpected error interrupted this page. Try again in a moment; if it keeps happening, let us know and we'll take a look.")
 
 @section('actions')
-    <a href="/" class="press" style="padding: 12px 24px; background: var(--accent); color: #10141a; font-family: var(--font-display); font-weight: 600; font-size: 15px; border-radius: 999px; text-decoration: none;">Go home</a>
+    <a href="/" class="press" style="padding: 12px 24px; background: var(--signal); border: 1px solid var(--signal); color: #15120a; font-family: var(--font-display); font-weight: 600; font-size: 15px; border-radius: 2px; text-decoration: none;">Go home</a>
     @if (Route::has('contact'))
-    <a href="{{ route('contact') }}" class="press link-underline" style="padding: 12px 24px; color: var(--ink); font-size: 15px; text-decoration: none;">Contact support</a>
+    <a href="{{ route('contact') }}" class="press link-underline" style="padding: 12px 24px; color: var(--text); font-size: 15px; text-decoration: none;">Contact support</a>
     @endif
 @endsection

@@ -1,4 +1,4 @@
-# Dot.Central — Security and Permissions Specification
+# Dot.Central: Security and Permissions Specification
 
 ## 1. Identity and tenancy
 - Authentication: Laravel Fortify/Jetstream (password, 2FA) plus ecosystem SSO handoff from the InfoDot hub (short-lived Sanctum token with `ecosystem:read`, consumed once). The handoff requires the hub and Dot.Central to share `users`/`personal_access_tokens`; where they do not, SSO is unavailable and local login applies. Hardening planned: reject the handoff if the token's user lacks any team; add a feature test.
@@ -9,17 +9,17 @@
 
 | Capability | Operator | Supervisor | Manager | Administrator |
 |---|:-:|:-:|:-:|:-:|
-| View overview, fleet, map, equipment, alerts, reports (assigned rooms) | ✓ | ✓ | ✓ (all rooms) | ✓ (all rooms) |
-| Acknowledge / assign / resolve alerts; explain exceptions | ✓ | ✓ | — | — |
-| Escalate alerts; approve/reject/dismiss exceptions; resolve conflicts | — | ✓ | ✓ (conflicts only) | — |
-| Start / review / close shift; issue and acknowledge handover | ✓ | ✓ | — | — |
-| Approve / reopen shift | — | ✓ | — | ✓ (reopen only, logged) |
-| Record incidents, tasks, manual interventions (with reason) | ✓ | ✓ | — | — |
-| Export reports / CSV | — | ✓ | ✓ | ✓ |
-| View audit log | — | ✓ | ✓ | ✓ |
-| Manage control rooms, Dot.Mines connections, catalogues, thresholds, shift types | — | — | — | ✓ (audited) |
-| Manage users, roles, room assignments | — | — | — | ✓ |
-| Acknowledge/resolve an alert *back to Dot.Mines* | — | ✓ | — | — |
+| View overview, fleet, map, equipment, alerts, reports (assigned rooms) | yes | yes | yes (all rooms) | yes (all rooms) |
+| Acknowledge / assign / resolve alerts; explain exceptions | yes | yes | no | no |
+| Escalate alerts; approve/reject/dismiss exceptions; resolve conflicts | no | yes | yes (conflicts only) | no |
+| Start / review / close shift; issue and acknowledge handover | yes | yes | no | no |
+| Approve / reopen shift | no | yes | no | yes (reopen only, logged) |
+| Record incidents, tasks, manual interventions (with reason) | yes | yes | no | no |
+| Export reports / CSV | no | yes | yes | yes |
+| View audit log | no | yes | yes | yes |
+| Manage control rooms, Dot.Mines connections, catalogues, thresholds, shift types | no | no | no | yes (audited) |
+| Manage users, roles, room assignments | no | no | no | yes |
+| Acknowledge/resolve an alert *back to Dot.Mines* | no | yes | no | no |
 
 Enforcement: Laravel policies per model + `Gate` abilities named after the capability; every controller/Livewire action calls `authorize`; denied attempts are audited. Jetstream `admin`/`editor` roles are migrated to `administrator`/`operator`.
 

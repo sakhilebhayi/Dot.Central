@@ -15,7 +15,8 @@ class EcosystemErrorPagesTest extends TestCase
         $response->assertStatus($code);
         $response->assertSee($expectedHeading);
         $response->assertSee('Dot.Central', false);
-        $response->assertSee('the rest of the Dot Ecosystem', false);
+        $response->assertSee("Error {$code}", false);
+        $response->assertDontSee('the rest of the Dot Ecosystem', false);
     }
 
     public static function errorCodes(): array

@@ -1,392 +1,210 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dot.Central — AI command centre for the Dot Ecosystem</title>
-        <meta name="description" content="Build, configure, and converse with Claude-powered agents, then route work from other Dot platforms through them. One command centre for the ecosystem's AI capability.">
+        <title>Dot.Central · Mining control room</title>
+        <meta name="description" content="Dot.Central is the control-room operating system for a mining operation. It reads the fleet from Dot.Mines and turns it into shifts, line-ups, handovers, alerts and reports that operators act on.">
 
-        <!-- Favicon -->
         <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon-32x32.png') }}">
         <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon-16x16.png') }}">
 
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-
-        @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/app.css', 'resources/js/app.js'])
-        @endif
-
-        <!-- Alpine.js is not bundled into resources/js/app.js on this platform (unlike Mines);
-             loaded the same way resources/views/layouts/app.blade.php already does it, so the
-             mobile nav toggle (x-data) actually works on this standalone guest page. -->
-        <script defer src="https://unpkg.com/alpinejs@3.10.2/dist/cdn.min.js"></script>
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
         <style>
             :root {
-                --ink: #10141a;
-                --ink-soft: #171d26;
-                --panel: #1b222c;
-                --gold: #e8bd3d;
-                --gold-soft: #f3d878;
-                --cyan: #22d3e0;
-                --cyan-soft: #7be8f0;
-                --paper: #edeff2;
-                --mist: #97a1ad;
-                --line: rgba(237, 239, 242, 0.10);
-                --font-display: 'Sora', system-ui, sans-serif;
+                --ground: #0f141b;
+                --panel: #151b24;
+                --rule: rgba(237, 239, 242, 0.12);
+                --rule-strong: rgba(237, 239, 242, 0.22);
+                --text: #e9ecf0;
+                --text-muted: #a6afba;
+                --text-quiet: #7f8995;
+                --signal: #f2a70b;
+                --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
                 --font-body: 'IBM Plex Sans', system-ui, sans-serif;
-                --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-                --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+                --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
             }
-            html { background: var(--ink); }
-            body { font-family: var(--font-body); background: var(--ink); color: var(--paper); }
-            .font-display { font-family: var(--font-display); }
-            .font-mono { font-family: var(--font-mono); }
-
-            .press { transition: transform 160ms var(--ease-out); }
-            .press:active { transform: scale(0.97); }
-
-            @media (prefers-reduced-motion: no-preference) {
-                .reveal {
-                    opacity: 0;
-                    transform: translateY(14px);
-                    transition: opacity 600ms var(--ease-out), transform 600ms var(--ease-out);
-                }
-                .reveal.is-visible { opacity: 1; transform: translateY(0); }
-            }
-            @media (prefers-reduced-motion: reduce) {
-                .reveal { opacity: 1; transform: none; }
-            }
-
-            @media (hover: hover) and (pointer: fine) {
-                .row-hover:hover { background: rgba(237, 239, 242, 0.03); }
-                .link-underline { background-size: 0% 1px; }
-                .link-underline:hover { background-size: 100% 1px; }
-            }
-            .link-underline {
-                background-image: linear-gradient(currentColor, currentColor);
-                background-position: 0 100%;
-                background-repeat: no-repeat;
-                transition: background-size 220ms var(--ease-out);
-            }
+            * { box-sizing: border-box; }
+            html { background: var(--ground); }
+            body { margin: 0; font-family: var(--font-body); background: var(--ground); color: var(--text); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+            a { color: inherit; }
+            .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+            .topbar { border-bottom: 1px solid var(--rule); }
+            .topbar .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+            .topbar nav { display: flex; align-items: center; gap: 22px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+            .topbar nav a { text-decoration: none; }
+            .topbar nav a:hover { color: var(--text); }
+            .btn { display: inline-block; padding: 10px 18px; font-family: var(--font-display); font-weight: 600; font-size: 14px; text-decoration: none; border: 1px solid var(--rule-strong); color: var(--text); }
+            .btn:hover { border-color: var(--text-muted); }
+            .btn--signal { background: var(--signal); border-color: var(--signal); color: #15120a; }
+            .btn--signal:hover { background: #f6b836; border-color: #f6b836; }
+            .hero { padding: 72px 0 56px; border-bottom: 1px solid var(--rule); }
+            .hero h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(34px, 5vw, 56px); line-height: 1.05; letter-spacing: -0.01em; margin: 0 0 20px; max-width: 14ch; }
+            .hero p { font-size: 18px; color: var(--text-muted); max-width: 56ch; margin: 0 0 32px; }
+            .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+            .strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--rule); }
+            @media (min-width: 760px) { .strip { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+            .strip > div { padding: 16px 18px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+            .strip > div:nth-child(2n) { border-right: 0; }
+            @media (min-width: 760px) { .strip > div { border-bottom: 0; } .strip > div:nth-child(2n) { border-right: 1px solid var(--rule); } .strip > div:last-child { border-right: 0; } }
+            .strip .n { font-family: var(--font-display); font-size: 22px; font-weight: 700; line-height: 1.1; }
+            .strip .l { font-family: var(--font-mono); font-size: 12px; color: var(--text-quiet); margin-top: 4px; }
+            section { padding: 56px 0; border-bottom: 1px solid var(--rule); }
+            h2 { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 1.15; margin: 0 0 8px; }
+            .lede { color: var(--text-muted); max-width: 60ch; margin: 0 0 28px; }
+            .steps { counter-reset: step; border-top: 1px solid var(--rule); }
+            .steps > div { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--rule); }
+            .steps > div::before { counter-increment: step; content: counter(step, decimal-leading-zero); font-family: var(--font-mono); font-size: 14px; color: var(--signal); padding-top: 3px; }
+            .steps h3 { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+            .steps p { margin: 0; color: var(--text-muted); max-width: 64ch; }
+            .panels { display: grid; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--rule); }
+            @media (min-width: 760px) { .panels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+            .panels > div { padding: 20px 18px; border-bottom: 1px solid var(--rule); }
+            @media (min-width: 760px) { .panels > div { border-bottom: 0; border-right: 1px solid var(--rule); } .panels > div:last-child { border-right: 0; } }
+            .panels h3 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+            .panels p { margin: 0; color: var(--text-muted); font-size: 15px; }
+            .ledger { width: 100%; border-collapse: collapse; font-size: 15px; }
+            .ledger th { text-align: left; font-family: var(--font-mono); font-weight: 500; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-quiet); padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule-strong); }
+            .ledger td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--text-muted); }
+            .ledger td:first-child { color: var(--text); font-family: var(--font-display); font-weight: 600; white-space: nowrap; }
+            footer { padding: 28px 0 40px; }
+            footer .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; font-family: var(--font-mono); font-size: 12px; color: var(--text-quiet); }
+            footer nav { display: flex; gap: 18px; }
+            footer a { text-decoration: none; }
+            footer a:hover { color: var(--text); }
+            .skip { position: absolute; left: -9999px; }
+            .skip:focus { left: 16px; top: 16px; background: var(--signal); color: #15120a; padding: 8px 12px; z-index: 10; }
         </style>
     </head>
-    <body class="antialiased">
+    <body>
+        <a href="#main" class="skip">Skip to content</a>
 
-        <!-- Nav -->
-        <header
-            x-data="{ scrolled: false, mobileMenuOpen: false }"
-            @scroll.window="scrolled = window.pageYOffset > 24"
-            :class="scrolled ? 'bg-[#10141a]/95 backdrop-blur-md border-b border-[var(--line)]' : 'border-b border-transparent'"
-            class="fixed top-0 left-0 right-0 z-50 transition-colors duration-300"
-        >
-            <nav class="max-w-[1400px] mx-auto px-5 sm:px-8 py-3 flex items-center justify-between">
-                <a href="/" class="flex items-center gap-2.5 press">
-                    <img src="{{ asset('images/logo-light.png') }}" alt="Dot.Central" class="h-16 sm:h-20 w-auto">
-                </a>
-
-                <div class="hidden md:flex items-center gap-8 font-mono text-[13px] tracking-wide uppercase text-[var(--mist)]">
-                    <a href="#agents" class="link-underline hover:text-[var(--paper)] pb-0.5">Agents</a>
-                    <a href="#dispatch" class="link-underline hover:text-[var(--paper)] pb-0.5">Dispatch</a>
-                    <a href="#platform" class="link-underline hover:text-[var(--paper)] pb-0.5">Platform</a>
-                </div>
-
-                @if (Route::has('login'))
-                    <div class="flex items-center gap-3">
-                        @auth
-                            <a href="{{ url('/dashboard') }}" class="press flex items-center gap-2 px-5 py-2.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] text-sm font-display font-semibold rounded-lg transition-colors">
-                                Dashboard
-                            </a>
-                        @else
-                            <a href="{{ route('login') }}" class="hidden sm:block text-sm font-medium text-[var(--mist)] hover:text-[var(--paper)] transition-colors">
-                                Sign in
-                            </a>
-                            @if (Route::has('register'))
-                                <a href="{{ route('register') }}" class="press px-5 py-2.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] text-sm font-display font-semibold rounded-lg transition-colors">
-                                    Get started
-                                </a>
-                            @endif
-                        @endauth
-
-                        <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden press p-2 -mr-2 text-[var(--paper)]" aria-label="Toggle menu">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path x-show="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 7h16M4 12h16M4 17h16"></path>
-                                <path x-show="mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
-                    </div>
-                @endif
-            </nav>
-
-            <div x-show="mobileMenuOpen"
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 class="md:hidden border-t border-[var(--line)] bg-[#10141a]"
-                 style="display: none;">
-                <div class="flex flex-col px-5 py-4 gap-1 font-mono text-sm uppercase tracking-wide">
-                    <a href="#agents" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Agents</a>
-                    <a href="#dispatch" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Dispatch</a>
-                    <a href="#platform" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Platform</a>
-                    @guest
-                        <a href="{{ route('login') }}" class="px-3 py-2.5 text-[var(--mist)] hover:text-[var(--paper)]">Sign in</a>
-                    @endguest
+        <header class="topbar">
+            <div class="wrap">
+                <a href="/" aria-label="Dot.Central home"><img src="{{ asset('images/logo-light.png') }}" alt="Dot.Central" style="height:44px;width:auto;display:block;"></a>
+                <nav aria-label="Sections">
+                    <a href="#shift">The shift</a>
+                    <a href="#derived">What it reads</a>
+                    <a href="#roles">Who does what</a>
+                </nav>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    @auth
+                        <a href="{{ route('dashboard') }}" class="btn btn--signal">Open the control room</a>
+                    @else
+                        @if (Route::has('login'))
+                            <a href="{{ route('login') }}" class="btn">Sign in</a>
+                        @endif
+                        @if (Route::has('register'))
+                            <a href="{{ route('register') }}" class="btn btn--signal">Create an account</a>
+                        @endif
+                    @endauth
                 </div>
             </div>
         </header>
 
-        <!-- Hero -->
-        <section class="relative min-h-[100dvh] flex items-center overflow-hidden">
-            <!-- Photo: patch-panel/network rack wiring, by Yuriy Vertikov, unsplash.com/photos/ca9Ex6yVRgw — a literal routing hub, matching what this platform actually does -->
-            <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1702478475268-aa8ef54c084e?q=80&w=2400&auto=format&fit=crop');"></div>
-            <div class="absolute inset-0" style="background: linear-gradient(100deg, var(--ink) 0%, var(--ink) 30%, rgba(16,20,26,0.5) 52%, rgba(16,20,26,0.2) 76%, rgba(16,20,26,0.06) 100%);"></div>
-            <div class="absolute inset-0" style="background: linear-gradient(180deg, rgba(16,20,26,0.65) 0%, transparent 16%);"></div>
-            <div class="absolute inset-0" style="background: radial-gradient(ellipse 80% 60% at 8% 0%, rgba(232,189,61,0.10) 0%, transparent 55%), radial-gradient(ellipse 70% 50% at 100% 100%, rgba(34,211,224,0.08) 0%, transparent 55%);"></div>
-
-            <!-- Signature: a routing diagram — other Dot platforms feeding into a central hub with the mark's own chevron,
-                 echoing the real logo's toggle-switch icon and outward-pointing chevron. -->
-            <svg class="hidden lg:block absolute right-[4%] top-1/2 -translate-y-1/2 h-[64%] w-auto opacity-[0.55] pointer-events-none" viewBox="0 0 360 420" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <!-- five source nodes, one per sibling platform -->
-                <circle cx="30" cy="60" r="7" stroke="#97a1ad" stroke-width="2"/>
-                <circle cx="30" cy="150" r="7" stroke="#97a1ad" stroke-width="2"/>
-                <circle cx="30" cy="240" r="7" stroke="#97a1ad" stroke-width="2"/>
-                <circle cx="30" cy="330" r="7" stroke="#97a1ad" stroke-width="2"/>
-                <circle cx="30" cy="20" r="4" stroke="#97a1ad" stroke-width="1.5" opacity="0.5"/>
-                <!-- converging routes -->
-                <path d="M37 60 C 140 60, 140 195, 190 195" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
-                <path d="M37 150 C 120 150, 140 195, 190 195" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
-                <path d="M37 240 C 120 240, 140 205, 190 205" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
-                <path d="M37 330 C 140 330, 140 205, 190 205" stroke="#97a1ad" stroke-width="1.5" opacity="0.55"/>
-                <!-- the hub: switch-pair, echoing the logo icon -->
-                <circle cx="220" cy="200" r="58" stroke="#e8bd3d" stroke-width="3"/>
-                <rect x="188" y="172" width="64" height="24" rx="12" stroke="#edeff2" stroke-width="3"/>
-                <circle cx="204" cy="184" r="7" fill="#edeff2"/>
-                <rect x="188" y="204" width="64" height="24" rx="12" stroke="#edeff2" stroke-width="3"/>
-                <circle cx="236" cy="216" r="7" fill="#edeff2"/>
-                <!-- outbound chevron -->
-                <path d="M300 150 L 350 200 L 300 250" stroke="#22d3e0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-
-            <div class="relative z-10 max-w-[1400px] mx-auto px-5 sm:px-8 pt-28 pb-16 w-full">
-                <div class="max-w-2xl reveal" data-reveal>
-                    <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-6">
-                        AI command centre — Dot Ecosystem
-                    </p>
-
-                    <h1 class="font-display font-bold text-4xl sm:text-5xl lg:text-6xl leading-[1.05] tracking-tight text-[var(--paper)] mb-6">
-                        Where the ecosystem's<br>work gets routed.
-                    </h1>
-
-                    <p class="text-lg text-[var(--mist)] leading-relaxed max-w-xl mb-10">
-                        Dot.Central is where teams build, configure, and converse with specialised Claude-powered agents — then route work from other Dot platforms through them. A home base for the ecosystem's AI capability, not another silo.
-                    </p>
-
-                    @guest
-                        <div class="flex flex-wrap items-center gap-4">
-                            <a href="{{ route('register') }}" class="press px-7 py-3.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] font-display font-semibold rounded-lg transition-colors">
-                                Get started
-                            </a>
-                            <a href="#agents" class="press flex items-center gap-2 px-7 py-3.5 text-[var(--paper)] font-medium rounded-lg border border-[var(--line)] hover:border-[var(--mist)] transition-colors">
-                                See what's inside
-                            </a>
-                        </div>
-                    @endguest
-                </div>
-            </div>
-        </section>
-
-        <!-- Agents / AI command centre -->
-        <section id="agents" class="py-24 sm:py-28 px-5 sm:px-8">
-            <div class="max-w-[1400px] mx-auto">
-                <div class="max-w-xl mb-16 reveal" data-reveal>
-                    <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-4">Domain one — running today</p>
-                    <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight">
-                        Configure agents. Converse with them.
-                    </h2>
-                    <p class="text-[var(--mist)] leading-relaxed mt-4">
-                        The AI command-centre scaffolding — agents, skills, conversations, usage tracking, and ecosystem SSO — is implemented and running.
-                    </p>
-                </div>
-
-                <div class="grid md:grid-cols-2 border-t border-[var(--line)]">
-                    @php
-                        $features = [
-                            ['tag' => 'Agent', 'title' => 'Configurable agents', 'body' => 'Each agent is a Claude-backed persona with its own name, system prompt, model, and an open capabilities list you shape to the job.'],
-                            ['tag' => 'Skill', 'title' => 'Agent skills', 'body' => 'Tag agents with skills — a many-to-many taxonomy that lets you group and discover agents by what they are actually good at.'],
-                            ['tag' => 'Thread', 'title' => 'Conversations', 'body' => 'Every chat is a persisted thread between a user and an agent, with full message history replayed to Claude on each turn.'],
-                            ['tag' => 'Log', 'title' => 'Usage tracking', 'body' => 'Every assistant turn logs input and output tokens per user and per agent — the foundation for cost visibility as usage grows.'],
-                            ['tag' => 'Team', 'title' => 'Team-scoped access', 'body' => 'Conversations and usage logs are scoped per user; the mining-dispatch domain below is scoped per Jetstream team.'],
-                            ['tag' => 'SSO', 'title' => 'Ecosystem SSO', 'body' => 'Sign in once through the InfoDot hub — Dot.Central authenticates via the same Sanctum-backed ecosystem handoff as every other Dot platform.'],
-                        ];
-                    @endphp
-                    @foreach ($features as $i => $f)
-                        <div class="row-hover border-b border-[var(--line)] {{ $i % 2 === 0 ? 'md:border-r' : '' }} px-1 py-8 sm:py-10 transition-colors reveal" data-reveal>
-                            <p class="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--cyan)] mb-3">{{ $f['tag'] }}</p>
-                            <h3 class="font-display font-semibold text-xl text-[var(--paper)] mb-2.5">{{ $f['title'] }}</h3>
-                            <p class="text-[var(--mist)] leading-relaxed max-w-md">{{ $f['body'] }}</p>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        </section>
-
-        <!-- Mining Dispatch (MVP scaffold) -->
-        <!-- Deliberately no photo in the hero above: that section (and its copy) is domain one, the AI-agent command
-             centre, which is abstract with no honest physical referent (wiki §1). This section is domain two, the
-             mining-dispatch scaffold, which *does* have a genuine real-world equivalent per wiki §3a — an operations/
-             dispatch control room with monitors and an operator, mirroring the actual Control Room / Alert / Operator
-             Session entities described below. Putting the photo here, not the hero, is the point: it depicts the thing
-             the copy right next to it is actually describing, rather than being generic tech-vibe decoration bolted
-             onto unrelated copy — the mistake the 0.7.0 pass explicitly removed a control-room photo for repeating. -->
-        <section id="dispatch" class="relative py-24 sm:py-28 px-5 sm:px-8 border-y border-[var(--line)] overflow-hidden">
-            <!-- Photo: a man sitting in front of multiple monitors in a control room, by Tasha Kostyuk, unsplash.com/photos/a-man-sitting-in-front-of-multiple-monitors-TtMKq3lJm-U -->
-            <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1708807472445-d33589e6b090?q=80&w=2400&auto=format&fit=crop');"></div>
-            <!-- Overlay kept >=90% opaque ink everywhere text sits (computed against sRGB luminance: mist-on-ink is
-                 ~7.05:1 at rest; even the worst case — a pure-white monitor pixel directly behind text at exactly 90%
-                 ink opacity — computes to ~5.39:1, still clear of WCAG AA's 4.5:1 for body copy). Uniform top-to-bottom
-                 wash rather than Mines' one-sided hero vignette, because both grid columns here carry real copy, not
-                 just one side. -->
-            <div class="absolute inset-0" style="background: linear-gradient(180deg, rgba(16,20,26,0.94) 0%, rgba(16,20,26,0.90) 45%, rgba(16,20,26,0.96) 100%);"></div>
-
-            <div class="relative z-10 max-w-[1400px] mx-auto">
-                <div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-12 lg:gap-20">
-                    <div class="reveal" data-reveal>
-                        <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-4">Domain two — early-stage MVP</p>
-                        <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight mb-5">
-                            A second domain: mining dispatch
-                        </h2>
-                        <p class="text-[var(--mist)] leading-relaxed max-w-sm">
-                            Alongside the agent hub, Dot.Central hosts a data-model-and-CRUD scaffold for mining-dispatch operations: control rooms, dispatch decisions, alerts, and operator sessions. Honestly labelled — no event emission or Dot.Mines integration yet.
-                        </p>
+        <main id="main">
+            <section class="hero">
+                <div class="wrap">
+                    <h1>The control room for a mining shift.</h1>
+                    <p>Dot.Central reads the fleet from Dot.Mines and turns it into the work of a shift: who is on which machine, which machines can run, what stopped and why, what the next shift must know. Operators act on it. Nothing here edits a Dot.Mines fact.</p>
+                    <div class="actions">
+                        @auth
+                            <a href="{{ route('dashboard') }}" class="btn btn--signal">Open the control room</a>
+                        @else
+                            @if (Route::has('login'))
+                                <a href="{{ route('login') }}" class="btn btn--signal">Sign in</a>
+                            @endif
+                            <a href="#shift" class="btn">How a shift runs</a>
+                        @endauth
                     </div>
+                </div>
+            </section>
 
-                    <div class="grid sm:grid-cols-2 gap-x-10">
-                        @php
-                            $dispatch = [
-                                ['title' => 'Control rooms', 'body' => 'Team-scoped tenant root. Each room maps to one Dot.Mines team through an encrypted connection; live synchronisation is the next increment.'],
-                                ['title' => 'Dispatch decisions', 'body' => 'Assign, reroute, hold, or stagger — the four workflow types, recorded in sequence per control room.'],
-                                ['title' => 'Alerts', 'body' => 'Severity-ranked threshold and sentinel trips, with a trigger and clear timestamp.'],
-                                ['title' => 'Operator sessions', 'body' => 'Shift-level staffing context per control room — deliberately no individual performance fields.'],
-                            ];
-                        @endphp
-                        @foreach ($dispatch as $c)
-                            <div class="py-6 border-t border-[var(--line)] reveal" data-reveal>
-                                <h3 class="font-display font-medium text-base text-[var(--paper)] mb-1.5">{{ $c['title'] }}</h3>
-                                <p class="text-sm text-[var(--mist)] leading-relaxed">{{ $c['body'] }}</p>
+            <section id="shift">
+                <div class="wrap">
+                    <h2>One shift, in order</h2>
+                    <p class="lede">The system follows the order a control room already works in. Each step only needs what the previous one produced.</p>
+                    <div class="steps">
+                        <div>
+                            <div>
+                                <h3>Start the shift</h3>
+                                <p>Pick the shift type and the supervisor. Open issues from the previous shift are listed before anything else: machines down, units on standby, exceptions still unexplained.</p>
                             </div>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Platform -->
-        <section id="platform" class="py-24 sm:py-28 px-5 sm:px-8">
-            <div class="max-w-[1400px] mx-auto">
-                <div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-12 lg:gap-20 items-start">
-                    <div class="reveal" data-reveal>
-                        <p class="font-mono text-xs tracking-[0.18em] uppercase text-[var(--gold)] mb-4">Under the hood</p>
-                        <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight mb-5">
-                            Built on the InfoDot stack
-                        </h2>
-                        <p class="text-[var(--mist)] leading-relaxed max-w-sm">
-                            Laravel 12, Jetstream teams, and a shared PostgreSQL instance across the ecosystem — with a direct line to Anthropic's Messages API for every agent turn.
-                        </p>
-                    </div>
-
-                    <div class="rounded-xl border border-[var(--line)] bg-[var(--panel)] overflow-hidden reveal" data-reveal>
-                        <div class="flex items-center gap-2 px-5 py-3 border-b border-[var(--line)]">
-                            <span class="w-2.5 h-2.5 rounded-full bg-[var(--gold)]"></span>
-                            <span class="font-mono text-[11px] tracking-wide text-[var(--mist)]">AgentChatService.php</span>
                         </div>
-                        <pre class="font-mono text-[13px] leading-relaxed px-5 py-6 overflow-x-auto text-[var(--mist)]"><code><span class="text-[var(--cyan)]">POST</span> https://api.anthropic.com/v1/messages
-  model:  claude-sonnet-4-6
-  system: agent.system_prompt
-  history: conversation.messages
-
-<span class="text-[var(--gold)]"># no ANTHROPIC_API_KEY?</span>
-<span class="text-[var(--mist)]"># falls back to a mock echo reply —</span>
-<span class="text-[var(--mist)]"># dev-mode fallback, not a bug</span></code></pre>
-                    </div>
-                </div>
-
-                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-[var(--line)] mt-14 rounded-xl overflow-hidden">
-                    @foreach([
-                        ['label' => 'Laravel 12 / PHP 8.4', 'desc' => 'Jetstream teams + Sanctum'],
-                        ['label' => 'Livewire 3 + Alpine.js', 'desc' => 'Chat and dashboard UI'],
-                        ['label' => 'PostgreSQL 16', 'desc' => 'Shared ecosystem instance'],
-                        ['label' => 'Anthropic Claude', 'desc' => 'Direct Messages API integration'],
-                    ] as $item)
-                        <div class="bg-[var(--ink)] p-5 reveal" data-reveal>
-                            <p class="font-display font-medium text-sm text-[var(--paper)] mb-1">{{ $item['label'] }}</p>
-                            <p class="text-xs text-[var(--mist)]">{{ $item['desc'] }}</p>
+                        <div>
+                            <div>
+                                <h3>Build the line-up</h3>
+                                <p>Faces come from the geofences or mine areas already configured. Loading units are placed, haul trucks are counted against the configured ratio, and the rest go to standby with a reason.</p>
+                            </div>
                         </div>
-                    @endforeach
-                </div>
-            </div>
-        </section>
-
-        <!-- CTA -->
-        <section class="relative py-28 sm:py-32 px-5 sm:px-8 overflow-hidden border-t border-[var(--line)]">
-            <div class="absolute inset-0" style="background: radial-gradient(ellipse 60% 80% at 50% 100%, rgba(232,189,61,0.08) 0%, transparent 60%);"></div>
-
-            <div class="relative z-10 max-w-2xl mx-auto text-center reveal" data-reveal>
-                <h2 class="font-display font-semibold text-3xl sm:text-4xl text-[var(--paper)] leading-tight mb-5">
-                    Build your first agent
-                </h2>
-                <p class="text-[var(--mist)] leading-relaxed mb-10 max-w-lg mx-auto">
-                    Sign in once through the ecosystem hub, then configure an agent, tag it with skills, and start a conversation.
-                </p>
-
-                @guest
-                    <div class="flex flex-wrap justify-center gap-4">
-                        <a href="{{ route('register') }}" class="press px-8 py-3.5 bg-[var(--gold)] hover:bg-[var(--gold-soft)] text-[#10141a] font-display font-semibold rounded-lg transition-colors">
-                            Get started
-                        </a>
-                        <a href="{{ route('login') }}" class="press px-8 py-3.5 text-[var(--paper)] font-medium rounded-lg border border-[var(--line)] hover:border-[var(--mist)] transition-colors">
-                            Sign in
-                        </a>
+                        <div>
+                            <div>
+                                <h3>Assign operators</h3>
+                                <p>Every placed machine gets an operator. Assignments are pushed to Dot.Mines, which checks licences, medicals and inductions and refuses what it cannot accept. A refusal is shown, never hidden.</p>
+                            </div>
+                        </div>
+                        <div>
+                            <div>
+                                <h3>Run and hand over</h3>
+                                <p>The overview, availability board, stoppages, exceptions and alerts follow from the line-up. At the end, the handover carries the line-up, the open issues and the supervisor's notes to the next shift.</p>
+                            </div>
+                        </div>
                     </div>
-                @endguest
-            </div>
-        </section>
-
-        <!-- Footer -->
-        <footer class="py-14 px-5 sm:px-8 border-t border-[var(--line)]">
-            <div class="max-w-[1400px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-                <a href="/" class="flex items-center gap-2.5">
-                    <img src="{{ asset('images/logo-light.png') }}" alt="Dot.Central" class="h-11 w-auto opacity-90">
-                </a>
-                <div class="flex items-center gap-6 font-mono text-xs tracking-wide uppercase text-[var(--mist)]">
-                    <a href="{{ route('policy.show') }}" class="hover:text-[var(--paper)] transition-colors">Privacy</a>
-                    <a href="{{ route('cookies') }}" class="hover:text-[var(--paper)] transition-colors">Cookies</a>
-                    <a href="{{ route('terms.show') }}" class="hover:text-[var(--paper)] transition-colors">Terms</a>
                 </div>
-                <p class="font-mono text-xs tracking-wide text-[var(--mist)]">
-                    &copy; {{ date('Y') }} Dot.Central. AI command centre for the Dot Ecosystem.
-                </p>
+            </section>
+
+            <section id="derived">
+                <div class="wrap">
+                    <h2>Read from the fleet, not typed in</h2>
+                    <p class="lede">Operators record decisions. Facts come from Dot.Mines on a schedule and through signed webhooks, and the room shows how fresh each one is.</p>
+                    <div class="panels">
+                        <div>
+                            <h3>Availability</h3>
+                            <p>A machine is down when Dot.Mines reports it offline or in maintenance, or when a stoppage has been classified as counting against availability. Missing telemetry is shown as unknown, not as stopped.</p>
+                        </div>
+                        <div>
+                            <h3>Production and hours</h3>
+                            <p>Loads, tonnes, cycle times and engine hours are read as the provider reports them, with the provider's timestamp. Thresholds for exceptions are set per control room.</p>
+                        </div>
+                        <div>
+                            <h3>Alerts</h3>
+                            <p>Alerts arrive from Dot.Mines. Acknowledging or resolving one here is recorded locally and pushed back, and the outcome of that push is part of the record.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="roles">
+                <div class="wrap">
+                    <h2>Who does what</h2>
+                    <p class="lede">Four roles, each scoped to a control room. Every action lands in an append-only audit log with the actor, the shift and the reason.</p>
+                    <table class="ledger">
+                        <thead>
+                            <tr><th scope="col">Role</th><th scope="col">Can</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Operator</td><td>Start and close shifts, build the line-up, classify stoppages, explain exceptions, acknowledge and resolve alerts, write handover notes.</td></tr>
+                            <tr><td>Supervisor</td><td>Everything an operator can, plus approving exceptions and confirming handovers.</td></tr>
+                            <tr><td>Manager</td><td>Reports and exports, shift types, downtime reasons and thresholds for the room.</td></tr>
+                            <tr><td>Administrator</td><td>Rooms, members, the Dot.Mines connection and its health. Administrators configure; they do not operate.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="wrap">
+                <span>&copy; {{ date('Y') }} Dot.Central. Part of the Dot ecosystem.</span>
+                <nav aria-label="Legal">
+                    <a href="{{ route('policy.show') }}">Privacy</a>
+                    <a href="{{ route('cookies') }}">Cookies</a>
+                    <a href="{{ route('terms.show') }}">Terms</a>
+                </nav>
             </div>
         </footer>
-
-        <script>
-            if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches && 'IntersectionObserver' in window) {
-                const io = new IntersectionObserver((entries) => {
-                    entries.forEach((entry) => {
-                        if (entry.isIntersecting) {
-                            entry.target.classList.add('is-visible');
-                            io.unobserve(entry.target);
-                        }
-                    });
-                }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-                document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
-            } else {
-                document.querySelectorAll('[data-reveal]').forEach((el) => el.classList.add('is-visible'));
-            }
-        </script>
     </body>
 </html>

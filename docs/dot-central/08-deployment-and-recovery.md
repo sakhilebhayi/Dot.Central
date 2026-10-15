@@ -1,6 +1,6 @@
-# Dot.Central — Deployment and Recovery
+# Dot.Central: Deployment and Recovery
 
-**Date:** 2026-10-15 · closes F-28 and the deployment half of I-17. Everything here was derived from the code (`routes/console.php`, `config/mines.php`, `app/Jobs`, `IntegrationHealthController`); nothing has been exercised on a server yet — the first staging deployment must walk this list and correct it.
+**Date:** 2026-10-15 · closes F-28 and the deployment half of I-17. Everything here was derived from the code (`routes/console.php`, `config/mines.php`, `app/Jobs`, `IntegrationHealthController`); nothing has been exercised on a server yet: the first staging deployment must walk this list and correct it.
 
 ## 1. What a running Dot.Central consists of
 
@@ -53,7 +53,7 @@ Real-time is polling only (Livewire `wire:poll`); no Reverb/Echo process is requ
 | Connection `credential_invalid` | token revoked or user left the team | mint a new token, Test credential, Sync now |
 | Stale/missing fleet everywhere, connection verified | Dot.Mines down or provider feed stopped | nothing to do in Dot.Central; machines show Stale/Unknown, never "stopped" |
 | Mirror corrupted | bad data | set the connection's `sync_cursor` to 0 (tinker) and Sync now; a full `/machines` refresh runs every `full_refresh_every` runs anyway |
-| Shift closed by mistake | — | supervisor: End Shift → Reopen with a reason (audited) |
+| Shift closed by mistake | none | supervisor: End Shift → Reopen with a reason (audited) |
 | Webhook deliveries failing | wrong secret or URL | compare the secret on the connection with the Dot.Mines endpoint; replays are ignored by delivery id |
 
 ## 7. Local development

@@ -56,14 +56,14 @@
 
                 @if($agents->isEmpty())
                 <div style="padding:3.5rem 1.5rem;text-align:center;">
-                    <div style="width:64px;height:64px;border-radius:16px;background:rgba(225,29,72,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
+                    <div style="width:64px;height:64px;border-radius:16px;background:var(--signal-quiet);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
                         <span class="material-symbols-rounded" style="font-size:32px;color:var(--signal);">smart_toy</span>
                     </div>
                     <div style="font-family:var(--font-display);font-size:1rem;font-weight:700;color:var(--text-primary);margin-bottom:0.5rem;">No agents yet</div>
-                    <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 1.5rem;">Create your first AI agent to get started with the Dot ecosystem.</p>
+                    <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 1.5rem;">No agents are configured for this team. An agent is a Claude-backed persona with a system prompt and a set of skills.</p>
                     <a href="{{ route('agents.create') }}" class="dot-btn dot-btn-primary">
                         <span class="material-symbols-rounded" style="font-size:16px;">add_circle</span>
-                        Create your first agent
+                        Create an agent
                     </a>
                 </div>
                 @else
@@ -130,7 +130,7 @@
                                     <span style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);">{{ number_format($agent->conversations_count) }}</span>
                                 </td>
                                 <td style="padding:1rem 1.5rem;text-align:right;">
-                                    <a href="{{ route('agents.show', $agent) }}" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.9rem;border-radius:9999px;border:1px solid var(--bad-quiet);color:var(--bad);font-size:0.75rem;font-weight:700;text-decoration:none;font-family:var(--font-display);transition:all 0.15s;" onmouseover="this.style.background='rgba(225,29,72,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <a href="{{ route('agents.show', $agent) }}" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.9rem;border-radius:9999px;border:1px solid var(--bad-quiet);color:var(--bad);font-size:0.75rem;font-weight:700;text-decoration:none;font-family:var(--font-display);transition:all 0.15s;" onmouseover="this.style.background='var(--bad-quiet)'" onmouseout="this.style.background='transparent'">
                                         Open
                                         <span class="material-symbols-rounded" style="font-size:14px;">arrow_forward</span>
                                     </a>
@@ -185,20 +185,6 @@
             </div>
 
         </div>
-
-        {{-- Quick-start CTA (only when no agents) --}}
-        @if($agents->isEmpty())
-        <div style="margin-top:1.5rem;padding:2rem;background:linear-gradient(135deg,rgba(225,29,72,0.08),rgba(159,18,57,0.05));border:1px solid rgba(225,29,72,0.18);border-radius:0.875rem;display:flex;align-items:center;justify-content:space-between;gap:1.5rem;">
-            <div>
-                <div style="font-family:var(--font-display);font-size:1rem;font-weight:800;color:var(--text-primary);margin-bottom:0.35rem;">Get started with Dot.Central</div>
-                <p style="font-size:0.8rem;color:var(--text-muted);margin:0;max-width:480px;">Create AI agents, assign skills, and deploy them across the Dot ecosystem. Your agents can be wired into Dot.Tasks, Dot.Finance, and every other platform in the hub.</p>
-            </div>
-            <a href="{{ route('agents.create') }}" class="dot-btn dot-btn-primary">
-                <span class="material-symbols-rounded" style="font-size:18px;">rocket_launch</span>
-                Create Your First Agent
-            </a>
-        </div>
-        @endif
 
     </div>
 </x-app-layout>

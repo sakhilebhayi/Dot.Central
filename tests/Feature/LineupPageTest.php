@@ -80,7 +80,7 @@ class LineupPageTest extends TestCase
         $new = Shift::withoutGlobalScopes()->where('shift_type_id', $night->id)->firstOrFail();
         $response->assertRedirect(route('shifts.lineup', $new));
 
-        $this->actingAs($this->operator)->get(route('shifts.show', $new))->assertOk()->assertSee('Line-up')->assertDontSee('✓ Line-up');
+        $this->actingAs($this->operator)->get(route('shifts.show', $new))->assertOk()->assertSee('Line-up')->assertDontSee('Done: </span>Line-up', false);
         $this->actingAs($this->operator)->get(route('shifts.lineup', $new))->assertOk()->assertSee('Shift Line-up')->assertSee('DRAFT')->assertSee('planning')->assertSee('HT-01');
     }
 
@@ -110,7 +110,7 @@ class LineupPageTest extends TestCase
         $component->set('standbyPick.'.$dozer->id, (string) $standby->id)->call('setStandby', $dozer->id)->assertSee('DZ-01: '.$standby->name)
             ->call('confirm')->assertSee('Line-up confirmed (version 1)')->assertSee('CONFIRMED v1')->assertSee('Re-confirm');
 
-        $this->actingAs($this->operator)->get(route('shifts.show', $this->shift))->assertOk()->assertSee('✓ Line-up');
+        $this->actingAs($this->operator)->get(route('shifts.show', $this->shift))->assertOk()->assertSee('Done: </span>Line-up', false);
     }
 
     public function test_managers_see_the_line_up_read_only_and_refusals_name_the_role(): void

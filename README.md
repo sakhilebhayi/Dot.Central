@@ -1,63 +1,34 @@
-<div align="center">
+# Dot.Central
 
-<img src="public/images/logo.png" alt="Dot.Central" width="320" />
+Dot.Central is the control-room operating system for a mining operation. It reads the fleet from Dot.Mines and turns it into the work of a shift: who is on which machine, which machines can run, what stopped and why, and what the next shift needs to know. Operators act on what they see. Nothing in Dot.Central edits a Dot.Mines fact.
 
-<br /><br />
+`wiki.md` is the maintained picture of the platform. The product documents in `docs/dot-central/` are the source of truth for the control-room build.
 
-**Create, configure, and converse with specialised AI agents powered by Claude.**
+## What it does
 
-<br />
+- Shifts: start, review, close and hand over, with open issues carried forward.
+- Line-up: faces from configured geofences or mine areas, loading units and haul trucks per face, standby with reasons, operator per machine pushed to Dot.Mines.
+- Availability board: which machines can be operated and what each one carries.
+- Derived readings from Dot.Mines: equipment status, engine hours, production, stoppages with operator classification, provider freshness.
+- Rule engine with an exception ledger and supervisor approvals.
+- Alerts mirrored from Dot.Mines; acknowledge and resolve pushed back with the outcome recorded.
+- Six reports with CSV export.
+- Room administration: shift types, downtime reasons, thresholds, operators, equipment roles, members.
+- Append-only audit log on every operational action.
+- An agent hub (Claude-backed agents, conversations, usage logs) kept under its own navigation section.
 
-![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20?style=flat-square&logo=laravel&logoColor=white) ![PHP](https://img.shields.io/badge/PHP-8.4-777BB4?style=flat-square&logo=php&logoColor=white) ![Livewire](https://img.shields.io/badge/Livewire-3-FB70A9?style=flat-square) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)
-
-<br /><br />
-
-**Part of the [InfoDot Ecosystem](https://github.com/sakhileb/InfoDot)** &nbsp;·&nbsp; `central.infodot.app`
-
-</div>
-
----
-
-## What is Dot.Central?
-
-Dot.Central hosts two domains side by side. See [`wiki.md`](wiki.md) for the full, actively-maintained picture — this README is a quick orientation, not the source of truth.
-
-1. **AI command centre** — teams create specialised Claude-powered agents with custom system prompts and skills, then converse with them and track token usage.
-2. **Mining-dispatch scaffold (MVP)** — control rooms, dispatch decisions, alerts, and operator sessions, scoped to Jetstream teams, plus a scheduled stale-session alert/review gate. Still no event emission out to the ecosystem or Dot.Mines integration yet.
-
-`wiki.md` also documents a known, tracked discrepancy: Dot.Brain's ingested view of this platform (`platforms/dot-central.md`) describes it as an operational-intelligence center for mining dispatch, while it was originally built as the AI-agent command centre, with the mining-dispatch domain added later as a scaffold on top. That gap is intentionally left open for a human decision, not resolved here.
-
-## Core Features
-
-- Agent builder — system prompt, persona, and skill assignment
-- Conversation interface, per-conversation message history
-- Usage and cost tracking per agent and per team member
-- Mining-dispatch control rooms — dispatch decisions, alerts (with in-app notifications), operator sessions
-- Hourly stale-session scan (`central:scan-stale-sessions`) — raises an alert, then opens a human-reviewed proposal, when a session logs no dispatch activity; never ends a session automatically
-- Ecosystem SSO from the InfoDot hub
-
-Not yet built (tracked in `wiki.md` §4/§7): knowledge-base grounding per agent, multi-agent routing/chaining, streaming chat responses, a public per-agent API endpoint, and Dot.Mines event integration for the dispatch domain.
-
-## Domain Models
-
-AI command centre: `Agent`, `AgentSkill`, `Conversation`, `Message`, `AgentUsageLog`.
-
-Mining dispatch (MVP scaffold): `ControlRoom`, `DispatchDecision`, `Alert`, `OperatorSession`, `StaleSessionProposal`.
-
-## Tech Stack
+## Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Laravel 12, PHP 8.4 |
-| Frontend | Livewire 3 · Alpine.js 3 · Tailwind CSS |
-| Database | PostgreSQL 16 (shared across ecosystem) |
-| Auth | Laravel Jetstream (teams) + Sanctum, ecosystem SSO from the InfoDot hub |
-| AI | Anthropic Claude, via direct HTTP call in `App\Services\AgentChatService` (falls back to a mock reply when `ANTHROPIC_API_KEY` is unset) |
-| Realtime (planned) | Laravel Reverb |
-| Search (planned) | Laravel Scout · Meilisearch |
-| Queue (planned) | Redis · Laravel Horizon |
+| Framework | Laravel 13, PHP 8.3+ |
+| UI | Livewire 3, Alpine.js, Tailwind CSS via Vite |
+| Database | PostgreSQL in production, SQLite in tests |
+| Auth | Jetstream teams, Sanctum, ecosystem sign-in from the InfoDot hub |
+| Dot.Mines | `/api/v1` bearer token per control room, scheduled sync, signed webhooks |
+| Agents | Anthropic Messages API through `App\Services\AgentChatService` |
 
-## Quick Start
+## Getting started
 
 ```bash
 git clone https://github.com/sakhileb/Dot.Central.git
@@ -67,15 +38,32 @@ composer install
 npm install && npm run build
 php artisan key:generate
 php artisan migrate
+php artisan db:seed
 php artisan serve
 ```
 
-> **Ecosystem SSO:** Set `DB_*` env vars to the shared InfoDot PostgreSQL instance and `APP_URL=https://central.infodot.app`. Users authenticated through InfoDot gain access automatically via Sanctum handoff tokens.
+Locally, `db:seed` creates a pilot control room with example users; see `database/seeders/LocalPilotSeeder.php`. Connecting a room to Dot.Mines needs a token minted on the Dot.Mines side (`integration:mint-token`) and is entered on the room's connection page, never in source or configuration files.
 
-## Ecosystem
+## Checks
 
-**Dot.Central** is one of **27 platforms** in the InfoDot ecosystem (per `config/ecosystem.php`'s registry, incl. InfoDot itself), connected via shared PostgreSQL and Sanctum SSO. Visit [InfoDot](https://github.com/sakhileb/InfoDot) to explore the full platform map.
+```bash
+php artisan test --compact
+vendor/bin/pint --dirty --format agent
+vendor/bin/phpstan analyse
+```
+
+`ProhibitedReferencesTest` fails the build if any customer, site or person name appears in the code or the product documents.
+
+## Documents
+
+| File | Purpose |
+|---|---|
+| `docs/dot-central/01` to `07` | Requirements, current state, architecture, Dot.Mines integration, feature matrix, roadmap, security |
+| `docs/dot-central/08` | Deployment and recovery |
+| `docs/dot-central/09` | Requests made of Dot.Mines and their status |
+| `docs/dot-central/10` | Outstanding issues register |
+| `docs/dot-central/11` to `13` | Operator experience, derived operations, shift line-up |
 
 ## License
 
-MIT © [SK Digital / BluPin Incorporated](https://github.com/sakhileb)
+MIT, SK Digital / BluPin Incorporated.

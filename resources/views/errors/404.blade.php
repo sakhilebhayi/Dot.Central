@@ -8,12 +8,12 @@
 @section('message', "The page you're looking for may have moved, been renamed, or never existed. Double-check the link, or head somewhere we know works.")
 
 @section('actions')
-    <a href="/" class="press" style="padding: 12px 24px; background: var(--accent); color: #10141a; font-family: var(--font-display); font-weight: 600; font-size: 15px; border-radius: 999px; text-decoration: none;">Go home</a>
+    <a href="/" class="press" style="padding: 12px 24px; background: var(--signal); border: 1px solid var(--signal); color: #15120a; font-family: var(--font-display); font-weight: 600; font-size: 15px; border-radius: 2px; text-decoration: none;">Go home</a>
     @auth
-    <a href="{{ route('dashboard') }}" class="press link-underline" style="padding: 12px 24px; color: var(--ink); font-size: 15px; text-decoration: none;">Go to dashboard</a>
+    <a href="{{ route('dashboard') }}" class="press link-underline" style="padding: 12px 24px; color: var(--text); font-size: 15px; text-decoration: none;">Go to dashboard</a>
     @else
         @if (Route::has('login'))
-    <a href="{{ route('login') }}" class="press link-underline" style="padding: 12px 24px; color: var(--ink); font-size: 15px; text-decoration: none;">Sign in</a>
+    <a href="{{ route('login') }}" class="press link-underline" style="padding: 12px 24px; color: var(--text); font-size: 15px; text-decoration: none;">Sign in</a>
         @endif
     @endauth
 @endsection

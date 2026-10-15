@@ -13,14 +13,14 @@
         <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:0.875rem;overflow:hidden;">
             @if($agents->isEmpty())
                 <div style="padding:3.5rem 1.5rem;text-align:center;">
-                    <div style="width:56px;height:56px;border-radius:14px;background:rgba(225,29,72,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
+                    <div style="width:56px;height:56px;border-radius:14px;background:var(--signal-quiet);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
                         <span class="material-symbols-rounded" style="font-size:28px;color:var(--signal);">smart_toy</span>
                     </div>
                     <div style="font-family:var(--font-display);font-size:1rem;font-weight:700;color:var(--text-primary);margin-bottom:0.5rem;">No agents yet</div>
-                    <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 1.5rem;">Create your first AI agent to start chatting.</p>
+                    <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 1.5rem;">No agents are configured for this team. An agent is a Claude-backed persona with a system prompt and a set of skills.</p>
                     <a href="{{ route('agents.create') }}" class="dot-btn dot-btn-primary">
                         <span class="material-symbols-rounded" style="font-size:16px;">add_circle</span>
-                        Create your first agent
+                        Create an agent
                     </a>
                 </div>
             @else

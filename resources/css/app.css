@@ -8,7 +8,7 @@
    vocabulary is shared with Dot.Memory's shipped control-room system:
    one instrument, two lighting conditions. `.dark` on <html> means
    NIGHT and night is the default; day is not an inversion (the signal
-   darkens to hold contrast, the lamp glow is dropped).
+   darkens to hold contrast, no glow in either).
    ================================================================== */
 
 @layer base {
@@ -42,7 +42,6 @@
         --info-quiet: rgba(31, 95, 150, 0.1);
         --review-quiet: rgba(122, 98, 8, 0.1);
 
-        --lamp-glow: none;
         --selection: rgba(138, 92, 7, 0.22);
 
         /* ---- Type ---------------------------------------------------- */
@@ -121,7 +120,6 @@
         --info-quiet: rgba(91, 157, 217, 0.13);
         --review-quiet: rgba(227, 192, 74, 0.13);
 
-        --lamp-glow: 0 0 10px -1px currentColor;
         --selection: rgba(242, 167, 11, 0.28);
     }
 
@@ -209,7 +207,7 @@
 .statebar--warn { --lamp: var(--warn); }
 .statebar--bad { --lamp: var(--bad); }
 .statebar--idle { --lamp: var(--text-faint); }
-.statebar__lamp { width: 9px; height: 9px; border-radius: 50%; background: var(--lamp); color: var(--lamp); box-shadow: var(--lamp-glow); flex-shrink: 0; }
+.statebar__lamp { width: 9px; height: 9px; border-radius: 50%; background: var(--lamp); color: var(--lamp); flex-shrink: 0; }
 .statebar__state { font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.02em; text-transform: uppercase; }
 .statebar__detail { font-size: var(--t-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .statebar__detail a { color: var(--signal); text-decoration: none; }

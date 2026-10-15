@@ -78,7 +78,7 @@
                         </div>
                         <form method="POST" action="{{ route('dispatch-decisions.destroy', $decision) }}" onsubmit="return confirm('Delete this decision?');">
                             @csrf @method('DELETE')
-                            <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.75rem;">✕</button>
+                            <button type="submit" class="dot-btn dot-btn-ghost dot-btn-sm">Delete</button>
                         </form>
                     </div>
                 @empty
@@ -119,7 +119,7 @@
                             @endunless
                             <form method="POST" action="{{ route('alerts.destroy', $alert) }}" onsubmit="return confirm('Delete this alert?');">
                                 @csrf @method('DELETE')
-                                <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.75rem;">✕</button>
+                                <button type="submit" class="dot-btn dot-btn-ghost dot-btn-sm">Delete</button>
                             </form>
                         </div>
                     </div>
@@ -159,7 +159,7 @@
                             @endunless
                             <form method="POST" action="{{ route('operator-sessions.destroy', $session) }}" onsubmit="return confirm('Delete this session?');">
                                 @csrf @method('DELETE')
-                                <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.75rem;">✕</button>
+                                <button type="submit" class="dot-btn dot-btn-ghost dot-btn-sm">Delete</button>
                             </form>
                         </div>
                     </div>

@@ -11,6 +11,6 @@
         ['Downtime', route('shifts.downtime', $shift), true],
         [$isClosed ? 'Handover' : 'End shift', route('shifts.review', $shift), $isClosed],
     ] as [$label, $href, $done])
-        <a href="{{ $href }}" class="dot-panel" style="padding:0.6rem 0.9rem;text-decoration:none;font-family:var(--font-display);font-size:var(--t-sm);font-weight:600;color:{{ $done ? 'var(--ok)' : 'var(--text-quiet)' }};">{{ $done ? '✓ ' : '' }}{{ $label }}</a>
+        <a href="{{ $href }}" class="dot-panel" style="padding:0.6rem 0.9rem;text-decoration:none;font-family:var(--font-display);font-size:var(--t-sm);font-weight:600;color:{{ $done ? 'var(--ok)' : 'var(--text-quiet)' }};">@if($done)<span class="material-symbols-rounded" style="font-size:14px;vertical-align:-2px;margin-right:0.2rem;" aria-hidden="true">check</span><span class="sr-only">Done: </span>@endif{{ $label }}</a>
     @endforeach
 </nav>

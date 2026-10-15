@@ -1,4 +1,4 @@
-# Dot.Central — Derived Operations Design (prototype features on Dot.Mines data)
+# Dot.Central: Derived Operations Design (prototype features on Dot.Mines data)
 
 **Owner instruction (2026-10-15):** the features and pages of the `DT/` prototype must be reflected in Dot.Central, but most if not all data must be derived from Dot.Mines; control-room operators have little input and act only where necessary.
 **Status:** design for Increments 3–6, implemented from this date. Resolves decisions D2 (Dot.Central owns shifts), D3 (no manual production capture) and D4 (line-up becomes a derived fleet board) in `03-architecture.md`.
@@ -7,20 +7,20 @@
 
 | Prototype (manual capture) | Dot.Central (derived) | Operator input that remains |
 |---|---|---|
-| Operator types closing hour-meter readings | Opening and closing readings are the Dot.Mines metric at or before shift start and end (`operating_hours`, provider clock) | none; may **explain** an exception |
+| Operator types closing hour-meter readings | Opening and closing readings are the Dot.Mines metric at or before shift start and end (`operating_hours`, provider clock) | none; may explain an exception |
 | Operator ticks loads per truck per hour | Loads are deltas of the cumulative `load_count` counter in metrics; tonnes are Dot.Mines daily production records | none |
-| Operator records downtime with a reason | Stoppages are **observed**: transitions of Dot.Mines status (offline, maintenance) and engine-running captured by sync | **classify** a stoppage with a reason code |
-| Operator builds the line-up (faces, trucks, operators) | The **fleet board** shows where each machine is (mine area, last geofence, state) from Dot.Mines | none |
-| Operator starts/closes the shift, writes handover | Shift is proposed from the room's shift types; the handover pack is computed | **confirm start**, **close with notes**, **acknowledge handover**; supervisor approves / reopens |
-| Operator explains, supervisor approves exceptions | Rules run over derived data on every sync and at review | **explain / approve / reject / dismiss** |
-| Alerts typed in | Alerts mirrored from Dot.Mines and raised by Dot.Central rules | **acknowledge / assign / escalate / resolve** |
+| Operator records downtime with a reason | Stoppages are observed: transitions of Dot.Mines status (offline, maintenance) and engine-running captured by sync | **classify** a stoppage with a reason code |
+| Operator builds the line-up (faces, trucks, operators) | The fleet board shows where each machine is (mine area, last geofence, state) from Dot.Mines | none |
+| Operator starts/closes the shift, writes handover | Shift is proposed from the room's shift types; the handover pack is computed | **confirm start**, close with notes, acknowledge handover; supervisor approves / reopens |
+| Operator explains, supervisor approves exceptions | Rules run over derived data on every sync and at review | explain / approve / reject / dismiss |
+| Alerts typed in | Alerts mirrored from Dot.Mines and raised by Dot.Central rules | acknowledge / assign / escalate / resolve |
 | Administration catalogues | Per-room configuration | administrator edits shift types, reason codes, thresholds |
 
 Nothing an operator enters changes a Dot.Mines fact. Every operator action is audited with reason text.
 
 ## 2. Derived data added to the mirror
 
-- **`equipment_metrics`** (replaces `equipment_hour_readings`): one row per Dot.Mines metric fetched — `recorded_at`, `operating_hours`, `idle_hours`, `fuel_level`, `speed`, `engine_running`, `load_count`, `payload_cumulative`, `odometer`, `ingested_at`. The hours job fetches up to 24 h of history per machine per run (one call), so shift derivations have the readings they need.
+- **`equipment_metrics`** (replaces `equipment_hour_readings`): one row per Dot.Mines metric fetched: `recorded_at`, `operating_hours`, `idle_hours`, `fuel_level`, `speed`, `engine_running`, `load_count`, `payload_cumulative`, `odometer`, `ingested_at`. The hours job fetches up to 24 h of history per machine per run (one call), so shift derivations have the readings they need.
 - **`equipment_status_events`**: every observed change of `mines_status` or `engine_running`, with `observed_at` (provider clock where known, else sync time), `source` (`sync`, `webhook`, `metric`). Stoppages are intervals built from these.
 - **`production_records`** mirror from the `/sync` production scope: `mines_record_id`, `equipment_id`, `record_date`, `shift`, `quantity`, `unit`, `mines_status`, `sync_version`.
 - **`downtime_classifications`**: operator classification of an observed stoppage (equipment, started_at, ended_at nullable, reason code, note). Links the human reason to the machine fact without altering it.
