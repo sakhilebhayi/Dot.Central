@@ -19,27 +19,27 @@ Scope: F-06, F-07, F-08, F-09, F-10.
 - Health page; shell indicator; system alerts for credential failure.
 Acceptance: sync against the local Dot.Mines instance with a human-minted test token produces mirrored equipment with correct provenance; failure modes tested with fakes.
 
-## Increment 3 — Live operations (Phase 4)
-Scope: F-11, F-12, F-13.
+## Increment 3 — Live operations (Phase 4) — **done 2026-10-15 except the map (F-13, awaiting D6)**
+Scope: F-11, F-12, F-13. Result: Overview is the landing page (poll 30 s), Fleet board (poll 15 s); see `12-derived-operations-design.md`.
 - Overview Livewire page (poll 15 s): fleet by state, attention list, active alerts by severity, freshness summary, shift tile.
 - Fleet board with filters, equipment drill-down (state, last heard, engine hours as-of, active alerts, open exceptions, incidents, history).
 - Map (Leaflet, pending D6) with per-marker state and age; stale markers rendered distinctly; "position only" vs "moving".
 Acceptance: pages render from mirrored data; empty, stale and failed states shown; browser screenshots recorded.
 
-## Increment 4 — Alerts and exceptions (Phase 4)
-Scope: F-14, F-15, F-25 (first rules).
+## Increment 4 — Alerts and exceptions (Phase 4) — **done 2026-10-15**
+Scope: F-14, F-15, F-25 (first rules). Result: alert workflow with `alert_events` and optional push to Dot.Mines (live-verified), rule engine with 10 rules, exception ledger, approvals inbox.
 - Alert model rework: source, external_id, severity, priority, status (active/acknowledged/assigned/escalated/resolved), assignee, escalation level, evidence json; `alert_events`; optional ack/resolve back to Dot.Mines.
 - Rule engine with declarative rules; first rules: telemetry missing > N, offline > N during shift, idle > N while on shift, engine hours decreasing, duplicate identifiers; findings upsert; lifecycle; approvals inbox.
 Acceptance: rule tests; dedup tests; permission tests; UI for queue, card actions, approvals.
 
-## Increment 5 — Shifts, handover, incidents, tasks (Phase 4)
-Scope: F-16..F-19.
+## Increment 5 — Shifts, handover, incidents, tasks (Phase 4) — **done 2026-10-15 except general tasks (F-19 partial)**
+Scope: F-16..F-19. Result: shift lifecycle over derived data, handover snapshot + acknowledge, observed stoppages classified against a reason catalogue.
 - Shift types per control room; shift lifecycle; review; close with blocking check; handover snapshot + acknowledge; reopen with reason.
 - Incidents (downtime) with reason catalogue and validation; tasks with escalation.
 Acceptance: lifecycle tests incl. "cannot close with open CRITICAL"; handover visible to next shift; audit rows.
 
-## Increment 6 — Production, reports, data quality (Phase 4)
-Scope: F-20..F-22.
+## Increment 6 — Production, reports, data quality (Phase 4) — **done 2026-10-15 (derived scope; no manual capture, D3)**
+Scope: F-20..F-22. Result: six reports with CSV + GENERATE audit, data-quality page, room administration (F-31).
 - Metric catalogue; production view from Dot.Mines daily records (source tagged); shift comparison; CSV export with GENERATE audit; data-quality page.
 Acceptance: calculations unit-tested; no fabricated figures; "no data" states.
 

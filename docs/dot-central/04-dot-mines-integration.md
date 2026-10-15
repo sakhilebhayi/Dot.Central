@@ -19,6 +19,7 @@ Not available (do not build against): shifts, mine areas REST, fault-code lifecy
 
 ## 2. Authentication and tenancy
 - Sanctum personal access token, `Authorization: Bearer`, abilities checked per verb (`read` for GET, `update` for POST ack/resolve). Minted by a human in Dot.Mines (`/user/api-tokens`). Tenant = the token user's `current_team_id`; `POST /api/v1/user/team/{id}` switches it (mutates the user). **Dot.Central must mint one token per control room from a user whose current team is that mine and must never switch teams through the API.**
+- **Pushing alert actions back** (`POST /alerts/{id}/acknowledge|resolve`) is additionally gated by Dot.Mines' `AlertPolicy`: the token's user must hold a Dot.Mines role on that team that grants `acknowledge_alerts` / `resolve_alerts` (the team `admin` role grants all). Token abilities alone are not enough; a user without such a role gets HTTP 403 (verified 2026-10-15, see §8 and I-23).
 - Stateful same-origin cookies also authenticate, which is irrelevant cross-origin.
 - Rate limit `api`: 60 req/min per token. Budget: one sync call per cycle, one machines page per 100 machines, engine-hours refresh spread over the hour.
 - Errors: 401 `{message}`, 403, 404, 409 (no team), 422 `{message, errors}`, 429 `{message, retry_after}`.
@@ -50,3 +51,8 @@ Dot.Mines runs locally on port 8010 (`.claude/launch.json`). The client and sync
 **Live result:** a token minted for the local Bell end-to-end fixture team (the seeded demo team owns no machines locally, and its seeded credentials have been changed) verified through `GET /user` (team 32); `mines:sync 1 --now` mirrored 2 machines (model, manufacturer, serial, area name from the `reference` scope, position with provider clock, Dot.Mines ingest clock) and 2 active alerts; `mines:refresh-hours 1 --now` fetched engine hours from `operating_hours` with their `recorded_at`; the run, cursor (0 → 116) and an `import` audit row were recorded. The fixture machines last reported on 2026-08-20, so the evaluator shows them as **Unknown** with "last known active", which is the intended behaviour. Two defects were found only by the live call and fixed with tests: the tombstone shape (§1) and area names for machines whose resource omits `mine_area`.
 
 **Not verifiable locally:** inbound webhooks, because Dot.Mines refuses private and loopback endpoint URLs; the receiver is proven with correctly signed fixtures (`MinesWebhookTest`) and needs a public callback for an end-to-end delivery.
+
+### 8.1 Alert push, verified 2026-10-15
+
+- First attempt: resolve from Dot.Central with "also resolve in Dot.Mines" → Dot.Mines answered 403 because the fixture owner held no team role. Dot.Central kept the local resolution and (after the fix in commit `a9ac08c`) reports "Dot.Mines was NOT updated: …" in the flash, the `alert_events.note` and the audit reason.
+- After granting the fixture owner the team `admin` role in the local Dot.Mines: resolve pushed, Dot.Mines alert 5 shows `status=resolved, resolved_by=<token user>`; Dot.Central `alert_events.pushed_to_source=true`, audit reason suffixed "(pushed to Dot.Mines)". Acknowledge is never pushed unless asked; the test suite asserts both.

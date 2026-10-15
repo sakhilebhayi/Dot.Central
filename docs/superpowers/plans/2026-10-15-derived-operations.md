@@ -28,3 +28,7 @@ Overview becomes the landing page (agent hub moves to `/agents` dashboard); Aler
 
 ### Task F: Live verification, docs
 Run against local Dot.Mines; screenshots; update matrix, wiki, issues, roadmap.
+
+---
+
+**Status 2026-10-15:** Tasks A–F done. Task E commit `48b6842`; live-verification fix `a9ac08c` (refused Dot.Mines push is reported, not hidden). Open: map (D6), general tasks (I-26), transitional inline-grid CSS block in `app.css` still in use by the older room pages.
