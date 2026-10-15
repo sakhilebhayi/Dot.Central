@@ -45,7 +45,8 @@ return [
         'zero_loads_hours' => 5,          // EQ-03 haul unit ran without loads
         'classify_after_minutes' => 60,   // DT-01 stoppage left unclassified
         'unack_minutes' => 15,            // AL-01 critical alert unacknowledged
-        'engine_hours_budget' => 10,      // reference line on the engine-hours table
+        'engine_hours_budget' => 10,
+        'trucks_per_loader' => 8,      // reference line on the engine-hours table
         'haul_types' => ['haul_truck', 'adt', 'truck'],
     ],
 ];

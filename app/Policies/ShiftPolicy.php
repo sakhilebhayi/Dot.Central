@@ -20,6 +20,12 @@ class ShiftPolicy
         return $user->can('operate', $controlRoom);
     }
 
+    /** Build, change and confirm the line-up. */
+    public function lineup(User $user, Shift $shift): bool
+    {
+        return $user->can('operate', $shift->controlRoom);
+    }
+
     public function close(User $user, Shift $shift): bool
     {
         return $user->can('operate', $shift->controlRoom);

@@ -66,6 +66,18 @@ class Shift extends Model
         return $this->hasOne(ShiftHandover::class);
     }
 
+    /** @return HasOne<ShiftLineup, $this> */
+    public function lineup(): HasOne
+    {
+        return $this->hasOne(ShiftLineup::class);
+    }
+
+    /** @return HasMany<LineupFace, $this> */
+    public function faces(): HasMany
+    {
+        return $this->hasMany(LineupFace::class);
+    }
+
     /** @return HasMany<ShiftUnitSummary, $this> */
     public function unitSummaries(): HasMany
     {

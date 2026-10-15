@@ -20,7 +20,7 @@ use Illuminate\View\View;
  */
 class ControlRoomAdminController extends Controller
 {
-    public const SETTING_KEYS = ['offline_minutes', 'stale_minutes', 'idle_minutes_threshold', 'zero_loads_hours', 'classify_after_minutes', 'unack_minutes', 'engine_hours_budget'];
+    public const SETTING_KEYS = ['offline_minutes', 'stale_minutes', 'idle_minutes_threshold', 'zero_loads_hours', 'classify_after_minutes', 'unack_minutes', 'engine_hours_budget', 'trucks_per_loader'];
 
     public function __construct(private readonly Audits $audits) {}
 
