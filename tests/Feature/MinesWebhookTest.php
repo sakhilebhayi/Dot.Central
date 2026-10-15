@@ -8,6 +8,7 @@ use App\Models\Equipment;
 use App\Models\IntegrationWebhookDelivery;
 use App\Models\MinesConnection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -113,5 +114,23 @@ class MinesWebhookTest extends TestCase
         $delivery = IntegrationWebhookDelivery::firstOrFail();
         $this->assertSame('failed', $delivery->status);
         $this->assertNotNull($delivery->error);
+    }
+
+    public function test_an_alert_for_a_machine_not_yet_mirrored_fetches_it_once_and_links_the_alert(): void
+    {
+        $connection = $this->connection(['base_url' => 'http://mines.test', 'api_token' => 'tok']);
+        Http::fake([
+            'mines.test/api/v1/machines/7' => Http::response(['data' => ['id' => 7, 'name' => 'HT-07', 'machine_type' => 'bell', 'model' => 'B50E', 'manufacturer' => 'Bell', 'status' => 'active', 'capacity' => 50, 'mine_area_id' => null, 'location' => ['latitude' => null, 'longitude' => null, 'updated_at' => null], 'created_at' => '2026-01-01T00:00:00+00:00', 'updated_at' => '2026-10-15T09:58:00+00:00']]),
+            'mines.test/api/v1/machines/8' => Http::response(['message' => 'down'], 503),
+        ]);
+
+        $this->deliver($connection, 'alert.triggered', $this->alertData(99, 7))->assertOk()->assertJson(['status' => 'applied']);
+        $equipment = Equipment::withoutGlobalScopes()->where('mines_machine_id', 7)->firstOrFail();
+        $this->assertSame('HT-07', $equipment->name);
+        $this->assertSame($equipment->id, Alert::where('external_id', '99')->firstOrFail()->equipment_id);
+
+        $this->deliver($connection, 'alert.triggered', $this->alertData(100, 8), ['delivery' => 'd-2'])->assertOk()->assertJson(['status' => 'applied']);
+        $this->assertNull(Alert::where('external_id', '100')->firstOrFail()->equipment_id, 'a failed fetch leaves the alert unlinked until the next sync');
+        $this->assertSame(1, Equipment::withoutGlobalScopes()->count());
     }
 }

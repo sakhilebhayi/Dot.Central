@@ -21,5 +21,9 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(MiningDispatchSeeder::class);
+
+        if (app()->environment('local')) {
+            $this->call(LocalPilotSeeder::class);
+        }
     }
 }

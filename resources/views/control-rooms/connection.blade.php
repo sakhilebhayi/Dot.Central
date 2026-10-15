@@ -4,7 +4,7 @@
         <h1 style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;color:var(--text-primary);margin:0 0 0.25rem;">Dot.Mines connection</h1>
         <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 1.5rem;">
             Maps this control room to one Dot.Mines team. The token is minted by a member of that team in Dot.Mines
-            (Profile → API Tokens) with the <em>read</em> and <em>update</em> abilities. It is stored encrypted and never shown again.
+            (Profile → API Tokens) with the <em>read</em> and <em>update</em> abilities. It is stored encrypted and never shown again. The minting user must stay a member of that team with their current team set to it; pushing an acknowledge or resolve back to Dot.Mines also needs that user's Dot.Mines role to grant alert acknowledge/resolve permissions (the team admin role does). If the person leaves, mint a new token here; the old one stops working and the Health page shows the credential failure.
         </p>
 
         <x-validation-errors class="mb-4" />

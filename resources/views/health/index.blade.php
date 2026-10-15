@@ -7,9 +7,21 @@
                 <h1 class="dot-page-head__title">Integration health</h1>
                 <p class="dot-page-head__lede">Is the data link working? Each control room's Dot.Mines connection, its last runs, how fresh the mirrored fleet is, and what failed. An operational incident and a data failure must never look the same.</p>
             </div>
-            <div class="dot-readout" style="text-align:right;">
-                <span class="dot-readout__label">Failed queue jobs</span>
-                <span class="dot-readout__value {{ $failedJobs > 0 ? 'dot-readout__value--bad' : '' }}">{{ Format::integer($failedJobs) }}</span>
+            <div style="display:flex;gap:1.25rem;">
+                <div class="dot-readout" style="text-align:right;">
+                    <span class="dot-readout__label">Scheduler last ran</span>
+                    <span class="dot-readout__value {{ $schedulerHeartbeat === null || $schedulerHeartbeat->lt(now()->subMinutes(3)) ? 'dot-readout__value--bad' : 'dot-readout__value--ok' }}" style="font-size:var(--t-lg);">{{ $schedulerHeartbeat ? Format::age($schedulerHeartbeat) : 'never' }}</span>
+                    <span class="dot-readout__context">needs `schedule:run` every minute</span>
+                </div>
+                <div class="dot-readout" style="text-align:right;">
+                    <span class="dot-readout__label">Queue worker last ran</span>
+                    <span class="dot-readout__value {{ $queueHeartbeat === null || $queueHeartbeat->lt(now()->subMinutes(12)) ? 'dot-readout__value--bad' : 'dot-readout__value--ok' }}" style="font-size:var(--t-lg);">{{ $queueHeartbeat ? Format::age($queueHeartbeat) : 'never' }}</span>
+                    <span class="dot-readout__context">needs `queue:work`; sync and rules are queued</span>
+                </div>
+                <div class="dot-readout" style="text-align:right;">
+                    <span class="dot-readout__label">Failed queue jobs</span>
+                    <span class="dot-readout__value {{ $failedJobs > 0 ? 'dot-readout__value--bad' : '' }}">{{ Format::integer($failedJobs) }}</span>
+                </div>
             </div>
         </div>
 

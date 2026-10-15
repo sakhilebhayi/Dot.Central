@@ -5,6 +5,7 @@ namespace App\Services\Mines;
 use App\Models\Equipment;
 use App\Models\IntegrationWebhookDelivery;
 use App\Models\MinesConnection;
+use App\Services\Mines\Exceptions\MinesException;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -15,7 +16,7 @@ use InvalidArgumentException;
  */
 final class WebhookApplier
 {
-    public function __construct(private readonly MinesSynchroniser $synchroniser) {}
+    public function __construct(private readonly MinesSynchroniser $synchroniser, private readonly MinesClientFactory $clients) {}
 
     public function apply(MinesConnection $connection, IntegrationWebhookDelivery $delivery): string
     {
@@ -38,9 +39,34 @@ final class WebhookApplier
             throw new InvalidArgumentException('alert.triggered payload has no alert id.');
         }
 
+        $this->mirrorMachineIfUnknown($connection, $data['machine_id'] ?? null);
         $this->synchroniser->applyAlert($connection, $data);
 
         return 'applied';
+    }
+
+    /**
+     * A webhook can name a machine the mirror has not seen yet (issue I-22):
+     * fetch it once so the alert links to a unit. A failed fetch is not an
+     * error; the next sync links it.
+     */
+    private function mirrorMachineIfUnknown(MinesConnection $connection, mixed $machineId): void
+    {
+        if (! is_numeric($machineId) || ! $connection->isUsable()) {
+            return;
+        }
+
+        $known = Equipment::withoutGlobalScopes()->where('control_room_id', $connection->control_room_id)->where('mines_machine_id', (int) $machineId)->exists();
+        if ($known) {
+            return;
+        }
+
+        try {
+            $resource = $this->clients->for($connection)->machine((int) $machineId);
+            $this->synchroniser->applyResource($connection, $resource);
+        } catch (MinesException) {
+            // left unlinked on purpose; see the docblock
+        }
     }
 
     /** @param array<string, mixed> $data */

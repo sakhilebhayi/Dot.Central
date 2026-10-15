@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\QueueHeartbeat;
 use App\Jobs\SyncMinesConnection;
 use App\Models\AuditEntry;
 use App\Models\ControlRoom;
@@ -10,7 +11,10 @@ use App\Models\IntegrationSyncRun;
 use App\Models\MinesConnection;
 use App\Models\Team;
 use App\Models\User;
+use App\Support\Format;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -99,5 +103,22 @@ class IntegrationHealthTest extends TestCase
         $supervisor = $this->member($team, 'supervisor', $room);
 
         $this->actingAs($supervisor)->post(route('health.sync', $connection))->assertForbidden();
+    }
+
+    public function test_health_shows_the_scheduler_and_queue_heartbeats(): void
+    {
+        $owner = User::factory()->withPersonalTeam()->create();
+        $supervisor = $this->member($owner->currentTeam, 'supervisor', ControlRoom::factory()->for($owner->currentTeam)->create());
+        Cache::forever('dot.scheduler_heartbeat', now()->subSeconds(30)->toIso8601String());
+
+        $this->actingAs($supervisor)->get(route('health.index'))->assertOk()->assertSeeInOrder(['Scheduler last ran', Format::age(now()->subSeconds(30)), 'Queue worker last ran', 'never']);
+
+        (new QueueHeartbeat)->handle();
+        $this->assertNotNull(Cache::get(QueueHeartbeat::KEY));
+        $this->actingAs($supervisor)->get(route('health.index'))->assertOk()->assertSeeInOrder(['Queue worker last ran', Format::age(now())]);
+
+        $events = collect(app(Schedule::class)->events())->map(fn ($e) => $e->description ?? $e->command ?? '')->implode(' ');
+        $this->assertStringContainsString('scheduler-heartbeat', $events);
+        $this->assertStringContainsString('queue-heartbeat', $events);
     }
 }

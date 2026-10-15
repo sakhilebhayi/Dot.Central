@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\QueueHeartbeat;
 use App\Jobs\SyncMinesConnection;
 use App\Models\ControlRoom;
 use App\Models\IntegrationWebhookDelivery;
@@ -13,6 +14,8 @@ use App\Services\Mines\FreshnessEvaluator;
 use App\Services\Mines\MinesClientFactory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -63,7 +66,16 @@ class IntegrationHealthController extends Controller
             'cards' => $cards,
             'failedJobs' => DB::table('failed_jobs')->count(),
             'syncInterval' => (int) config('mines.sync_interval_minutes', 5),
+            'schedulerHeartbeat' => $this->heartbeat('dot.scheduler_heartbeat'),
+            'queueHeartbeat' => $this->heartbeat(QueueHeartbeat::KEY),
         ]);
+    }
+
+    private function heartbeat(string $key): ?Carbon
+    {
+        $value = Cache::get($key);
+
+        return is_string($value) ? Carbon::parse($value) : null;
     }
 
     public function sync(Request $request, MinesConnection $connection, Audits $audits): RedirectResponse
