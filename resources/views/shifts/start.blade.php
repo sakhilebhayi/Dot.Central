@@ -45,6 +45,7 @@
                             <li>Opening engine hours = the last Dot.Mines reading before the shift starts (no typing)</li>
                             <li>Loads, production, stoppages and states are derived from telemetry as the shift runs</li>
                             <li>The previous handover is acknowledged when you start</li>
+                            <li>Next step, Shift Line-up: faces copied from the previous shift, trucks with their loading units, operators from the previous shift; machines Dot.Mines reports stopped stay down</li>
                         </ul>
                     </div>
                 </form>
@@ -68,6 +69,26 @@
                         <p class="dot-readout__context">Issued {{ Format::stamp($previous->handover->issued_at, $timezone) }}{{ $previous->handover->acknowledged_at ? ' · acknowledged '.Format::stamp($previous->handover->acknowledged_at, $timezone) : ' · will be acknowledged when you start' }}</p>
                     @else
                         <p class="dot-page-head__lede">No previous handover.</p>
+                    @endif
+
+                    <h3 class="dot-readout__label" style="margin-top:1rem;">Still down at the previous end ({{ count($outstanding['down']) }})</h3>
+                    <p style="font-size:var(--t-sm);color:var(--text-quiet);">{{ collect($outstanding['down'])->map(fn($d) => $d['name'].' ('.$d['cause'].($d['since'] ? ' since '.Format::stamp($d['since'], $timezone) : '').')')->implode(', ') ?: 'none — Dot.Mines reports every machine running or idle' }}</p>
+                    @if($outstanding['standby'] !== [])
+                        <h3 class="dot-readout__label">On standby at the previous end ({{ count($outstanding['standby']) }})</h3>
+                        <p style="font-size:var(--t-sm);color:var(--text-quiet);">{{ collect($outstanding['standby'])->map(fn($s) => $s['name'].' ('.$s['reason'].')')->implode(', ') }}</p>
+                    @endif
+                    <h3 class="dot-readout__label">Open exceptions carried ({{ $outstanding['exceptions']->count() }})</h3>
+                    @if($outstanding['exceptions']->isEmpty())
+                        <p style="font-size:var(--t-sm);color:var(--text-quiet);">none</p>
+                    @else
+                        <div class="dot-table-wrap"><table class="dot-ledger"><thead><tr><th>Sev</th><th>Rule</th><th>Unit</th><th>Detail</th></tr></thead><tbody>
+                            @foreach($outstanding['exceptions']->take(12) as $e)<tr><td><span class="dot-badge dot-badge--{{ $e->tone() }}">{{ $e->severity }}</span></td><td class="dot-ledger__key">{{ $e->rule_code }}</td><td class="dot-ledger__key">{{ $e->equipment?->name ?? '—' }}</td><td>{{ $e->title }}</td></tr>@endforeach
+                        </tbody></table></div>
+                        @if($outstanding['exceptions']->count() > 12)<p class="dot-readout__context">+ {{ $outstanding['exceptions']->count() - 12 }} more under <a href="{{ route('exceptions.index', ['room' => $controlRoom->id]) }}" style="color:var(--signal);">Exceptions</a></p>@endif
+                    @endif
+                    @if($outstanding['faces'] !== [])
+                        <h3 class="dot-readout__label">Previous faces ({{ count($outstanding['faces']) }}) — copied on the Line-up</h3>
+                        <p style="font-size:var(--t-sm);color:var(--text-quiet);">{{ collect($outstanding['faces'])->map(fn($f) => $f['label'].' ('.(implode(' + ', $f['loaders']) ?: 'no loader').', '.count($f['trucks']).' trucks)')->implode(' · ') }}</p>
                     @endif
                 </div>
             </div>

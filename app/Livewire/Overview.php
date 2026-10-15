@@ -7,6 +7,7 @@ use App\Models\ControlRoom;
 use App\Models\OperationalException;
 use App\Models\Shift;
 use App\Models\Team;
+use App\Services\Lineup\LineupService;
 use App\Services\Mines\FreshnessEvaluator;
 use App\Services\Shifts\ShiftDerivation;
 use App\Services\Shifts\ShiftService;
@@ -27,7 +28,7 @@ class Overview extends Component
     #[Url(as: 'room')]
     public ?int $roomId = null;
 
-    public function render(ShiftService $shifts, ShiftDerivation $derivation, FreshnessEvaluator $freshness): View
+    public function render(ShiftService $shifts, ShiftDerivation $derivation, FreshnessEvaluator $freshness, LineupService $lineup): View
     {
         $rooms = ControlRoom::accessibleBy(auth()->user())->orderBy('name')->get();
         $team = auth()->user()?->currentTeam;
@@ -82,6 +83,8 @@ class Overview extends Component
             'alerts' => $alerts,
             'assignees' => $team instanceof Team ? $team->allUsers()->sortBy('name')->values() : collect(),
             'connection' => $connection,
+            'lineup' => $shift !== null ? $lineup->lineup($shift) : null,
+            'lineupSummary' => $shift !== null ? $lineup->summary($shift) : null,
             'timezone' => $room->timezone(),
         ]);
     }

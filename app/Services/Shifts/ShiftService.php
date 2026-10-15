@@ -8,6 +8,7 @@ use App\Models\ShiftHandover;
 use App\Models\ShiftType;
 use App\Models\User;
 use App\Services\Audits;
+use App\Services\Lineup\LineupService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +24,7 @@ final class ShiftService
         private readonly ShiftDerivation $derivation,
         private readonly ShiftBlockers $blockers,
         private readonly Audits $audits,
+        private readonly LineupService $lineup,
     ) {}
 
     public function current(ControlRoom $room): ?Shift
@@ -197,8 +199,37 @@ final class ShiftService
             'shift' => ['label' => $shift->label(), 'starts_at' => $shift->starts_at->toIso8601String(), 'ends_at' => $shift->ends_at->toIso8601String()],
             'fleet' => $review['totals'],
             'open_items' => $review['blocking']->values()->all(),
+            'lineup' => $this->lineupSnapshot($shift),
             'notes' => $notes,
             'built_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Faces, machines and operators as they stand at the end of the shift,
+     * plus the machines on standby; what the next shift starts from.
+     *
+     * @return array<string, mixed>
+     */
+    private function lineupSnapshot(Shift $shift): array
+    {
+        $record = $this->lineup->lineup($shift);
+        $pool = $this->lineup->pool($shift)->keyBy(fn (array $r) => $r['equipment']->id);
+        $faces = [];
+
+        foreach ($this->lineup->faces($shift) as $face) {
+            $members = $face->allocations()->whereNull('to_at')->get();
+            $names = fn (string $role) => $members->where('role', $role)->map(fn ($a) => $pool[$a->equipment_id]['equipment']->name ?? '?')->values()->all();
+            $faces[] = ['label' => $face->label(), 'kind' => $face->kind, 'what' => $face->what(), 'cut' => $face->cut, 'blocks' => $face->blocks ?? [], 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT')];
+        }
+
+        return [
+            'status' => $record->exists ? $record->status : 'NONE',
+            'version' => $record->version,
+            'faces' => $faces,
+            'operators' => $pool->filter(fn (array $r) => $r['operator'] !== null)->map(fn (array $r) => $r['operator']->label())->mapWithKeys(fn ($label, $id) => [$pool[$id]['equipment']->name => $label])->all(),
+            'standby_now' => $pool->where('state', 'STANDBY')->map(fn (array $r) => ['name' => $r['equipment']->name, 'reason' => $r['standby']?->reason?->name, 'since' => $r['standby']?->from_at?->toIso8601String()])->values()->all(),
+            'down_now' => $pool->where('state', 'DOWN')->map(fn (array $r) => ['name' => $r['equipment']->name, 'cause' => $r['down']['cause'] ?? null, 'since' => $r['down']['since']?->toIso8601String()])->values()->all(),
         ];
     }
 }

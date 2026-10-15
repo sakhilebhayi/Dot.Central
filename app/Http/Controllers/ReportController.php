@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\ControlRoom;
+use App\Models\LineupAllocation;
 use App\Models\Shift;
 use App\Services\Audits;
+use App\Services\Lineup\LineupService;
 use App\Services\Mines\FreshnessEvaluator;
 use App\Services\Shifts\ShiftDerivation;
 use App\Support\EquipmentState;
+use App\Support\RoleClass;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -18,9 +21,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ReportController extends Controller
 {
-    public const REPORTS = ['shift' => 'Shift summary', 'hours' => 'Engine hour report', 'production' => 'Production report', 'downtime' => 'Downtime report', 'handover' => 'Shift handover', 'equipment' => 'Equipment report'];
+    public const REPORTS = ['shift' => 'Shift summary', 'hours' => 'Engine hour report', 'production' => 'Production report', 'downtime' => 'Downtime report', 'handover' => 'Shift handover', 'lineup' => 'Shift line-up', 'equipment' => 'Equipment report'];
 
-    public function __construct(private readonly ShiftDerivation $derivation, private readonly FreshnessEvaluator $freshness, private readonly Audits $audits) {}
+    public function __construct(private readonly ShiftDerivation $derivation, private readonly FreshnessEvaluator $freshness, private readonly Audits $audits, private readonly LineupService $lineup) {}
 
     public function index(Request $request): View|StreamedResponse
     {
@@ -57,7 +60,7 @@ class ReportController extends Controller
      */
     private function build(string $report, ?Shift $shift, ?ControlRoom $room): array
     {
-        if (in_array($report, ['shift', 'hours', 'production', 'downtime', 'handover'], true) && $shift === null) {
+        if (in_array($report, ['shift', 'hours', 'production', 'downtime', 'handover', 'lineup'], true) && $shift === null) {
             return [[], [], 'No shift'];
         }
 
@@ -66,6 +69,7 @@ class ReportController extends Controller
             'production' => $this->production($shift),
             'downtime' => $this->downtime($shift),
             'handover' => $this->handover($shift),
+            'lineup' => $this->lineupReport($shift),
             'equipment' => $this->equipment($room),
             default => $this->shiftSummary($shift),
         };
@@ -123,6 +127,26 @@ class ReportController extends Controller
         $rows[] = ['item' => 'Acknowledged', 'value' => $shift->handover?->acknowledged_at?->toDateTimeString() ?? 'not yet'];
 
         return [['item' => 'Item', 'value' => 'Value'], $rows, 'Shift handover · '.$shift->label()];
+    }
+
+    /** @return array{0: array<string, string>, 1: list<array<string, mixed>>, 2: string} */
+    private function lineupReport(Shift $shift): array
+    {
+        $pool = $this->lineup->pool($shift)->keyBy(fn (array $r) => $r['equipment']->id);
+        $rows = [];
+        foreach ($this->lineup->faces($shift, true) as $face) {
+            foreach ($face->allocations()->orderBy('from_at')->get() as $a) {
+                $p = $pool[$a->equipment_id] ?? null;
+                $rows[] = ['face' => $face->label().($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->toDateTimeString(), 'until' => $a->to_at?->toDateTimeString() ?? 'still there', 'note' => $a->ended_reason];
+            }
+        }
+        foreach ($pool->whereIn('state', ['FREE', 'STANDBY', 'DOWN']) as $p) {
+            $rows[] = ['face' => '— not on a face —', 'role' => RoleClass::label($p['role_class']), 'unit' => $p['equipment']->name, 'operator' => $p['operator']?->label(), 'from' => null, 'until' => null, 'note' => match ($p['state']) {
+                'DOWN' => 'down: '.($p['down']['cause'] ?? ''), 'STANDBY' => $p['standby']?->reason?->name, default => 'no place and no reason'
+            }];
+        }
+
+        return [['face' => 'Face', 'role' => 'Role', 'unit' => 'Machine', 'operator' => 'Operator', 'from' => 'From (UTC)', 'until' => 'Until (UTC)', 'note' => 'Note'], $rows, 'Shift line-up · '.$shift->label().' · '.$this->lineup->lineup($shift)->status];
     }
 
     /** @return array{0: array<string, string>, 1: list<array<string, mixed>>, 2: string} */

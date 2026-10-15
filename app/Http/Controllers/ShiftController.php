@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\EquipmentStatusEvent;
+use App\Models\LineupStandby;
+use App\Models\OperationalException;
 use App\Models\Shift;
 use App\Models\ShiftType;
+use App\Services\Lineup\LineupService;
 use App\Services\Shifts\ShiftService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
@@ -19,7 +23,7 @@ use Illuminate\View\View;
  */
 class ShiftController extends Controller
 {
-    public function __construct(private readonly ShiftService $shifts) {}
+    public function __construct(private readonly ShiftService $shifts, private readonly LineupService $lineup) {}
 
     public function index(Request $request, ControlRoom $controlRoom): View
     {
@@ -46,8 +50,59 @@ class ShiftController extends Controller
             'previous' => $proposal['previous'],
             'shiftTypes' => $controlRoom->shiftTypes()->where('is_active', true)->get(),
             'expectedUnits' => $controlRoom->equipment()->whereNull('retired_at')->count(),
+            'outstanding' => $this->outstanding($controlRoom, $proposal['previous']),
             'timezone' => $controlRoom->timezone(),
         ]);
+    }
+
+    /**
+     * What the incoming shift inherits: machines still down and on standby at the previous end, exceptions still open, previous faces.
+     *
+     * @return array{down: list<array{name: string, cause: string|null, since: Carbon|null}>, standby: list<array{name: string, reason: string|null}>, exceptions: Collection<int, OperationalException>, faces: list<array<string, mixed>>}
+     */
+    private function outstanding(ControlRoom $controlRoom, ?Shift $previous): array
+    {
+        $down = [];
+        $standby = [];
+        $faces = [];
+        if ($previous !== null) {
+            $end = $previous->ends_at->copy()->subMinute();
+            foreach ($controlRoom->equipment()->whereNull('retired_at')->orderBy('name')->get() as $unit) {
+                if (($d = $this->lineup->downAt($unit, $end)) !== null) {
+                    $down[] = ['name' => $unit->name, 'cause' => $d['cause'], 'since' => $d['since']];
+                }
+            }
+            foreach (LineupStandby::withoutGlobalScopes()->with(['equipment', 'reason'])->where('shift_id', $previous->id)->where(fn ($q) => $q->whereNull('to_at')->orWhere('to_at', '>=', $end))->get() as $s) {
+                $standby[] = ['name' => (string) $s->equipment?->name, 'reason' => $s->reason?->name];
+            }
+            $pool = $this->lineup->pool($previous)->keyBy(fn (array $r) => $r['equipment']->id);
+            foreach ($this->lineup->faces($previous) as $face) {
+                $members = $face->allocations()->where(fn ($q) => $q->whereNull('to_at')->orWhere('to_at', '>=', $end))->get();
+                $names = fn (string $role) => $members->where('role', $role)->map(fn ($a) => $pool[$a->equipment_id]['equipment']->name ?? '?')->values()->all();
+                $faces[] = ['label' => $face->label(), 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT')];
+            }
+        }
+
+        return [
+            'down' => $down,
+            'standby' => $standby,
+            'exceptions' => OperationalException::withoutGlobalScopes()->where('control_room_id', $controlRoom->id)->needsAttention()->with('equipment')->orderByRaw("case severity when 'CRITICAL' then 0 when 'WARNING' then 1 when 'REVIEW' then 2 else 3 end")->orderByDesc('raised_at')->get(),
+            'faces' => $faces,
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function facesTable(Shift $shift): array
+    {
+        $pool = $this->lineup->pool($shift)->keyBy(fn (array $r) => $r['equipment']->id);
+        $rows = [];
+        foreach ($this->lineup->faces($shift) as $face) {
+            $members = $face->allocations()->whereNull('to_at')->get();
+            $names = fn (string $role) => $members->where('role', $role)->map(fn ($a) => $pool[$a->equipment_id]['equipment']->name ?? '?')->values()->all();
+            $rows[] = ['face' => $face, 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT')];
+        }
+
+        return $rows;
     }
 
     public function store(Request $request, ControlRoom $controlRoom): RedirectResponse
@@ -80,6 +135,8 @@ class ShiftController extends Controller
             'blocking' => $review['blocking'],
             'alerts' => Alert::where('control_room_id', $room->id)->whereNull('cleared_at')->orderByRaw("case severity when 'critical' then 0 when 'warning' then 1 else 2 end")->latest('triggered_at')->limit(8)->get(),
             'recentStoppages' => $this->recentStoppages($shift),
+            'lineupStatus' => $this->lineup->lineup($shift),
+            'lineupFaces' => $this->facesTable($shift),
             'timezone' => $room->timezone(),
         ]);
     }

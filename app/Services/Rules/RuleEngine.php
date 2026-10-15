@@ -5,8 +5,10 @@ namespace App\Services\Rules;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\Equipment;
+use App\Models\LineupAllocation;
 use App\Models\MinesConnection;
 use App\Models\Shift;
+use App\Services\Lineup\LineupService;
 use App\Services\Mines\FreshnessEvaluator;
 use App\Services\Shifts\ShiftDerivation;
 use App\Support\EquipmentState;
@@ -19,12 +21,13 @@ use Illuminate\Support\Collection;
  */
 final class RuleEngine
 {
-    public const CODES = ['TEL-01', 'TEL-02', 'EQ-01', 'EQ-02', 'EQ-03', 'EQ-04', 'EQ-05', 'DT-01', 'AL-01', 'SH-01'];
+    public const CODES = ['TEL-01', 'TEL-02', 'EQ-01', 'EQ-02', 'EQ-03', 'EQ-04', 'EQ-05', 'DT-01', 'AL-01', 'SH-01', 'LU-06', 'LU-07', 'LU-09', 'LU-10', 'LU-11', 'LU-13'];
 
     public function __construct(
         private readonly ShiftDerivation $derivation,
         private readonly FreshnessEvaluator $freshness,
         private readonly ExceptionLedger $ledger,
+        private readonly LineupService $lineup,
     ) {}
 
     /**
@@ -45,6 +48,7 @@ final class RuleEngine
 
         if ($shift !== null) {
             $findings = $findings->merge($this->shiftRules($room, $shift, $settings->all()));
+            $findings = $findings->merge($this->lineupRules($shift));
         }
 
         $findings = $findings->merge($this->alertRules($room, $shift, $settings->all()));
@@ -141,6 +145,49 @@ final class RuleEngine
         }
 
         return array_values(array_filter($out, fn (array $f) => ! ($f['satisfied'] ?? false)));
+    }
+
+    /**
+     * Line-up rules (13-shift-lineup-design.md §7): the live checks become
+     * exceptions once the shift is under way, plus LU-11 (ran but never
+     * placed, final review) and LU-13 (never confirmed).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function lineupRules(Shift $shift): array
+    {
+        $out = [];
+        $faces = $this->lineup->faces($shift);
+        $started = ! $this->lineup->isPlanning($shift);
+
+        if ($faces->isEmpty() && ! $this->lineup->lineup($shift)->exists) {
+            return [];
+        }
+
+        foreach ($this->lineup->checks($shift) as $check) {
+            $unit = $check['equipment_id'] !== null ? Equipment::withoutGlobalScopes()->find($check['equipment_id']) : null;
+            $out[] = $this->finding($check['code'], 'Line-up', $check['severity'], $check['outcome'], $check['title'], $check['message'], $check['fix'], $unit, $shift, ['face_id' => $check['face_id']],
+                $check['code'].'|'.$shift->id.'|'.($check['equipment_id'] ?? 'f'.$check['face_id']));
+        }
+
+        if ($started && $faces->isNotEmpty() && ! $this->lineup->isConfirmed($shift)) {
+            $out[] = $this->finding('LU-13', 'Line-up', 'REVIEW', 'REQUIRES_EXPLANATION', 'Line-up not confirmed',
+                'The line-up of '.$shift->label().' has faces but was never confirmed; the supervisor cannot see it was checked.',
+                'Confirm the line-up on the Shift Line-up page.', null, $shift, [], 'LU-13|'.$shift->id);
+        }
+
+        if ($shift->ends_at->lessThan(now())) {
+            $allocated = LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->pluck('equipment_id')->unique()->all();
+            foreach ($this->derivation->unitSummaries($shift) as $u) {
+                if ($u['run_hours'] !== null && $u['run_hours'] > 0 && ! in_array($u['equipment_id'], $allocated, true)) {
+                    $out[] = $this->finding('LU-11', 'Line-up', 'REVIEW', 'SUSPICIOUS', $u['equipment']->name.' ran '.$u['run_hours'].' h but was never on the line-up',
+                        'Engine hours grew during the shift although the machine was never allocated to a face or work area.',
+                        'Explain where it worked, or correct the line-up before the shift is approved.', $u['equipment'], $shift);
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**

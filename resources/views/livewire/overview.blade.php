@@ -6,13 +6,14 @@
     <div class="dot-page-head">
         <div>
             <h1 class="dot-page-head__title">Operational Overview</h1>
-            <p class="dot-page-head__lede">{{ $room->name }} · {{ $shift ? $shift->label().' · '.$shift->status.($isCurrent ? '' : ' (last completed shift)') : 'no shift yet' }} · Dot.Mines {{ $connection ? 'synced '.Format::age($connection->last_success_at) : 'not connected' }}</p>
+            <p class="dot-page-head__lede">{{ $room->name }} · {{ $shift ? $shift->label().' · '.$shift->status.($isCurrent ? '' : ' (last completed shift)') : 'no shift yet' }} · Dot.Mines {{ $connection ? 'synced '.Format::age($connection->last_success_at) : 'not connected' }}@if($lineup) · line-up <span class="dot-badge dot-badge--{{ $lineup->isConfirmed() ? 'ok' : 'warn' }}">{{ $lineup->exists ? $lineup->status : 'NOT STARTED' }}</span> {{ $lineupSummary['placed'] }} placed · {{ $lineupSummary['free'] }} free · {{ $lineupSummary['down'] }} down @endif</p>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
             @if($rooms->count() > 1)
             <select wire:model.live="roomId" class="dot-input" style="width:auto;" aria-label="Control room">@foreach($rooms as $r)<option value="{{ $r->id }}">{{ $r->name }}</option>@endforeach</select>
             @endif
             @if($shift && $isCurrent)
+                <a href="{{ route('shifts.lineup', $shift) }}" class="dot-btn dot-btn-ghost">Line-up</a>
                 <a href="{{ route('shifts.show', $shift) }}" class="dot-btn dot-btn-ghost">Shift operations</a>
             @else
                 @can('open', [\App\Models\Shift::class, $room])<a href="{{ route('control-rooms.shifts.start', $room) }}" class="dot-btn dot-btn-primary">Start shift</a>@endcan

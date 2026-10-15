@@ -14,6 +14,22 @@
         @include('shifts._strip')
         @include('shifts._tiles')
 
+        <div class="dot-panel dot-panel--flush" style="margin-bottom:1.25rem;">
+            <div class="dot-panel__head"><h2 class="dot-panel__title">Faces (line-up) · <span class="dot-badge dot-badge--{{ $lineupStatus->isConfirmed() ? 'ok' : 'warn' }}">{{ $lineupStatus->exists ? $lineupStatus->status : 'NOT STARTED' }}</span></h2><a href="{{ route('shifts.lineup', $shift) }}" class="dot-panel__action">Open line-up</a></div>
+            <div class="dot-table-wrap">
+                <table class="dot-ledger">
+                    <thead><tr><th>#</th><th>Material / work</th><th>Loading units</th><th>Trucks</th><th>Support</th><th>Cut / blocks</th></tr></thead>
+                    <tbody>
+                    @forelse($lineupFaces as $row)
+                        <tr><td class="num">{{ $row['face']->seq }}</td><td>{{ $row['face']->what() }}</td><td>{{ implode(' + ', $row['loaders']) ?: '—' }}</td><td>{{ count($row['trucks']) }}{{ $row['trucks'] ? ': '.implode(', ', $row['trucks']) : '' }}</td><td>{{ implode(', ', $row['support']) ?: '—' }}</td><td class="dot-ledger__key">{{ trim(($row['face']->cut ?? '').' '.implode(' ', $row['face']->blocks ?? [])) ?: '—' }}</td></tr>
+                    @empty
+                        <tr><td colspan="6" class="dot-ledger__empty">No faces yet — build them on the Shift Line-up.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="dot-panels dot-panels--split">
             <div class="dot-panel dot-panel--flush">
                 <div class="dot-panel__head"><h2 class="dot-panel__title">Machines needing attention</h2><a href="{{ route('control-rooms.fleet', $controlRoom) }}" class="dot-panel__action">Fleet board</a></div>
