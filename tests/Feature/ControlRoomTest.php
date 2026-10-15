@@ -119,6 +119,7 @@ class ControlRoomTest extends TestCase
         $raiser->switchTeam($team);
 
         $controlRoom = ControlRoom::factory()->for($team)->create();
+        $controlRoom->users()->attach($raiser);
 
         $this->actingAs($raiser)->post(route('control-rooms.alerts.store', $controlRoom), [
             'severity' => 'critical',

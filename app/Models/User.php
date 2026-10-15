@@ -6,6 +6,7 @@ namespace App\Models;
 use App\Support\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -74,6 +75,14 @@ class User extends Authenticatable
         $key = $this->teamRole($team)?->key;
 
         return $key === null ? null : Role::tryFrom($key);
+    }
+
+    /**
+     * Control rooms this user is assigned to (site scope).
+     */
+    public function controlRooms(): BelongsToMany
+    {
+        return $this->belongsToMany(ControlRoom::class)->withTimestamps();
     }
 
     public function hasAnyRoleOn(Team $team, Role ...$roles): bool

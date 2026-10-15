@@ -65,6 +65,8 @@ class RolePermissionsTest extends TestCase
         $member->switchTeam($team);
 
         $controlRoom = ControlRoom::factory()->for($team)->create();
+        // Operators and supervisors act only in rooms they are assigned to.
+        $controlRoom->users()->attach($member);
         $alert = Alert::factory()->for($controlRoom)->create();
         $decision = DispatchDecision::factory()->for($controlRoom)->for($owner, 'decidedBy')->create();
         $session = OperatorSession::factory()->for($controlRoom)->for($owner, 'operator')->create();

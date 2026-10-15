@@ -2,7 +2,9 @@
     <div style="padding:2rem 2.5rem;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
             <h1 style="font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;color:var(--text-primary);margin:0;">{{ $controlRoom->name }}</h1>
+            @can('update', $controlRoom)
             <a href="{{ route('control-rooms.edit', $controlRoom) }}" style="font-size:0.75rem;color:var(--text-muted);text-decoration:none;">Edit →</a>
+            @endcan
         </div>
         <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 2rem;">
             Mines site: {{ $controlRoom->mines_site_ref ?? '—' }} &middot;
@@ -113,7 +115,11 @@
 
                 <form method="POST" action="{{ route('control-rooms.operator-sessions.store', $controlRoom) }}" onsubmit="var b=this.querySelector('button[type=submit]');setTimeout(function(){b.disabled=true;b.innerText='Starting…';},0);" style="margin-bottom:1.25rem;display:flex;flex-direction:column;gap:0.5rem;">
                     @csrf
-                    <input type="number" name="user_id" placeholder="User ID" required style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:0.4rem;padding:0.45rem 0.6rem;font-size:0.78rem;" />
+                    <select name="user_id" required style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:0.4rem;padding:0.45rem 0.6rem;font-size:0.78rem;">
+                        @foreach($members as $member)
+                            <option value="{{ $member->id }}">{{ $member->name }}</option>
+                        @endforeach
+                    </select>
                     <input type="text" name="shift_label" placeholder="Shift label (e.g. day)" required style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:0.4rem;padding:0.45rem 0.6rem;font-size:0.78rem;" />
                     <input type="datetime-local" name="started_at" required value="{{ now()->format('Y-m-d\TH:i') }}" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:0.4rem;padding:0.45rem 0.6rem;font-size:0.78rem;" />
                     <button type="submit" style="background:#e11d48;color:#fff;border:none;border-radius:0.4rem;padding:0.5rem;font-size:0.75rem;font-weight:700;cursor:pointer;">Start Session</button>
@@ -143,6 +149,42 @@
                 @endforelse
             </div>
 
+        </div>
+        {{-- Members (site scope) --}}
+        <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:0.875rem;padding:1.25rem;margin-top:1.5rem;">
+            <h2 style="font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:700;color:var(--text-primary);margin:0 0 0.25rem;">Members</h2>
+            <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 1rem;">Operators and supervisors see only the rooms they are assigned to. Managers and administrators see every room of the team.</p>
+
+            @can('manage', $controlRoom)
+                @if($assignableUsers->isNotEmpty())
+                <form method="POST" action="{{ route('control-rooms.members.store', $controlRoom) }}" style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+                    @csrf
+                    <select name="user_id" required style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);border-radius:0.4rem;padding:0.45rem 0.6rem;font-size:0.78rem;flex:1;">
+                        @foreach($assignableUsers as $candidate)
+                            <option value="{{ $candidate->id }}">{{ $candidate->name }} ({{ $candidate->email }})</option>
+                        @endforeach
+                    </select>
+                    <button type="submit" style="background:#e11d48;color:#fff;border:none;border-radius:0.4rem;padding:0.5rem 0.9rem;font-size:0.75rem;font-weight:700;cursor:pointer;">Assign</button>
+                </form>
+                @endif
+            @endcan
+
+            @forelse($members as $member)
+                <div style="border-top:1px solid var(--divider);padding:0.6rem 0;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                    <div>
+                        <div style="font-size:0.78rem;color:var(--text-primary);font-weight:600;">{{ $member->name }}</div>
+                        <div style="font-size:0.68rem;color:var(--text-muted);">{{ $member->roleOn($controlRoom->team)?->label() ?? 'No role' }}</div>
+                    </div>
+                    @can('manage', $controlRoom)
+                    <form method="POST" action="{{ route('control-rooms.members.destroy', [$controlRoom, $member]) }}" onsubmit="return confirm('Remove this member from the control room?');">
+                        @csrf @method('DELETE')
+                        <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.7rem;">Remove</button>
+                    </form>
+                    @endcan
+                </div>
+            @empty
+                <p style="font-size:0.75rem;color:var(--text-muted);">Nobody is assigned to this room yet.</p>
+            @endforelse
         </div>
     </div>
 </x-app-layout>

@@ -5,6 +5,7 @@ use App\Http\Controllers\AgentKnowledgeController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\EcosystemAuthController;
 use App\Http\Controllers\ControlRoomController;
+use App\Http\Controllers\ControlRoomMemberController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\NotificationController;
@@ -68,6 +69,11 @@ Route::middleware([
     // Mining-dispatch domain (MVP scaffold) — control rooms are the tenant
     // root, dispatch decisions/alerts/operator sessions nest underneath.
     Route::resource('control-rooms', ControlRoomController::class);
+
+    Route::post('control-rooms/{controlRoom}/members', [ControlRoomMemberController::class, 'store'])
+        ->name('control-rooms.members.store');
+    Route::delete('control-rooms/{controlRoom}/members/{user}', [ControlRoomMemberController::class, 'destroy'])
+        ->name('control-rooms.members.destroy');
 
     Route::post('control-rooms/{controlRoom}/dispatch-decisions', [DispatchDecisionController::class, 'store'])
         ->name('control-rooms.dispatch-decisions.store');

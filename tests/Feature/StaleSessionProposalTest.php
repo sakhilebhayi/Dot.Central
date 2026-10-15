@@ -22,6 +22,7 @@ class StaleSessionProposalTest extends TestCase
         $owner = User::factory()->create();
         $teamOwner->currentTeam->users()->attach($owner, ['role' => 'supervisor']);
         $owner->switchTeam($teamOwner->currentTeam);
+        $controlRoom->users()->attach($owner);
 
         $session = OperatorSession::factory()->for($controlRoom)->create([
             'started_at' => now()->subHours(9),

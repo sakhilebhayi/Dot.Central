@@ -20,13 +20,12 @@ class ControlRoomController extends Controller
 {
     public function index(Request $request): View
     {
-        $controlRooms = $request->user()->currentTeam
-            ? $request->user()->currentTeam
-                ->controlRooms()
-                ->withCount(['dispatchDecisions', 'alerts', 'operatorSessions'])
-                ->latest()
-                ->get()
-            : collect();
+        $this->authorize('viewAny', ControlRoom::class);
+
+        $controlRooms = ControlRoom::accessibleBy($request->user())
+            ->withCount(['dispatchDecisions', 'alerts', 'operatorSessions'])
+            ->latest()
+            ->get();
 
         // DispatchDecision/Alert/OperatorSession carry HasControlRoomTeamScope,
         // so these no longer need an explicit whereIn('control_room_id', ...)
@@ -64,6 +63,8 @@ class ControlRoomController extends Controller
             'mines_site_ref' => $validated['mines_site_ref'] ?? null,
         ]);
 
+        $controlRoom->users()->attach($request->user());
+
         return redirect()->route('control-rooms.show', $controlRoom);
     }
 
@@ -79,8 +80,15 @@ class ControlRoomController extends Controller
 
         $pendingProposals = $controlRoom->staleSessionProposals()->where('status', 'pending')->with('operatorSession.operator')->get();
 
+        $members = $controlRoom->users()->orderBy('name')->get();
+        $assignableUsers = $request->user()->can('manage', $controlRoom)
+            ? $controlRoom->team->allUsers()->whereNotIn('id', $members->pluck('id'))->sortBy('name')->values()
+            : collect();
+
         return view('control-rooms.show', [
             'controlRoom' => $controlRoom,
+            'members' => $members,
+            'assignableUsers' => $assignableUsers,
             'workflowTypes' => DispatchDecision::WORKFLOW_TYPES,
             'severities' => Alert::SEVERITIES,
             'pendingProposals' => $pendingProposals,

@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTeamScope;
+use App\Support\Role;
 use Database\Factories\ControlRoomFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -55,11 +58,49 @@ class ControlRoom extends Model
     }
 
     /**
+     * Team members assigned to this room (site scope).
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class)->withTimestamps();
+    }
+
+    /**
      * Whether the user may see this room. Managers and administrators see
-     * every room of the team; other members see rooms they belong to.
+     * every room of the team; other members see rooms they are assigned to.
      */
     public function isAccessibleBy(User $user): bool
     {
-        return $user->belongsToTeam($this->team);
+        if (! $user->belongsToTeam($this->team)) {
+            return false;
+        }
+
+        if ($user->hasAnyRoleOn($this->team, Role::Manager, Role::Administrator)) {
+            return true;
+        }
+
+        return $this->users()->whereKey($user->id)->exists();
+    }
+
+    /**
+     * Rooms the user may see within their current team.
+     *
+     * @param  Builder<ControlRoom>  $query
+     * @return Builder<ControlRoom>
+     */
+    public function scopeAccessibleBy(Builder $query, User $user): Builder
+    {
+        $team = $user->currentTeam;
+
+        if ($team === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->hasAnyRoleOn($team, Role::Manager, Role::Administrator)) {
+            return $query->where('team_id', $team->id);
+        }
+
+        return $query->where('team_id', $team->id)
+            ->whereHas('users', fn (Builder $users) => $users->whereKey($user->id));
     }
 }
