@@ -127,21 +127,24 @@ jobs:
             ln -sfn "central/public/${target}" "$DOCROOT/${target}"
           done
 
-          # Cron: scheduler every minute, a queue worker that exits when
-          # idle (no supervisor on shared hosting), a nightly SQLite backup
-          # keeping 14 copies. Added once, recognised by the marker.
+          # Cron: scheduler every minute and a queue worker that exits when
+          # idle (no supervisor on shared hosting). cron runs with a minimal
+          # PATH, so the lines carry the ABSOLUTE path of the PHP this shell
+          # resolved, and each run's output goes to a log file instead of
+          # /dev/null so a failure is visible. The nightly database backup
+          # runs inside the scheduler (central:backup-database). Lines are
+          # recognised by the marker and rewritten on every run, so re-running
+          # the bootstrap repairs them.
+          PHP_BIN="$(command -v "$PHP")"
+          echo "== PHP for cron: $PHP_BIN"
           MARK="# dot-central"
-          if ! crontab -l 2>/dev/null | grep -q "$MARK"; then
-            {
-              crontab -l 2>/dev/null || true
-              echo "* * * * * cd $APP && $PHP artisan schedule:run >> /dev/null 2>&1 $MARK scheduler"
-              echo "* * * * * cd $APP && $PHP artisan queue:work --stop-when-empty --tries=3 --max-time=50 >> /dev/null 2>&1 $MARK queue"
-              echo "15 2 * * * cd $APP && sqlite3 database/database.sqlite \".backup storage/backups/central-\$(date +\\%F).sqlite\" && ls -1t storage/backups/central-*.sqlite | tail -n +15 | xargs -r rm -f $MARK backup"
-            } | crontab -
-            echo "Cron lines installed."
-          else
-            echo "Cron lines already present."
-          fi
+          {
+            crontab -l 2>/dev/null | grep -v "$MARK" || true
+            echo "* * * * * cd $APP && $PHP_BIN artisan schedule:run > storage/logs/cron-scheduler.log 2>&1 $MARK scheduler"
+            echo "* * * * * cd $APP && $PHP_BIN artisan queue:work --stop-when-empty --tries=3 --max-time=50 > storage/logs/cron-queue.log 2>&1 $MARK queue"
+          } | crontab -
+          echo "== Cron lines now installed:"
+          crontab -l | grep "$MARK"
 
           echo "== Code deployed: $(git rev-parse --short HEAD)"
           BOOTSTRAP

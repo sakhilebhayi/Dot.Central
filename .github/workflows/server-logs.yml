@@ -36,3 +36,26 @@ jobs:
           echo "== $latest (last 100 lines)"
           tail -100 "$latest"
           LOGS
+
+      - name: Cron diagnostics
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}" \
+              'bash -s' <<'CRON'
+          set -uo pipefail
+          cd "$DEPLOY_PATH"
+          echo "== crontab lines for this app"
+          crontab -l 2>/dev/null | grep "# dot-central" || echo "(none)"
+          echo "== php resolved by a login shell: $(command -v php) -> $(php -v 2>/dev/null | head -1)"
+          echo "== php resolved with cron's minimal PATH: $(env -i PATH=/usr/bin:/bin sh -c 'command -v php || echo "not found"')"
+          for f in storage/logs/cron-scheduler.log storage/logs/cron-queue.log; do
+            echo "== $f"
+            if [ -f "$f" ]; then
+              stat -c 'last written %y' "$f" 2>/dev/null || true
+              tail -20 "$f"
+            else
+              echo "(missing: the cron line has not run since the bootstrap wrote it)"
+            fi
+          done
+          CRON
