@@ -35,6 +35,6 @@ class SchedulerProbeController extends Controller
     {
         $value = Cache::get($key);
 
-        return is_string($value) ? max(0, (int) round(Carbon::parse($value)->diffInSeconds(now()))) : null;
+        return is_string($value) ? max(0, (int) floor(Carbon::parse($value)->diffInSeconds(now()))) : null;
     }
 }
