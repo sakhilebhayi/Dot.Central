@@ -6,6 +6,7 @@ use App\Models\MemoryConnection;
 use App\Models\MemoryOutboxRow;
 use App\Services\Guardian\CheckResult;
 use App\Services\Guardian\Contracts\GuardianCheck;
+use Illuminate\Support\Carbon;
 
 /**
  * Is what this platform owes Dot.Memory actually leaving? The outbox is
@@ -32,7 +33,7 @@ class MemoryOutboxCheck implements GuardianCheck
         $pending = (clone $unsent)->where('attempts', '<', MemoryOutboxRow::MAX_ATTEMPTS)->count();
         $stuck = (clone $unsent)->where('attempts', '>=', MemoryOutboxRow::MAX_ATTEMPTS)->count();
         $oldest = (clone $unsent)->where('attempts', '<', MemoryOutboxRow::MAX_ATTEMPTS)->min('created_at');
-        $oldestAge = $oldest === null ? 0 : max(0, (int) floor(\Illuminate\Support\Carbon::parse($oldest)->diffInSeconds(now())));
+        $oldestAge = $oldest === null ? 0 : max(0, (int) floor(Carbon::parse($oldest)->diffInSeconds(now())));
         $lastSent = MemoryOutboxRow::whereNotNull('sent_at')->max('sent_at');
 
         $metrics = [
