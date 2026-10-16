@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\BackupSqliteDatabase;
 use App\Console\Commands\EvaluateRules;
 use App\Console\Commands\RefreshMinesHours;
 use App\Console\Commands\ScanStaleSessions;
@@ -45,3 +46,7 @@ Schedule::command(EvaluateRules::class)->everyFiveMinutes()->withoutOverlapping(
 // the scheduler last ticked and when a queue worker last ran a job.
 Schedule::call(fn () => Cache::forever('dot.scheduler_heartbeat', now()->toIso8601String()))->everyMinute()->name('scheduler-heartbeat');
 Schedule::job(new QueueHeartbeat)->everyFiveMinutes()->name('queue-heartbeat');
+
+// Nightly copy of the SQLite file (shifts, line-ups and the audit log are
+// not rebuilt from Dot.Mines). No-op on other database drivers.
+Schedule::command(BackupSqliteDatabase::class)->dailyAt('02:15')->onOneServer();
