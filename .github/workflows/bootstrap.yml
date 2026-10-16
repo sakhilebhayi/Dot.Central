@@ -1,0 +1,163 @@
+name: Bootstrap Production
+
+# One-time first deployment of Dot.Central to central.infodot.co.za on the
+# shared cPanel account, following the layout live for Dot.Mines and
+# Dot.Dopemine: the docroot is ~/central.infodot.co.za, the repository
+# lives at <docroot>/central (DEPLOY_PATH), and the docroot gets an
+# index.php shim, a copy of public/.htaccess and symlinks into
+# central/public. SQLite by decision (2026-10-16): almost everything is
+# rebuilt from Dot.Mines; what is not (shifts, line-ups, audit log) is
+# copied nightly by cron. Safe to re-run: every step is idempotent and
+# .env is never overwritten.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "bootstrap" to confirm first-time production setup'
+        required: true
+
+concurrency:
+  group: central-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Bootstrap central.infodot.co.za
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Refuse unconfirmed runs
+        if: ${{ github.event.inputs.confirm != 'bootstrap' }}
+        run: |
+          echo '::error::Confirmation input was not "bootstrap" -- aborting.'
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build frontend assets
+        run: |
+          npm ci --silent
+          npm run build
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Clone, install, configure, migrate, wire the docroot
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}" \
+              'bash -s' <<'BOOTSTRAP'
+          set -euo pipefail
+          APP="$DEPLOY_PATH"
+          DOCROOT="$(dirname "$APP")"
+          PHP=php
+
+          echo "== PHP: $($PHP -v | head -1)"
+          mkdir -p "$DOCROOT"
+
+          if [ ! -d "$APP/.git" ]; then
+            git clone https://github.com/sakhilebhayi/Dot.Central.git "$APP"
+          else
+            git -C "$APP" fetch origin main
+            git -C "$APP" reset --hard origin/main
+          fi
+          cd "$APP"
+
+          composer install --no-interaction --optimize-autoloader --no-dev
+
+          # Nothing in this file is secret: APP_KEY is generated on the
+          # server right after, and the database is a local file.
+          if [ ! -f .env ]; then
+            cat > .env <<'ENV'
+          APP_NAME="Dot.Central"
+          APP_ENV=production
+          APP_KEY=
+          APP_DEBUG=false
+          APP_URL=https://central.infodot.co.za
+
+          LOG_CHANNEL=daily
+          LOG_LEVEL=info
+
+          DB_CONNECTION=sqlite
+
+          SESSION_DRIVER=database
+          SESSION_LIFETIME=120
+          SESSION_SECURE_COOKIE=true
+
+          CACHE_STORE=database
+          QUEUE_CONNECTION=database
+
+          MAIL_MAILER=log
+          ENV
+            chmod 600 .env
+            $PHP artisan key:generate --force
+          fi
+
+          mkdir -p database storage/backups
+          touch database/database.sqlite
+
+          $PHP artisan migrate --force
+          $PHP artisan config:cache
+          $PHP artisan route:cache
+          $PHP artisan view:cache
+          $PHP artisan event:cache
+
+          # Docroot wiring: keep the static placeholder page as a backup,
+          # then shim, rewrite rules and asset links (idempotent).
+          if [ -f "$DOCROOT/index.html" ]; then
+            mv -f "$DOCROOT/index.html" "$DOCROOT/index.coming-soon.bak"
+          fi
+          cat > "$DOCROOT/index.php" <<'SHIM'
+          <?php require __DIR__.'/central/public/index.php';
+          SHIM
+          cp "$APP/public/.htaccess" "$DOCROOT/.htaccess"
+          for target in build images favicon-16x16.png favicon-32x32.png apple-touch-icon.png robots.txt; do
+            ln -sfn "central/public/${target}" "$DOCROOT/${target}"
+          done
+
+          # Cron: scheduler every minute, a queue worker that exits when
+          # idle (no supervisor on shared hosting), a nightly SQLite backup
+          # keeping 14 copies. Added once, recognised by the marker.
+          MARK="# dot-central"
+          if ! crontab -l 2>/dev/null | grep -q "$MARK"; then
+            {
+              crontab -l 2>/dev/null || true
+              echo "* * * * * cd $APP && $PHP artisan schedule:run >> /dev/null 2>&1 $MARK scheduler"
+              echo "* * * * * cd $APP && $PHP artisan queue:work --stop-when-empty --tries=3 --max-time=50 >> /dev/null 2>&1 $MARK queue"
+              echo "15 2 * * * cd $APP && sqlite3 database/database.sqlite \".backup storage/backups/central-\$(date +\\%F).sqlite\" && ls -1t storage/backups/central-*.sqlite | tail -n +15 | xargs -r rm -f $MARK backup"
+            } | crontab -
+            echo "Cron lines installed."
+          else
+            echo "Cron lines already present."
+          fi
+
+          echo "== Code deployed: $(git rev-parse --short HEAD)"
+          BOOTSTRAP
+
+      - name: Transfer built assets
+        run: |
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            public/build/ \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/public/build/"
+
+      - name: Health check
+        run: |
+          sleep 3
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${{ secrets.DEPLOY_HOST }}/up")
+          echo "GET /up -> ${code}"
+          [ "$code" = "200" ] || { echo "::error::The application did not answer 200 on /up."; exit 1; }
+          denied=$(curl -s -o /dev/null -w '%{http_code}' "https://${{ secrets.DEPLOY_HOST }}/central/database/database.sqlite")
+          echo "GET /central/database/database.sqlite -> ${denied}"
+          [ "$denied" = "403" ] || [ "$denied" = "404" ] || { echo "::error::The application directory is reachable over HTTP."; exit 1; }

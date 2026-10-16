@@ -1,0 +1,11 @@
+# The application directory lives INSIDE the cPanel docroot
+# (~/central.infodot.co.za/central). Nothing under it may be fetched over
+# HTTP: PHP reads the filesystem, so the app still boots through the
+# docroot's index.php shim. Both directives so that either Apache 2.4
+# authorisation or mod_rewrite alone is enough to refuse the request.
+Require all denied
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^ - [F,L]
+</IfModule>
