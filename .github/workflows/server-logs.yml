@@ -28,13 +28,15 @@ jobs:
               'bash -s' <<'LOGS'
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          latest=$(ls -1t storage/logs/*.log 2>/dev/null | head -1 || true)
+          # The application log, not whichever file was written last: the cron
+          # logs are rewritten every minute and would always win.
+          latest=$(ls -1t storage/logs/laravel*.log 2>/dev/null | head -1 || true)
           if [ -z "$latest" ]; then
-            echo "No log files in storage/logs."
+            echo "No application log (storage/logs/laravel*.log) yet."
             exit 0
           fi
-          echo "== $latest (last 100 lines)"
-          tail -100 "$latest"
+          echo "== $latest (last 120 lines)"
+          tail -120 "$latest"
           LOGS
 
       - name: Cron diagnostics

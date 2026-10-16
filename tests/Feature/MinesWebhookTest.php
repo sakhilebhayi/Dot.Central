@@ -83,6 +83,8 @@ class MinesWebhookTest extends TestCase
         $this->assertSame(1, Alert::count());
 
         $this->call('POST', '/webhooks/mines/999999', [], [], [], ['HTTP_X_MINES_SIGNATURE' => 't=1,v1=x'], '{}')->assertNotFound();
+        // A mistyped endpoint (anything but the numeric connection id) is a 404, never a 500 that makes the sender retry for hours.
+        $this->call('POST', '/webhooks/mines/not-a-connection-id', [], [], [], ['HTTP_X_MINES_SIGNATURE' => 't=1,v1=x'], '{}')->assertNotFound();
 
         $disabled = $this->connection(['status' => 'disabled']);
         $this->deliver($disabled, 'alert.triggered', $this->alertData(), ['delivery' => 'd-2'])->assertStatus(202)->assertJson(['status' => 'ignored']);

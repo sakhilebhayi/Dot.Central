@@ -38,7 +38,7 @@ use Laravel\Jetstream\Jetstream;
 Route::get('/auth/ecosystem', [EcosystemAuthController::class, 'handle'])->name('ecosystem.auth');
 
 // Signed deliveries from Dot.Mines (no session; verified by HMAC, see MinesWebhookController).
-Route::post('/webhooks/mines/{connection}', MinesWebhookController::class)->name('webhooks.mines');
+Route::post('/webhooks/mines/{connection}', MinesWebhookController::class)->whereNumber('connection')->name('webhooks.mines');
 Route::get('/', function () {
     return view('welcome');
 });
