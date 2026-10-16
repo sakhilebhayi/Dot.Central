@@ -79,4 +79,17 @@ class DeploymentWorkflowsTest extends TestCase
             }
         }
     }
+
+    public function test_crontab_writes_are_verified_and_the_watchdog_runs_every_fifteen_minutes(): void
+    {
+        foreach (['bootstrap.yml', 'deploy.yml'] as $file) {
+            $text = (string) file_get_contents(base_path('.github/workflows/'.$file));
+            $this->assertStringContainsString('MARK="# dot-central"', $text, $file);
+            $this->assertStringContainsString('crontab verification failed', $text, $file);
+            $this->assertStringNotContainsString('| crontab -', $text, "$file must never pipe into crontab -");
+        }
+
+        $watchdog = $this->workflow('scheduler-watchdog.yml');
+        $this->assertSame('*/15 * * * *', $watchdog['on']['schedule'][0]['cron']);
+    }
 }

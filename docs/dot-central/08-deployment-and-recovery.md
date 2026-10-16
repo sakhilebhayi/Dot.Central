@@ -63,3 +63,7 @@ Guarded by `DeploymentWorkflowsTest`: triggers, the quality gate, and that no se
 ## 7. Local development
 
 `php artisan migrate && php artisan db:seed` creates the pilot (`LocalPilotSeeder`, local environment only: administrator, supervisor, operator, a provisioned room, two operators; no Dot.Mines token). Dot.Mines runs from `~/Dot/mines` (launch entry `mines`, port 8010); mint a token for its fixture team and paste it on the connection page. Webhooks cannot be received locally (Dot.Mines rejects private URLs); `MinesWebhookTest` covers the receiver with signed fixtures.
+
+## 8. Crontab rules for the shared account
+
+The hosting account has one crontab shared by every Dot app. On 2026-08-31 a sibling app's cron pipeline installed an empty crontab when its read failed and Dot.Mines' scheduler was dead for six weeks. Rules: the crontab is written only by deploy workflows; each workflow touches only lines carrying its own marker (`# dot-central`); the read is checked before the write and the result is read back after it, restoring the previous crontab if any other line went missing; never add a line by hand and never pipe into `crontab -`. Both `bootstrap.yml` and `deploy.yml` re-assert Dot.Central's two lines on every run. `/up/scheduler` is a public probe of the two heartbeats (200 fresh, 503 stale) and `scheduler-watchdog.yml` asks it every 15 minutes from GitHub, failing the run so the owner is emailed.

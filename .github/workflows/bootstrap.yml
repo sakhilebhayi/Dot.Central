@@ -127,24 +127,36 @@ jobs:
             ln -sfn "central/public/${target}" "$DOCROOT/${target}"
           done
 
-          # Cron: scheduler every minute and a queue worker that exits when
-          # idle (no supervisor on shared hosting). cron runs with a minimal
-          # PATH, so the lines carry the ABSOLUTE path of the PHP this shell
-          # resolved, and each run's output goes to a log file instead of
-          # /dev/null so a failure is visible. The nightly database backup
-          # runs inside the scheduler (central:backup-database). Lines are
-          # recognised by the marker and rewritten on every run, so re-running
-          # the bootstrap repairs them.
-          PHP_BIN="$(command -v "$PHP")"
-          echo "== PHP for cron: $PHP_BIN"
+          # ---- crontab: repair this app's lines, never touch anyone else's ----
+          # Rule for this account: the crontab is written only by deploy
+          # workflows, each touches only lines carrying its own marker, and a
+          # write is verified before and after. 2026-08-31: a pipeline whose read
+          # failed installed an EMPTY crontab and silently killed Dot.Mines'
+          # scheduler for six weeks. cron runs with a minimal PATH, so lines carry
+          # the absolute PHP path and keep their last output in a log file.
           MARK="# dot-central"
+          PHP_BIN="$(command -v "${PHP:-php}")"
+          OLD="$(mktemp)"; NEW="$(mktemp)"; ERR="$(mktemp)"
+          if ! crontab -l > "$OLD" 2> "$ERR"; then
+            if grep -qi "no crontab for" "$ERR"; then : > "$OLD"; else
+              echo "::error::crontab -l failed: $(cat "$ERR"). Refusing to write a crontab I could not read."; exit 1
+            fi
+          fi
+          OTHERS=$(grep -v "$MARK" "$OLD" | grep -c . || true)
           {
-            crontab -l 2>/dev/null | grep -v "$MARK" || true
-            echo "* * * * * cd $APP && $PHP_BIN artisan schedule:run > storage/logs/cron-scheduler.log 2>&1 $MARK scheduler"
-            echo "* * * * * cd $APP && $PHP_BIN artisan queue:work --stop-when-empty --tries=3 --max-time=50 > storage/logs/cron-queue.log 2>&1 $MARK queue"
-          } | crontab -
-          echo "== Cron lines now installed:"
-          crontab -l | grep "$MARK"
+            grep -v "$MARK" "$OLD" || true
+            echo "* * * * * cd $APP && $PHP_BIN artisan schedule:run > storage/logs/cron-scheduler.log 2>&1 $MARK"
+            echo "* * * * * cd $APP && $PHP_BIN artisan queue:work --stop-when-empty --tries=3 --max-time=50 > storage/logs/cron-queue.log 2>&1 $MARK"
+          } > "$NEW"
+          crontab "$NEW"
+          AFTER=$(crontab -l | grep -v "$MARK" | grep -c . || true)
+          MINE=$(crontab -l | grep -c "$MARK" || true)
+          if [ "$AFTER" != "$OTHERS" ] || [ "$MINE" != "2" ]; then
+            crontab "$OLD"
+            echo "::error::crontab verification failed (other lines before=$OTHERS after=$AFTER, mine=$MINE); the previous crontab was restored."; exit 1
+          fi
+          rm -f "$OLD" "$NEW" "$ERR"
+          echo "== crontab: $MINE line(s) for $MARK installed, $OTHERS other line(s) preserved"
 
           echo "== Code deployed: $(git rev-parse --short HEAD)"
           BOOTSTRAP

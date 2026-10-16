@@ -19,6 +19,7 @@ use App\Http\Controllers\MinesWebhookController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SchedulerProbeController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
@@ -41,6 +42,11 @@ Route::post('/webhooks/mines/{connection}', MinesWebhookController::class)->name
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Public liveness of the scheduler and the queue worker (no data beyond
+// ages): 200 while both heartbeats are fresh, 503 otherwise. Read by
+// .github/workflows/scheduler-watchdog.yml every 15 minutes.
+Route::get('/up/scheduler', SchedulerProbeController::class)->name('up.scheduler');
 
 // Cookie Policy — Jetstream's termsAndPrivacyPolicy feature covers terms.show/policy.show
 // natively. There's no Jetstream equivalent for a Cookie Policy, so this one is wired by hand,
