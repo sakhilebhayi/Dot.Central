@@ -14,6 +14,10 @@
         @if($a->assignee)<span>· assigned to {{ $a->assignee->name }}</span>@endif
         @if($a->cleared_at)<span>· resolved {{ Format::stamp($a->cleared_at) }}{{ $a->resolution_note ? ': '.$a->resolution_note : '' }}</span>@endif
     </div>
+    @if(\App\Services\Memory\MemoryAvailability::enabled())
+        @php($memorySubject = \App\Services\Memory\LoopSubject::for($a))
+        <livewire:memory-context :subject-type="$memorySubject['type']" :subject-id="$memorySubject['id']" :signature="'dot-central:alert:'.strtolower($a->severity)" :key="'memory-alert-'.$a->id" />
+    @endif
     @if($a->cleared_at === null)
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;">
         @can('acknowledge', $a)@if($a->acknowledged_at === null)<form method="POST" action="{{ route('alerts.acknowledge', $a) }}">@csrf<button class="dot-btn dot-btn-primary dot-btn-sm">Acknowledge</button></form>@endif@endcan

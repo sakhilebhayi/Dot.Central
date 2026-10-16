@@ -17,6 +17,10 @@
         @if($e->equipment)<span>· {{ $e->equipment->name }}</span>@endif
         <span>· raised {{ Format::stamp($e->raised_at) }} by {{ $e->raised_by }}</span>
     </div>
+    @if(\App\Services\Memory\MemoryAvailability::enabled())
+        @php($memorySubject = \App\Services\Memory\LoopSubject::for($e))
+        <livewire:memory-context :subject-type="$memorySubject['type']" :subject-id="$memorySubject['id']" :signature="'dot-central:exception:'.$e->rule_code" :key="'memory-exception-'.$e->id" />
+    @endif
     @auth
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;">
         @can('explain', $e)

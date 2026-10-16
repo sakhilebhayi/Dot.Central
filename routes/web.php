@@ -13,6 +13,7 @@ use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\ExceptionController;
 use App\Http\Controllers\IntegrationHealthController;
+use App\Http\Controllers\MemoryConnectionController;
 use App\Http\Controllers\MinesConnectionController;
 use App\Http\Controllers\MinesWebhookController;
 use App\Http\Controllers\NotificationController;
@@ -95,6 +96,8 @@ Route::middleware([
     Route::get('/health', [IntegrationHealthController::class, 'index'])->name('health.index');
     Route::post('/health/connections/{connection}/sync', [IntegrationHealthController::class, 'sync'])->name('health.sync');
     Route::post('/health/connections/{connection}/test', [IntegrationHealthController::class, 'test'])->name('health.test');
+    Route::post('/health/memory', [MemoryConnectionController::class, 'update'])->name('health.memory.update');
+    Route::post('/health/memory/test', [MemoryConnectionController::class, 'test'])->name('health.memory.test');
 
     Route::get('control-rooms/{controlRoom}/shifts', [ShiftController::class, 'index'])->name('control-rooms.shifts.index');
     Route::get('control-rooms/{controlRoom}/shifts/start', [ShiftController::class, 'start'])->name('control-rooms.shifts.start');

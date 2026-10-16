@@ -31,6 +31,54 @@
         @if (session('error'))
             <div class="dot-msg dot-msg--critical" role="alert"><div class="dot-msg__title">Dot.Mines refused the request</div><div>{{ session('error') }}</div></div>
         @endif
+        @if (session('memory_error'))
+            <div class="dot-msg dot-msg--critical" role="alert"><div class="dot-msg__title">Dot.Memory refused the request</div><div>{{ session('memory_error') }}</div></div>
+        @endif
+
+        @php($memoryConnection = $memory['connection'])
+        @php($memoryTone = $memoryConnection === null ? 'neutral' : match($memoryConnection->status) { 'verified' => ($memoryConnection->enabled ? 'ok' : 'neutral'), 'unreachable' => 'warn', 'credential_invalid' => 'bad', default => 'neutral' })
+        <section class="dot-panels dot-panels--1" aria-labelledby="memory-title" id="memory" style="margin-bottom:1.25rem;">
+            <div class="dot-panel dot-panel--flush">
+                <div class="dot-panel__head">
+                    <h2 class="dot-panel__title" id="memory-title"><span class="dot-status-lamp" style="background:var(--{{ $memoryTone === 'neutral' ? 'text-faint' : $memoryTone }});"></span>Dot.Memory</h2>
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                        @if($memoryConnection)
+                            <span class="dot-badge dot-badge--{{ $memoryTone === 'neutral' ? 'info' : $memoryTone }}">{{ $memoryConnection->enabled ? str_replace('_', ' ', $memoryConnection->status) : 'disabled' }}</span>
+                            @can('act-on-health')
+                            <form method="POST" action="{{ route('health.memory.test') }}">@csrf<button type="submit" class="dot-btn dot-btn-ghost dot-btn-sm">Test credential</button></form>
+                            @endcan
+                        @else
+                            <span class="dot-badge">not connected</span>
+                        @endif
+                    </div>
+                </div>
+                <div class="dot-panel__body">
+                    <p class="dot-page-head__lede" style="margin-bottom:0.9rem;">Decisions, actions and outcomes from this control room are remembered in Dot.Memory; alerts and exceptions show what was tried before and what worked. Records wait here if Dot.Memory is unreachable and are sent later.</p>
+                    <div class="dot-panels dot-panels--6" style="margin-bottom:1rem;">
+                        <div class="dot-panel dot-readout"><span class="dot-readout__label">Status</span><span class="dot-readout__value" style="font-size:var(--t-title);">{{ $memoryConnection === null ? 'not connected' : ($memoryConnection->enabled ? str_replace('_', ' ', $memoryConnection->status) : 'disabled') }}</span><span class="dot-readout__context">{{ $memoryConnection?->last_error ? \Illuminate\Support\Str::limit($memoryConnection->last_error, 60) : 'verified '.Format::age($memoryConnection?->last_verified_at) }}</span></div>
+                        <div class="dot-panel dot-readout"><span class="dot-readout__label">Last write</span><span class="dot-readout__value" style="font-size:var(--t-title);">{{ Format::age($memoryConnection?->last_write_at) }}</span></div>
+                        <div class="dot-panel dot-readout"><span class="dot-readout__label">Outbox pending</span><span class="dot-readout__value">{{ Format::integer($memory['pending']) }}</span></div>
+                        <div class="dot-panel dot-readout"><span class="dot-readout__label">Outbox failed / stuck</span><span class="dot-readout__value {{ $memory['stuck'] > 0 ? 'dot-readout__value--bad' : ($memory['failed'] > 0 ? 'dot-readout__value--warn' : '') }}">{{ Format::integer($memory['failed']) }} / {{ Format::integer($memory['stuck']) }}</span><span class="dot-readout__context">retrying / given up after {{ \App\Models\MemoryOutboxRow::MAX_ATTEMPTS }} attempts</span></div>
+                        <div class="dot-panel dot-readout"><span class="dot-readout__label">Open incidents</span><span class="dot-readout__value {{ $memory['open_incidents'] > 0 ? 'dot-readout__value--warn' : '' }}">{{ Format::integer($memory['open_incidents']) }}</span><span class="dot-readout__context">reported about this platform</span></div>
+                        <div class="dot-panel dot-readout"><span class="dot-readout__label">Last recall</span><span class="dot-readout__value" style="font-size:var(--t-title);">{{ Format::age($memoryConnection?->last_context_at) }}</span></div>
+                    </div>
+                    @can('act-on-health')
+                    <form method="POST" action="{{ route('health.memory.update') }}" style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto auto;gap:0.6rem;align-items:end;">
+                        @csrf
+                        <label style="display:block;font-size:var(--t-xs);color:var(--text-muted);">Dot.Memory base URL
+                            <input name="base_url" type="url" class="dot-input" style="width:100%;margin-top:0.25rem;" value="{{ old('base_url', $memoryConnection->base_url ?? config('ecosystem.platforms.memory.url')) }}" required />
+                        </label>
+                        <label style="display:block;font-size:var(--t-xs);color:var(--text-muted);">API token{{ $memoryConnection && $memoryConnection->api_token ? ' (leave blank to keep)' : '' }}
+                            <input name="api_token" type="password" autocomplete="new-password" class="dot-input" style="width:100%;margin-top:0.25rem;" {{ $memoryConnection && $memoryConnection->api_token ? '' : 'required' }} />
+                        </label>
+                        <label style="display:flex;gap:0.4rem;align-items:center;font-size:var(--t-sm);padding-bottom:0.45rem;"><input type="checkbox" name="enabled" value="1" @checked(old('enabled', $memoryConnection?->enabled ?? true)) /> Enabled</label>
+                        <button type="submit" class="dot-btn dot-btn-primary dot-btn-sm">Save</button>
+                    </form>
+                    @error('base_url')<div class="dot-msg dot-msg--critical" style="margin-top:0.5rem;">{{ $message }}</div>@enderror
+                    @endcan
+                </div>
+            </div>
+        </section>
 
         <div class="dot-stack">
         @forelse($cards as $card)

@@ -2,7 +2,10 @@
 
 use App\Console\Commands\BackupSqliteDatabase;
 use App\Console\Commands\EvaluateRules;
+use App\Console\Commands\FlushMemoryOutboxes;
+use App\Console\Commands\PruneMemoryOutbox;
 use App\Console\Commands\RefreshMinesHours;
+use App\Console\Commands\ReportMemoryIncidents;
 use App\Console\Commands\ScanStaleSessions;
 use App\Console\Commands\SyncMines;
 use App\Jobs\QueueHeartbeat;
@@ -50,3 +53,9 @@ Schedule::job(new QueueHeartbeat)->everyFiveMinutes()->name('queue-heartbeat');
 // Nightly copy of the SQLite file (shifts, line-ups and the audit log are
 // not rebuilt from Dot.Mines). No-op on other database drivers.
 Schedule::command(BackupSqliteDatabase::class)->dailyAt('02:15')->onOneServer();
+
+// Dot.Memory: send what the outbox holds (backstop for the after-commit
+// dispatch) and prune sent rows. See docs/dot-central/14-dot-memory-integration.md.
+Schedule::command(FlushMemoryOutboxes::class)->everyMinute()->withoutOverlapping()->onOneServer();
+Schedule::command(PruneMemoryOutbox::class)->dailyAt('03:10')->onOneServer();
+Schedule::command(ReportMemoryIncidents::class)->everyFiveMinutes()->withoutOverlapping()->onOneServer();

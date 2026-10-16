@@ -1,6 +1,18 @@
 parameters:
 	ignoreErrors:
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/AuditEntry.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/ControlRoom.php
+
+		-
 			message: '#^Method App\\Actions\\Jetstream\\CreateTeam\:\:create\(\) should return App\\Models\\Team but returns Illuminate\\Database\\Eloquent\\Model\.$#'
 			identifier: return.type
 			count: 1
@@ -97,34 +109,10 @@ parameters:
 			path: app/Http/Controllers/ControlRoomController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Agent.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/AgentKnowledge.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/AuditEntry.php
-
-		-
 			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Models/AuditEntry.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Models/ControlRoom.php
 
 		-
 			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:hasAnyRoleOn\(\) expects App\\Models\\Team, Illuminate\\Database\\Eloquent\\Model given\.$#'
