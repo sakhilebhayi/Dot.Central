@@ -72,7 +72,7 @@ class IntegrationHealthController extends Controller
             'syncInterval' => (int) config('mines.sync_interval_minutes', 5),
             'schedulerHeartbeat' => $this->heartbeat('dot.scheduler_heartbeat'),
             'queueHeartbeat' => $this->heartbeat(QueueHeartbeat::KEY),
-            'memory' => $this->memory($request->user()->currentTeam),
+            'memory' => $this->memory($request->user()->currentTeam instanceof Team ? $request->user()->currentTeam : null),
         ]);
     }
 
