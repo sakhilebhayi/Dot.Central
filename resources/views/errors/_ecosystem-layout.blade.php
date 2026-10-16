@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{{ $code }} — @yield('title') · Dot.Central</title>
+        <title>{{ $code }} · @yield('title') · Dot.Central</title>
         <meta name="robots" content="noindex">
 
         @php
@@ -14,6 +14,7 @@
                     break;
                 }
             }
+            $logoPath = file_exists(public_path('images/logo-light.png')) ? 'images/logo-light.png' : 'images/logo.png';
         @endphp
         @if ($faviconPath)
             <link rel="icon" href="{{ asset($faviconPath) }}">
@@ -21,134 +22,89 @@
 
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-        @php
-            $viteManifestPath = public_path('build/manifest.json');
-            $viteEntries = [];
-            if (file_exists($viteManifestPath)) {
-                $viteManifest = json_decode(file_get_contents($viteManifestPath), true) ?? [];
-                foreach (['resources/css/app.css', 'resources/js/app.js'] as $entry) {
-                    if (isset($viteManifest[$entry])) {
-                        $viteEntries[] = $entry;
-                    }
-                }
-            }
-
-            // Every Dot platform, pulled from the shared ecosystem registry
-            // (config/ecosystem.php, identical across all platforms) rather
-            // than a fixed hand-picked subset -- add a platform to the
-            // registry once and it shows up here automatically everywhere.
-            // Self-exclusion uses this generator-verified literal name
-            // rather than config('app.name'), since not every platform's
-            // .env reliably has APP_NAME set correctly.
-            $currentPlatformName = 'Dot.Central';
-            $discover = collect(config('ecosystem.platforms', []))
-                ->reject(fn ($p) => ($p['name'] ?? null) === $currentPlatformName)
-                ->reject(fn ($p) => ($p['active'] ?? true) === false)
-                ->values()
-                ->all();
-
-            $logoLightPath = null;
-            foreach (['images/logo-light.png', null] as $logoLightCandidate) {
-                if ($logoLightCandidate && file_exists(public_path($logoLightCandidate))) {
-                    $logoLightPath = $logoLightCandidate;
-                    break;
-                }
-            }
-        @endphp
-        @if (!empty($viteEntries))
-            @vite($viteEntries)
-        @endif
-
+        {{-- No Vite bundle on purpose: an error page must render even when the build is missing. --}}
         <style>
             :root {
-                --paper: #10141a;
-                --ink: #edeff2;
-                --ink-soft: #97a1ad;
-                --chrome: #1b222c;
-                --chrome-soft: #1b222c;
-                --accent: #e8bd3d;
-                --accent-deep: #f3d878;
-                --line: rgba(255,255,255,0.12);
-                --font-display: 'Sora', system-ui, sans-serif;
+                --ground: #0f141b;
+                --panel: #151b24;
+                --rule: rgba(237, 239, 242, 0.12);
+                --rule-strong: rgba(237, 239, 242, 0.22);
+                --text: #e9ecf0;
+                --text-muted: #a6afba;
+                --text-quiet: #7f8995;
+                --signal: #f2a70b;
+                --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
                 --font-body: 'IBM Plex Sans', system-ui, sans-serif;
-                --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-                --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+                --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
             }
             * { box-sizing: border-box; }
-            html { background: var(--paper); }
-            body { margin: 0; font-family: var(--font-body); background: var(--paper); color: #97a1ad; min-height: 100dvh; display: flex; flex-direction: column; }
+            html { background: var(--ground); }
+            body { margin: 0; font-family: var(--font-body); background: var(--ground); color: var(--text); min-height: 100dvh; display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+            a { color: inherit; }
             .font-display { font-family: var(--font-display); }
             .font-mono { font-family: var(--font-mono); }
-            a { color: inherit; }
-            .press { transition: transform 160ms var(--ease-out); }
-            .press:active { transform: scale(0.97); }
-            .link-underline { background-image: linear-gradient(currentColor, currentColor); background-position: 0 100%; background-repeat: no-repeat; background-size: 0% 1px; transition: background-size 200ms var(--ease-out); }
-            @media (hover: hover) and (pointer: fine) {
-                .link-underline:hover { background-size: 100% 1px; }
-            }
+            .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; width: 100%; }
+            header { border-bottom: 1px solid var(--rule); }
+            header .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+            .btn { display: inline-block; padding: 10px 18px; font-family: var(--font-display); font-weight: 600; font-size: 14px; text-decoration: none; border: 1px solid var(--rule-strong); color: var(--text); }
+            .btn:hover { border-color: var(--text-muted); }
+            .press { padding: 10px 18px; font-family: var(--font-display); font-weight: 600; font-size: 14px; text-decoration: none; border: 1px solid var(--rule-strong); color: var(--text); display: inline-block; }
+            .press[style*="var(--accent)"] { border-color: var(--signal); }
+            .link-underline { text-decoration: none; }
+            .link-underline:hover { text-decoration: underline; }
+            main { flex: 1; display: flex; align-items: center; padding: 56px 0; }
+            .card { border: 1px solid var(--rule); background: var(--panel); max-width: 640px; width: 100%; }
+            .card__head { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--rule); }
+            .card__head .icon { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; }
+            .card__head .icon svg { width: 28px; height: 28px; }
+            .card__code { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-quiet); }
+            .card__body { padding: 22px 20px 24px; }
+            .card__body h1 { font-family: var(--font-display); font-size: 28px; font-weight: 700; line-height: 1.15; margin: 0 0 10px; }
+            .card__body p { margin: 0 0 24px; color: var(--text-muted); font-size: 16px; line-height: 1.55; }
+            .card__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+            footer { border-top: 1px solid var(--rule); padding: 20px 0; }
+            footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; font-family: var(--font-mono); font-size: 12px; color: var(--text-quiet); }
         </style>
     </head>
     <body>
-        <header style="background: var(--chrome);">
-            <nav style="max-width: 1400px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
-                <a href="/" class="press" style="display: flex; align-items: center; gap: 10px;">
-                    {{-- The header sits on --chrome, which is always a dark
-                         surface in this template regardless of whether the
-                         platform's overall theme is light or dark -- so the
-                         logo's ink-colored wordmark needs the dark-safe
-                         white-ink variant here, not the default asset. --}}
-                    <img src="{{ asset($logoLightPath ?? 'images/logo.png') }}" alt="Dot.Central" style="height: 40px; width: auto;">
-                </a>
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    @auth
-                        <a href="{{ route('dashboard') }}" class="press" style="padding: 10px 20px; background: var(--accent); color: #10141a; font-family: var(--font-display); font-weight: 600; font-size: 14px; border-radius: 999px; text-decoration: none;">Dashboard</a>
-                    @else
-                        @if (Route::has('login'))
-                            <a href="{{ route('login') }}" class="link-underline" style="color: rgba(255,255,255,0.85); font-size: 14px; text-decoration: none; padding-bottom: 1px;">Sign in</a>
-                        @endif
-                    @endauth
-                </div>
-            </nav>
+        <header>
+            <div class="wrap">
+                <a href="/" aria-label="Dot.Central home"><img src="{{ asset($logoPath) }}" alt="Dot.Central" style="height: 40px; width: auto; display: block;"></a>
+                @auth
+                    <a href="{{ route('dashboard') }}" class="btn">Open the control room</a>
+                @else
+                    @if (Route::has('login'))
+                        <a href="{{ route('login') }}" class="btn">Sign in</a>
+                    @endif
+                @endauth
+            </div>
         </header>
 
-        <main style="flex: 1; display: flex; align-items: center; padding: 48px 20px;">
-            <div style="max-width: 640px; margin: 0 auto; width: 100%; text-align: center;">
-                <div style="display: inline-flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 24px; background: rgba(255,255,255,0.06); margin-bottom: 28px;" aria-hidden="true">
-                    @yield('icon')
-                </div>
-
-                <p class="font-mono" style="font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px;">Error {{ $code }}</p>
-                <h1 class="font-display" style="font-size: clamp(26px, 4vw, 34px); font-weight: 700; line-height: 1.2; margin: 0 0 14px; color: var(--ink);">@yield('title')</h1>
-                <p style="font-size: 16px; line-height: 1.6; color: var(--ink-soft); margin: 0 0 32px;">@yield('message')</p>
-
-                <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-bottom: 56px;">
-                    @yield('actions')
-                </div>
-
-                @if (!empty($discover))
-                    <div style="border-top: 1px solid var(--line); padding-top: 28px; text-align: left;">
-                        <p class="font-mono" style="font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 14px; text-align: center;">While you're here — the rest of the Dot Ecosystem ({{ count($discover) }})</p>
-                        <div style="display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;">
-                            @foreach ($discover as $platform)
-                                <a href="{{ $platform['url'] }}" class="press" style="flex: 0 0 auto; scroll-snap-align: start; display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 7px; background: #1b222c; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; white-space: nowrap;">
-                                    <span class="material-symbols-rounded" aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: {{ $platform['accent'] ?? 'var(--accent)' }}; color: #ffffff; font-size: 16px; flex-shrink: 0;">{{ $platform['icon'] ?? 'apps' }}</span>
-                                    <span class="font-display" style="font-weight: 600; font-size: 13px; color: var(--ink);">{{ $platform['name'] }}</span>
-                                </a>
-                            @endforeach
+        <main>
+            <div class="wrap">
+                <div class="card">
+                    <div class="card__head">
+                        <span class="icon" aria-hidden="true">@yield('icon')</span>
+                        <span class="card__code">Error {{ $code }}</span>
+                    </div>
+                    <div class="card__body">
+                        <h1>@yield('title')</h1>
+                        <p>@yield('message')</p>
+                        <div class="card__actions">
+                            @yield('actions')
                         </div>
                     </div>
-                @endif
+                </div>
             </div>
         </main>
 
-        <footer style="background: var(--chrome-soft); padding: 24px 20px;">
-            <div style="max-width: 1400px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px;">
-                <p class="font-mono" style="font-size: 12px; color: rgba(255,255,255,0.6); margin: 0;">&copy; {{ date('Y') }} Dot.Central.</p>
+        <footer>
+            <div class="wrap">
+                <span>&copy; {{ date('Y') }} Dot.Central.</span>
                 @if (Route::has('contact'))
-                    <a href="{{ route('contact') }}" class="link-underline font-mono" style="font-size: 12px; color: rgba(255,255,255,0.6); text-decoration: none; padding-bottom: 1px;">Contact support</a>
+                    <a href="{{ route('contact') }}" class="link-underline">Contact support</a>
                 @endif
             </div>
         </footer>

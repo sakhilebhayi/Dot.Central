@@ -30,7 +30,7 @@ class ControlRoomTest extends TestCase
         $user = User::factory()->withPersonalTeam()->create();
         $team = $user->currentTeam;
 
-        $controlRoom = ControlRoom::factory()->for($team)->create(['name' => 'Kolomela Control Room']);
+        $controlRoom = ControlRoom::factory()->for($team)->create(['name' => 'Demo Control Room']);
         DispatchDecision::factory()->for($controlRoom)->for($user, 'decidedBy')->create();
         Alert::factory()->for($controlRoom)->create();
         OperatorSession::factory()->for($controlRoom)->for($user, 'operator')->create();
@@ -38,7 +38,7 @@ class ControlRoomTest extends TestCase
         $this->actingAs($user)
             ->get('/control-rooms')
             ->assertOk()
-            ->assertSee('Kolomela Control Room')
+            ->assertSee('Demo Control Room')
             ->assertSee('Active Control Rooms')
             ->assertSee('Open Alerts');
     }
@@ -49,7 +49,6 @@ class ControlRoomTest extends TestCase
 
         $response = $this->actingAs($user)->post('/control-rooms', [
             'name' => 'New Site Control Room',
-            'mines_site_ref' => 'kolomela',
         ]);
 
         $this->assertDatabaseHas('control_rooms', [
@@ -113,11 +112,15 @@ class ControlRoomTest extends TestCase
         $owner = User::factory()->withPersonalTeam()->create();
         $team = $owner->currentTeam;
         $teammate = User::factory()->create();
-        $team->users()->attach($teammate, ['role' => 'editor']);
+        $team->users()->attach($teammate, ['role' => 'operator']);
+        $raiser = User::factory()->create();
+        $team->users()->attach($raiser, ['role' => 'supervisor']);
+        $raiser->switchTeam($team);
 
         $controlRoom = ControlRoom::factory()->for($team)->create();
+        $controlRoom->users()->attach($raiser);
 
-        $this->actingAs($owner)->post(route('control-rooms.alerts.store', $controlRoom), [
+        $this->actingAs($raiser)->post(route('control-rooms.alerts.store', $controlRoom), [
             'severity' => 'critical',
             'title' => 'Sentinel threshold breach',
             'triggered_at' => now()->format('Y-m-d\TH:i'),
@@ -129,6 +132,7 @@ class ControlRoomTest extends TestCase
         ]);
 
         $this->assertSame(1, $teammate->fresh()->unreadNotifications()->count());
-        $this->assertSame(0, $owner->fresh()->unreadNotifications()->count());
+        $this->assertSame(1, $owner->fresh()->unreadNotifications()->count());
+        $this->assertSame(0, $raiser->fresh()->unreadNotifications()->count());
     }
 }

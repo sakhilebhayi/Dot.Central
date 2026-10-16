@@ -6,6 +6,7 @@ use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\DispatchDecision;
 use App\Models\OperatorSession;
+use App\Services\RoomProvisioner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -20,13 +21,13 @@ class ControlRoomController extends Controller
 {
     public function index(Request $request): View
     {
-        $controlRooms = $request->user()->currentTeam
-            ? $request->user()->currentTeam
-                ->controlRooms()
-                ->withCount(['dispatchDecisions', 'alerts', 'operatorSessions'])
-                ->latest()
-                ->get()
-            : collect();
+        $this->authorize('viewAny', ControlRoom::class);
+
+        $controlRooms = ControlRoom::accessibleBy($request->user())
+            ->with('minesConnection')
+            ->withCount(['dispatchDecisions', 'alerts', 'operatorSessions'])
+            ->latest()
+            ->get();
 
         // DispatchDecision/Alert/OperatorSession carry HasControlRoomTeamScope,
         // so these no longer need an explicit whereIn('control_room_id', ...)
@@ -44,32 +45,36 @@ class ControlRoomController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', ControlRoom::class);
+
         return view('control-rooms.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', ControlRoom::class);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'mines_site_ref' => ['nullable', 'string', 'max:255'],
         ]);
-
-        abort_unless($request->user()->currentTeam, 403, 'You need a team before creating a control room.');
 
         $controlRoom = $request->user()->currentTeam->controlRooms()->create([
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']).'-'.Str::random(6),
-            'mines_site_ref' => $validated['mines_site_ref'] ?? null,
         ]);
+
+        $controlRoom->users()->attach($request->user());
+        app(RoomProvisioner::class)->provision($controlRoom);
 
         return redirect()->route('control-rooms.show', $controlRoom);
     }
 
     public function show(Request $request, ControlRoom $controlRoom): View
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('view', $controlRoom);
 
         $controlRoom->load([
+            'minesConnection',
             'dispatchDecisions' => fn ($q) => $q->latest('decided_at')->limit(20),
             'alerts' => fn ($q) => $q->latest('triggered_at')->limit(20),
             'operatorSessions' => fn ($q) => $q->latest('started_at')->limit(20),
@@ -77,8 +82,15 @@ class ControlRoomController extends Controller
 
         $pendingProposals = $controlRoom->staleSessionProposals()->where('status', 'pending')->with('operatorSession.operator')->get();
 
+        $members = $controlRoom->users()->orderBy('name')->get();
+        $assignableUsers = $request->user()->can('manage', $controlRoom)
+            ? $controlRoom->team->allUsers()->whereNotIn('id', $members->pluck('id'))->sortBy('name')->values()
+            : collect();
+
         return view('control-rooms.show', [
             'controlRoom' => $controlRoom,
+            'members' => $members,
+            'assignableUsers' => $assignableUsers,
             'workflowTypes' => DispatchDecision::WORKFLOW_TYPES,
             'severities' => Alert::SEVERITIES,
             'pendingProposals' => $pendingProposals,
@@ -87,24 +99,22 @@ class ControlRoomController extends Controller
 
     public function edit(Request $request, ControlRoom $controlRoom): View
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('update', $controlRoom);
 
         return view('control-rooms.edit', compact('controlRoom'));
     }
 
     public function update(Request $request, ControlRoom $controlRoom): RedirectResponse
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('update', $controlRoom);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'mines_site_ref' => ['nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $controlRoom->update([
             'name' => $validated['name'],
-            'mines_site_ref' => $validated['mines_site_ref'] ?? null,
             'is_active' => $request->boolean('is_active'),
         ]);
 
@@ -113,22 +123,10 @@ class ControlRoomController extends Controller
 
     public function destroy(Request $request, ControlRoom $controlRoom): RedirectResponse
     {
-        $this->authorizeAccess($request, $controlRoom);
+        $this->authorize('delete', $controlRoom);
 
         $controlRoom->delete();
 
         return redirect()->route('control-rooms.index');
-    }
-
-    /**
-     * MVP-level tenancy guard: a control room may only be viewed/modified by
-     * a member of the team it belongs to.
-     */
-    protected function authorizeAccess(Request $request, ControlRoom $controlRoom): void
-    {
-        abort_unless(
-            $request->user()->belongsToTeam($controlRoom->team),
-            403
-        );
     }
 }

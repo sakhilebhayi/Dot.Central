@@ -11,10 +11,10 @@
         <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon-16x16.png') }}">
         <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('apple-touch-icon.png') }}">
 
-        <!-- Fonts — same pairing as resources/views/welcome.blade.php: Sora (display), IBM Plex Sans (body), IBM Plex Mono (labels) -->
+        <!-- Fonts: the same IBM Plex set the authenticated shell uses -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -29,12 +29,11 @@
                 --panel: #1b222c;
                 --gold: #e8bd3d;
                 --gold-soft: #f3d878;
-                --cyan: #22d3e0;
-                --cyan-soft: #7be8f0;
                 --paper: #edeff2;
                 --mist: #97a1ad;
-                --line: rgba(237, 239, 242, 0.10);
-                --font-display: 'Sora', system-ui, sans-serif;
+                --line: rgba(237, 239, 242, 0.12);
+                --rule: rgba(237, 239, 242, 0.12);
+                --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
                 --font-body: 'IBM Plex Sans', system-ui, sans-serif;
                 --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
                 --ease-out: cubic-bezier(0.23, 1, 0.32, 1);

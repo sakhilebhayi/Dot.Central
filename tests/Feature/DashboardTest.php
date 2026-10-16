@@ -23,7 +23,9 @@ class DashboardTest extends TestCase
         $this->actingAs($user)
             ->get('/dashboard')
             ->assertOk()
-            ->assertSee('Agent Hub Dashboard');
+            ->assertSee('Operational Overview');
+
+        $this->actingAs($user)->get(route('agents.hub'))->assertOk()->assertSee('Agent Hub Dashboard');
     }
 
     public function test_dashboard_links_to_the_real_agent_routes_not_placeholder_links(): void
@@ -31,7 +33,7 @@ class DashboardTest extends TestCase
         $user = User::factory()->withPersonalTeam()->create();
         Agent::factory()->for($user->currentTeam)->create(['name' => 'Support Bot']);
 
-        $response = $this->actingAs($user)->get('/dashboard');
+        $response = $this->actingAs($user)->get(route('agents.hub'));
 
         $response->assertOk();
         $response->assertSee(route('agents.create'), false);

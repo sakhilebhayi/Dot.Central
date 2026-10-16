@@ -15,6 +15,7 @@ class AlertFactory extends Factory
     {
         return [
             'control_room_id' => ControlRoom::factory(),
+            'source' => 'manual',
             'severity' => fake()->randomElement(Alert::SEVERITIES),
             'title' => fake()->sentence(4),
             'description' => fake()->optional()->paragraph(),

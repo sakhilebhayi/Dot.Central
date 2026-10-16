@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasControlRoomTeamScope;
 use Database\Factories\StaleSessionProposalFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class StaleSessionProposal extends Model
 {
     /** @use HasFactory<StaleSessionProposalFactory> */
-    use HasControlRoomTeamScope, HasFactory;
+    use Auditable, HasControlRoomTeamScope, HasFactory;
 
     protected $fillable = [
         'operator_session_id', 'control_room_id', 'hours_silent',

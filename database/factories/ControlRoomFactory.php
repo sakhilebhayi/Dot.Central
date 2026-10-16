@@ -20,7 +20,6 @@ class ControlRoomFactory extends Factory
             'team_id' => Team::factory(),
             'name' => $name,
             'slug' => Str::slug($name).'-'.Str::random(6),
-            'mines_site_ref' => Str::slug(fake()->city()),
             'is_active' => true,
         ];
     }

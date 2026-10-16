@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasControlRoomTeamScope;
 use Database\Factories\OperatorSessionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OperatorSession extends Model
 {
     /** @use HasFactory<OperatorSessionFactory> */
-    use HasControlRoomTeamScope, HasFactory;
+    use Auditable, HasControlRoomTeamScope, HasFactory;
 
     protected $fillable = [
         'control_room_id', 'user_id', 'shift_label', 'started_at', 'ended_at',

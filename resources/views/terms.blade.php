@@ -3,7 +3,7 @@
         <x-authentication-card-logo />
 
         <div class="w-full sm:max-w-2xl mt-6 rounded-xl border border-[var(--line)] shadow-2xl overflow-hidden p-6 sm:p-10" style="background: var(--panel);">
-            <div class="prose prose-invert max-w-none prose-a:text-[var(--cyan)]" style="color: var(--paper);">
+            <div class="prose prose-invert max-w-none prose-a:text-[var(--gold)]" style="color: var(--paper);">
                 {!! $terms !!}
             </div>
         </div>

@@ -15,8 +15,15 @@ class StaleSessionProposalTest extends TestCase
 
     private function makeProposal(): array
     {
-        $owner = User::factory()->withPersonalTeam()->create();
-        $controlRoom = ControlRoom::factory()->for($owner->currentTeam)->create();
+        $teamOwner = User::factory()->withPersonalTeam()->create();
+        $controlRoom = ControlRoom::factory()->for($teamOwner->currentTeam)->create();
+
+        // Resolving a proposal is a supervisory action; the actor is a supervisor member.
+        $owner = User::factory()->create();
+        $teamOwner->currentTeam->users()->attach($owner, ['role' => 'supervisor']);
+        $owner->switchTeam($teamOwner->currentTeam);
+        $controlRoom->users()->attach($owner);
+
         $session = OperatorSession::factory()->for($controlRoom)->create([
             'started_at' => now()->subHours(9),
             'ended_at' => null,

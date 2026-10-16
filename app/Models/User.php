@@ -3,8 +3,10 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -55,6 +57,41 @@ class User extends Authenticatable
     protected $appends = [
         'profile_photo_url',
     ];
+
+    /**
+     * The control-room role this user holds on a team. Team owners are
+     * administrators; non-members have no role.
+     */
+    public function roleOn(Team $team): ?Role
+    {
+        if ($this->ownsTeam($team)) {
+            return Role::Administrator;
+        }
+
+        if (! $this->belongsToTeam($team)) {
+            return null;
+        }
+
+        $membership = $team->users()->whereKey($this->id)->first()?->membership;
+        $key = $membership?->role;
+
+        return is_string($key) ? Role::tryFrom($key) : null;
+    }
+
+    /**
+     * Control rooms this user is assigned to (site scope).
+     */
+    public function controlRooms(): BelongsToMany
+    {
+        return $this->belongsToMany(ControlRoom::class)->withTimestamps();
+    }
+
+    public function hasAnyRoleOn(Team $team, Role ...$roles): bool
+    {
+        $role = $this->roleOn($team);
+
+        return $role !== null && in_array($role, $roles, true);
+    }
 
     /**
      * Get the attributes that should be cast.
