@@ -27,7 +27,7 @@ Owner steps, once:
 3. Register the first administrator through the registration page, create the control room, paste a Dot.Mines token on the connection page, and register the webhook endpoint in Dot.Mines (`https://central.infodot.co.za/webhooks/mines/<connection id>`).
 4. Open Health: both heartbeats green, the connection verified, fleet mirrored.
 
-Issue I-32 closes on the first green bootstrap run, not before.
+Issue I-32 closed on 2026-10-16 with the first green bootstrap run (`/up` 200, `/login` 200, `/central/database/database.sqlite` refused with 403, built assets served from the docroot symlink).
 
 ## 3. Upgrades (`.github/workflows/deploy.yml`)
 
