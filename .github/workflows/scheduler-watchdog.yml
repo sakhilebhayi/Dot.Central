@@ -1,0 +1,27 @@
+name: Scheduler Watchdog
+
+# The alarm that reaches a person. Every 15 minutes, from GitHub, ask the
+# public /up/scheduler probe whether the scheduler and the queue worker
+# ran recently and FAIL this run if not; GitHub emails the owner on a
+# failed scheduled run. Read-only, no secrets beyond the host name.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  watch:
+    name: Scheduler and queue alive
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ask the scheduler probe
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          code=$(curl -sS -o "$body" -w '%{http_code}' --max-time 20 -H "Accept: application/json" "https://$HOST/up/scheduler" || echo 000)
+          echo "GET /up/scheduler -> $code"
+          cat "$body"; echo
+          [ "$code" = "200" ] || { echo "::error::Scheduler probe answered HTTP $code: the scheduler or the queue worker has not run recently on $HOST."; exit 1; }
