@@ -79,4 +79,4 @@ Webhook silence is not a condition: no event is a normal state. Incidents are se
 
 ## 8. Not done
 
-Recall shows only what Dot.Central itself has recorded until Dot.Mines also writes to the loop for the same machines (I-33). Dot.Brain decisions flowing back into the control room are the next loop, once Memory holds history.
+Recall is cross-platform: the context query carries no platform filter, so Dot.Mines' own records for the same machine (Dot.Mines branch `feature/memory-loop`) appear in the strip once that side is live (I-33). Dot.Brain decisions flowing back into the control room are the next loop, once Memory holds history.

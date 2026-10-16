@@ -36,7 +36,7 @@ class MemoryClientTest extends TestCase
         $context = $this->client()->context('equipment', '7', 'dot-central:alert:critical');
 
         $this->assertTrue($context['known']);
-        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'subject_type=equipment') && str_contains($r->url(), 'subject_id=7') && str_contains($r->url(), 'platform=dot-central'));
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'subject_type=equipment') && str_contains($r->url(), 'subject_id=7') && ! str_contains($r->url(), 'platform='));
     }
 
     public function test_incidents_store_and_update(): void

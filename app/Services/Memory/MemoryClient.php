@@ -47,7 +47,9 @@ final class MemoryClient
     /** @return array<string, mixed> */
     public function context(string $subjectType, string $subjectId, ?string $signature = null): array
     {
-        $query = array_filter(['subject_type' => $subjectType, 'subject_id' => $subjectId, 'signature' => $signature, 'platform' => self::PLATFORM], fn ($v) => $v !== null);
+        // No platform filter on purpose: a machine's history is shared with
+        // Dot.Mines and the guardian, and recall should show all of it.
+        $query = array_filter(['subject_type' => $subjectType, 'subject_id' => $subjectId, 'signature' => $signature], fn ($v) => $v !== null);
 
         return $this->data($this->send(fn (PendingRequest $r) => $r->get($this->url('intelligence/context'), $query)));
     }
