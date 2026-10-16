@@ -6,7 +6,11 @@ use App\Jobs\QueueHeartbeat;
 use App\Jobs\SyncMinesConnection;
 use App\Models\ControlRoom;
 use App\Models\IntegrationWebhookDelivery;
+use App\Models\MemoryConnection;
+use App\Models\MemoryIncident;
+use App\Models\MemoryOutboxRow;
 use App\Models\MinesConnection;
+use App\Models\Team;
 use App\Services\Audits;
 use App\Services\Mines\Exceptions\CredentialRejected;
 use App\Services\Mines\Exceptions\MinesException;
@@ -68,7 +72,30 @@ class IntegrationHealthController extends Controller
             'syncInterval' => (int) config('mines.sync_interval_minutes', 5),
             'schedulerHeartbeat' => $this->heartbeat('dot.scheduler_heartbeat'),
             'queueHeartbeat' => $this->heartbeat(QueueHeartbeat::KEY),
+            'memory' => $this->memory($request->user()->currentTeam),
         ]);
+    }
+
+    /**
+     * The team's Dot.Memory connection and what waits in its outbox.
+     *
+     * @return array{connection: MemoryConnection|null, pending: int, failed: int, stuck: int, open_incidents: int}
+     */
+    private function memory(?Team $team): array
+    {
+        if (! $team instanceof Team) {
+            return ['connection' => null, 'pending' => 0, 'failed' => 0, 'stuck' => 0, 'open_incidents' => 0];
+        }
+
+        $outbox = MemoryOutboxRow::where('team_id', $team->id)->whereNull('sent_at');
+
+        return [
+            'connection' => MemoryConnection::withoutGlobalScopes()->where('team_id', $team->id)->first(),
+            'pending' => (clone $outbox)->where('attempts', '<', MemoryOutboxRow::MAX_ATTEMPTS)->count(),
+            'failed' => (clone $outbox)->where('attempts', '>', 0)->where('attempts', '<', MemoryOutboxRow::MAX_ATTEMPTS)->count(),
+            'stuck' => (clone $outbox)->where('attempts', '>=', MemoryOutboxRow::MAX_ATTEMPTS)->count(),
+            'open_incidents' => MemoryIncident::where('team_id', $team->id)->where('status', 'open')->count(),
+        ];
     }
 
     private function heartbeat(string $key): ?Carbon
