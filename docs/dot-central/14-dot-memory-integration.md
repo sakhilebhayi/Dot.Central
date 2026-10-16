@@ -12,7 +12,17 @@ Nothing new is typed. Every record is derived from the audit log, the Dot.Mines 
 
 One connection per team, configured by an administrator on the Health page (`/health`, card "Dot.Memory"): base URL (defaults to the ecosystem registry), API token, enabled. The token is stored with the `encrypted` cast, redacted from audit rows and never shown again.
 
-Minting the token: sign in to Dot.Memory as the user that should own the records, open Profile, then API Tokens, and create a token. Dot.Central calls `GET /api/user` on Test credential.
+Minting the token, two ways (Dot.Memory PR `feature/service-tokens`):
+
+1. Service account (recommended): generate the plaintext locally, hash it, and run Dot.Memory's `provision-service-token.yml` with `service=dot-central` and that hash. The workflow prints a token id; the bearer value is `<id>|<plaintext>` and never exists on the server. Rotation is the same run again.
+
+```bash
+plain=$(openssl rand -hex 32); printf '%s' "$plain" | shasum -a 256; echo "plaintext: $plain"
+```
+
+2. Personal token: sign in to Dot.Memory, open Profile, then API Tokens, and create a token. It works only while that person's account exists.
+
+Dot.Central calls `GET /api/user` on Test credential.
 
 Statuses: `unverified` (saved, not tested), `verified`, `unreachable` (the last write or test could not reach Memory; writes keep queuing), `credential_invalid` (Memory answered 401 or 403; nothing is sent until the token is replaced).
 
