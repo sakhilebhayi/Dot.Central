@@ -5,6 +5,7 @@ use App\Console\Commands\EvaluateRules;
 use App\Console\Commands\FlushMemoryOutboxes;
 use App\Console\Commands\PruneMemoryOutbox;
 use App\Console\Commands\RefreshMinesHours;
+use App\Console\Commands\ReportMemoryIncidents;
 use App\Console\Commands\ScanStaleSessions;
 use App\Console\Commands\SyncMines;
 use App\Jobs\QueueHeartbeat;
@@ -57,3 +58,4 @@ Schedule::command(BackupSqliteDatabase::class)->dailyAt('02:15')->onOneServer();
 // dispatch) and prune sent rows. See docs/dot-central/14-dot-memory-integration.md.
 Schedule::command(FlushMemoryOutboxes::class)->everyMinute()->withoutOverlapping()->onOneServer();
 Schedule::command(PruneMemoryOutbox::class)->dailyAt('03:10')->onOneServer();
+Schedule::command(ReportMemoryIncidents::class)->everyFiveMinutes()->withoutOverlapping()->onOneServer();
