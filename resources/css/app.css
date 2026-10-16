@@ -384,3 +384,6 @@ select.dot-select option, select.dot-input option { background: var(--panel); co
     [style*="grid-template-columns:repeat("] { grid-template-columns: minmax(0, 1fr) !important; }
     [style*="padding:2rem 2.5rem"] { padding: 1.1rem 1rem !important; }
 }
+
+/* Dot.Memory recall strip under alert, exception and machine cards. */
+.memory-strip { font-size: var(--t-xs); color: var(--text-quiet); margin-top: 0.45rem; }

@@ -19,6 +19,11 @@
             <div class="dot-panel dot-readout"><span class="dot-readout__label">Position</span><span class="dot-readout__value" style="font-size:1rem;">{{ $equipment->latitude === null ? '—' : Format::number($equipment->latitude, 5).', '.Format::number($equipment->longitude, 5) }}</span><span class="dot-readout__context">recorded {{ Format::stamp($equipment->location_recorded_at, $timezone) }} · {{ $equipment->mine_area_name ?? 'no area' }}</span></div>
         </div>
 
+        @if(\App\Services\Memory\MemoryAvailability::enabled())
+        <div class="dot-panel" style="margin-bottom:1.25rem;padding:0.6rem 0.9rem;">
+            <livewire:memory-context subject-type="equipment" :subject-id="(string) $equipment->mines_machine_id" :key="'memory-equipment-'.$equipment->id" />
+        </div>
+        @endif
         <div class="dot-panels dot-panels--split">
             <div class="dot-panel dot-panel--flush">
                 <div class="dot-panel__head"><h2 class="dot-panel__title">Engine-hour readings</h2><span class="dot-panel__action" style="color:var(--text-faint);">{{ $readings->count() }} kept</span></div>
