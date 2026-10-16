@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AuditEntry;
 use App\Models\ControlRoom;
 use App\Models\User;
+use App\Services\Memory\MemoryRecorder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
@@ -43,7 +44,7 @@ class Audits
             }
         }
 
-        return AuditEntry::query()->create([
+        $entry = AuditEntry::query()->create([
             'occurred_at' => now(),
             'user_id' => $actor?->id,
             'user_role' => ($actor !== null && $team !== null) ? $actor->roleOn($team)?->value : null,
@@ -59,6 +60,12 @@ class Audits
             'approved_by' => $approvedBy,
             'ip' => app()->runningInConsole() ? null : request()->ip(),
         ]);
+
+        // Dot.Memory remembers decisions and outcomes; derived from this row,
+        // queued locally, never able to fail the caller.
+        app(MemoryRecorder::class)->fromAudit($entry);
+
+        return $entry;
     }
 
     private function controlRoomOf(?Model $subject): ?ControlRoom

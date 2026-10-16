@@ -12,6 +12,7 @@ use App\Models\MinesConnection;
 use App\Models\Operator;
 use App\Models\ProductionRecord;
 use App\Services\Audits;
+use App\Services\Memory\MemoryRecorder;
 use App\Services\Mines\Exceptions\CredentialRejected;
 use App\Services\Mines\Exceptions\MinesException;
 use App\Services\Mines\Exceptions\RateLimited;
@@ -466,12 +467,16 @@ final class MinesSynchroniser
         } while ($page <= $result['meta']['last_page']);
 
         // Alerts that Dot.Mines no longer lists as active were resolved there.
-        Alert::withoutGlobalScopes()
+        $cleared = Alert::withoutGlobalScopes()
             ->where('control_room_id', $connection->control_room_id)
             ->where('source', 'dot_mines')
             ->whereNull('cleared_at')
             ->whereNotIn('external_id', $activeIds)
-            ->update(['cleared_at' => now()]);
+            ->get();
+        foreach ($cleared as $alert) {
+            $alert->forceFill(['cleared_at' => now()])->save();
+            app(MemoryRecorder::class)->alertCleared($alert, 'dot-mines');
+        }
 
         $run->save();
     }
@@ -513,6 +518,12 @@ final class MinesSynchroniser
         ]);
 
         $alert->save();
+
+        if ($alert->wasRecentlyCreated) {
+            app(MemoryRecorder::class)->observeAlert($alert);
+        } elseif ($alert->wasChanged('cleared_at') && $alert->cleared_at !== null) {
+            app(MemoryRecorder::class)->alertCleared($alert, 'dot-mines');
+        }
 
         return $alert;
     }

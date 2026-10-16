@@ -22,7 +22,7 @@ final class AlertWorkflow
         $alert->forceFill(['acknowledged_at' => now(), 'acknowledged_by' => $user->id])->save();
         $outcome = $push ? $this->push($alert, 'acknowledge') : PushOutcome::notRequested();
         $alert->events()->create(['action' => 'acknowledged', 'user_id' => $user->id, 'pushed_to_source' => $outcome->pushed, 'note' => $outcome->failure]);
-        $this->audits->record('ack', $alert, ['acknowledged_at' => ['old' => null, 'new' => now()->toIso8601String()]], 'Acknowledged'.$outcome->suffix(), $alert->controlRoom, $user);
+        $this->audits->record('ack', $alert, ['acknowledged_at' => ['old' => null, 'new' => now()->toIso8601String()], 'push' => ['old' => null, 'new' => $this->pushLabel($outcome)]], 'Acknowledged'.$outcome->suffix(), $alert->controlRoom, $user);
 
         return $outcome;
     }
@@ -49,7 +49,7 @@ final class AlertWorkflow
         $alert->forceFill(['cleared_at' => now(), 'resolved_by' => $user->id, 'resolution_note' => $note])->save();
         $outcome = $push ? $this->push($alert, 'resolve') : PushOutcome::notRequested();
         $alert->events()->create(['action' => 'resolved', 'user_id' => $user->id, 'note' => trim(($note ?? '').($outcome->failure ? ' ['.$outcome->failure.']' : '')) ?: null, 'pushed_to_source' => $outcome->pushed]);
-        $this->audits->record('updated', $alert, ['cleared_at' => ['old' => null, 'new' => now()->toIso8601String()]], ($note ?? 'Resolved').$outcome->suffix(), $alert->controlRoom, $user);
+        $this->audits->record('updated', $alert, ['cleared_at' => ['old' => null, 'new' => now()->toIso8601String()], 'push' => ['old' => null, 'new' => $this->pushLabel($outcome)]], ($note ?? 'Resolved').$outcome->suffix(), $alert->controlRoom, $user);
 
         return $outcome;
     }
@@ -78,5 +78,10 @@ final class AlertWorkflow
         } catch (MinesException $e) {
             return PushOutcome::failed($e->getMessage());
         }
+    }
+
+    private function pushLabel(PushOutcome $outcome): string
+    {
+        return $outcome->requested ? ($outcome->pushed ? 'pushed' : 'refused') : 'not_requested';
     }
 }

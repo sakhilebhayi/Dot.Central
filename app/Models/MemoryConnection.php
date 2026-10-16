@@ -45,6 +45,12 @@ class MemoryConnection extends Model
         'last_context_at' => 'datetime',
     ];
 
+    /** A team-level entity: audits carry no control room. */
+    public function auditControlRoom(): ?ControlRoom
+    {
+        return null;
+    }
+
     /** @return list<string> */
     public function auditRedactedAttributes(): array
     {

@@ -2,6 +2,8 @@
 
 namespace App\Models\Concerns;
 
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
@@ -27,8 +29,11 @@ trait HasTeamScope
     protected static function bootHasTeamScope(): void
     {
         static::addGlobalScope('team', function (Builder $builder): void {
-            if (Auth::check() && Auth::user()->currentTeam) {
-                $builder->where($builder->getModel()->getTable().'.team_id', Auth::user()->currentTeam->id);
+            $user = Auth::user();
+            $team = $user instanceof User ? $user->currentTeam : null;
+
+            if ($team instanceof Team) {
+                $builder->where($builder->getModel()->getTable().'.team_id', $team->id);
             }
         });
     }

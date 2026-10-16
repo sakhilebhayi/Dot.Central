@@ -15,12 +15,14 @@ use App\Models\ShiftLineup;
 use App\Models\ShiftOperatorAssignment;
 use App\Models\User;
 use App\Services\Audits;
+use App\Services\Memory\MemoryRecorder;
 use App\Services\Mines\Exceptions\MinesException;
 use App\Services\Mines\Exceptions\MinesRefused;
 use App\Services\Mines\MinesClientFactory;
 use App\Support\RoleClass;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -493,6 +495,7 @@ final class LineupService
 
             return ['pushed' => true, 'note' => 'pushed to Dot.Mines', 'resource' => $resource];
         } catch (MinesRefused $e) {
+            app(MemoryRecorder::class)->assignmentRefused($shift, $unit, $operator, $e->messages, Auth::user());
             $this->refuse('LU-04', 'Dot.Mines refused '.$operator->name().' on '.$unit->name.': '.implode(' ', $e->messages).' Fix the operator\'s credentials in Dot.Mines, or have a supervisor override it there.');
         } catch (MinesException $e) {
             return ['pushed' => false, 'note' => 'Dot.Mines not updated: '.$e->getMessage(), 'resource' => null];
