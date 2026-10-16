@@ -1,0 +1,123 @@
+name: Deploy to Production
+
+# Runs automatically after the CI workflow finishes GREEN on main (every
+# merge), and manually from the Actions tab with a typed confirmation to
+# redeploy the current main. Run bootstrap.yml once first on a new server:
+# this workflow assumes .env, the database, the docroot wiring and the
+# cron lines already exist.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm deploying main to production'
+        required: true
+
+concurrency:
+  group: central-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy main to central.infodot.co.za
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Only a successful CI run deploys; a manual run must be confirmed.
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      || (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'deploy')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build frontend assets
+        run: |
+          npm ci --silent
+          npm run build
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Deploy code and run migrations
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}" \
+              'bash -s' <<'DEPLOY'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          PHP=php
+          DOCROOT="$(dirname "$DEPLOY_PATH")"
+
+          echo "== Current release: $(git rev-parse --short HEAD)"
+          git fetch origin main
+
+          # Maintenance mode only for the risky window (migrations).
+          $PHP artisan down --retry=30 || true
+
+          git reset --hard origin/main
+          composer install --no-interaction --optimize-autoloader --no-dev
+
+          $PHP artisan migrate --force
+
+          $PHP artisan config:cache
+          $PHP artisan route:cache
+          $PHP artisan view:cache
+          $PHP artisan event:cache
+
+          for target in build images favicon-16x16.png favicon-32x32.png apple-touch-icon.png robots.txt; do
+            ln -sfn "central/public/${target}" "$DOCROOT/${target}"
+          done
+          DEPLOY
+
+      - name: Transfer built assets
+        run: |
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            public/build/ \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/public/build/"
+
+      - name: Restart workers and go live
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}" \
+              'bash -s' <<'RESTART'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          PHP=php
+          # The cron-driven worker exits when idle and starts fresh each
+          # minute; queue:restart makes a running one finish and exit now.
+          $PHP artisan queue:restart
+          $PHP artisan up
+          echo "== Deployed: $(git rev-parse --short HEAD)"
+          RESTART
+
+      - name: Health check
+        run: |
+          sleep 5
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${{ secrets.DEPLOY_HOST }}/up")
+          echo "GET /up -> ${code}"
+          if [ "$code" != "200" ]; then
+            echo "::error::Health check failed on /up (HTTP ${code}). The site may still be in maintenance mode or the release is unhealthy."
+            exit 1
+          fi
+
+      - name: Failure notice
+        if: failure()
+        run: |
+          echo '::error::Deploy failed. If it failed during or after migrations the site may have been left in maintenance mode on purpose -- inspect the server before running `php artisan up`.'

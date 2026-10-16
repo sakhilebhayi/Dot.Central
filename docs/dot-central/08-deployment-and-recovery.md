@@ -14,22 +14,26 @@
 
 Real-time is polling only (Livewire `wire:poll`); no Reverb/Echo process is required.
 
-## 2. First deployment
+## 2. First deployment (built 2026-10-16, `.github/workflows/bootstrap.yml`)
 
-1. `composer install --no-dev --optimize-autoloader`, `npm ci && npm run build` (Vite; the built assets are committed per release, not to git).
-2. `.env`: `APP_KEY`, `APP_URL` (used in webhook URLs shown to administrators), database, `QUEUE_CONNECTION=database` or redis, `CACHE_STORE=database` or redis, mail (notifications), `MINES_*` overrides only if the defaults in `config/mines.php` are wrong for the site.
-3. `php artisan migrate --force`. All migrations are forward-only safe on a populated database (`add_team_id_to_agents_table` backfills before the NOT NULL change).
-4. `php artisan config:cache route:cache view:cache`.
-5. Cron entry on exactly one server: `* * * * * cd /app && php artisan schedule:run >> /dev/null 2>&1`.
-6. Queue workers under supervisord: `php artisan queue:work --sleep=3 --tries=3 --max-time=3600`.
-7. Create the first team and administrator through registration (or `LocalPilotSeeder` locally only).
-8. Per control room: an administrator opens Control Rooms → room → Configure connection, pastes a Dot.Mines token minted by a member of the matching Dot.Mines team (`04-dot-mines-integration.md` §2 lists the role the minting user needs), then Health → Test credential → Sync now.
-9. In Dot.Mines, register the webhook endpoint `https://<APP_URL>/webhooks/mines/<connection id>` with the secret stored on the connection, events `alert.triggered`, `machine.offline`, `geofence.*`, `maintenance.predicted`.
-10. Open Health: both heartbeats green, the connection verified, fleet mirrored.
+Dot.Central deploys to the shared cPanel account that already hosts Dot.Mines: the docroot is `~/central.infodot.co.za`, the repository is cloned to `DEPLOY_PATH` (`~/central.infodot.co.za/central`), and the docroot carries an `index.php` shim that requires `central/public/index.php`, a copy of `public/.htaccess`, and symlinks for `build`, `images`, the favicons and `robots.txt`. The repository's root `.htaccess` denies every HTTP request under the application directory (`AppDirectoryIsNotServedTest`); never put anything that must be fetchable inside it.
 
-## 3. Upgrades
+Database: SQLite (owner decision 2026-10-16: almost everything is rebuilt from Dot.Mines). `config/database.php` sets WAL journaling and a 5 s busy timeout so the scheduler, the worker and web requests can write concurrently (`SqliteConnectionSettingsTest`).
 
-`php artisan down --retry=30` → pull → `composer install` → `npm run build` → `migrate --force` → caches → `queue:restart` → `up`. `queue:restart` is mandatory: workers hold old code until restarted.
+Owner steps, once:
+
+1. Set five repository secrets on `sakhilebhayi/Dot.Central`: `DEPLOY_HOST` (`central.infodot.co.za`), `DEPLOY_USER` (the hosting account user), `DEPLOY_PATH`, `DEPLOY_SSH_KEY` (a dedicated deploy key whose public half is in the account's `authorized_keys`), `DEPLOY_KNOWN_HOSTS` (`ssh-keyscan -H central.infodot.co.za`). The Dot.Mines key and user may be reused.
+2. Run `gh workflow run bootstrap.yml -f confirm=bootstrap`. It builds the assets on the runner, clones and installs, writes `.env` only if none exists (no secrets in it; `APP_KEY` is generated on the server), creates the database, migrates, caches, wires the docroot (the placeholder page is kept as `index.coming-soon.bak`), installs three cron lines (`schedule:run` every minute, `queue:work --stop-when-empty --tries=3 --max-time=50` every minute, a nightly `sqlite3 .backup` into `storage/backups` keeping 14 copies), ships `public/build`, then checks `GET /up` is 200 and `/central/database/database.sqlite` is refused.
+3. Register the first administrator through the registration page, create the control room, paste a Dot.Mines token on the connection page, and register the webhook endpoint in Dot.Mines (`https://central.infodot.co.za/webhooks/mines/<connection id>`).
+4. Open Health: both heartbeats green, the connection verified, fleet mirrored.
+
+Issue I-32 closes on the first green bootstrap run, not before.
+
+## 3. Upgrades (`.github/workflows/deploy.yml`)
+
+Every merge to `main` deploys itself: `deploy.yml` runs when the `CI` workflow finishes with success on `main` (`workflow_run`), so a red CI run never reaches the server. It can also be run by hand with `gh workflow run deploy.yml -f confirm=deploy`. Steps: build assets on the runner, `artisan down`, `git reset --hard origin/main`, `composer install --no-dev`, `migrate --force`, caches, rsync `public/build`, refresh the docroot symlinks, `queue:restart`, `artisan up`, then `GET /up` must be 200. Two deploys never run at once (concurrency group `central-production-deploy`). `server-logs.yml` tails the newest log read-only when a run fails.
+
+Guarded by `DeploymentWorkflowsTest`: triggers, the quality gate, and that no secret is ever passed as an SSH command-line argument.
 
 ## 4. Backups and retention
 
