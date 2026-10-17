@@ -22,7 +22,7 @@ Dot.Central is the control-room operating system for a mining operation. It read
 | Layer | Technology |
 |---|---|
 | Framework | Laravel 13, PHP 8.3+ |
-| UI | Livewire 3, Alpine.js, Tailwind CSS via Vite |
+| UI | Livewire 3, Alpine.js, Tailwind CSS 4 via Vite |
 | Database | PostgreSQL in production, SQLite in tests |
 | Auth | Jetstream teams, Sanctum, ecosystem sign-in from the InfoDot hub |
 | Dot.Mines | `/api/v1` bearer token per control room, scheduled sync, signed webhooks |
@@ -43,6 +43,17 @@ php artisan serve
 ```
 
 Locally, `db:seed` creates a pilot control room with example users; see `database/seeders/LocalPilotSeeder.php`. Connecting a room to Dot.Mines needs a token minted on the Dot.Mines side (`integration:mint-token`) and is entered on the room's connection page, never in source or configuration files.
+
+## Tailwind CSS 4
+
+Tailwind is v4, built by `@tailwindcss/vite` (`vite.config.js`). There is no `tailwind.config.js`, `postcss.config.js` or autoprefixer: everything that used to be config lives in `resources/css/app.css`.
+
+- `@import 'tailwindcss' source(none)` plus four `@source` lines (the old `content` globs, nothing wider: automatic detection would scan `app/`, `docs/` and `tests/`), `@plugin` for forms and typography, and `@custom-variant dark (&:where(.dark, .dark *))` so night stays the `dark` class on `<html>`.
+- **The cascade is the v3 one on purpose.** The shell's `@layer base` block (tokens, `:root.dark`) comes after Tailwind's preflight, utilities sit above it, and the shell's plain classes stay unlayered, so they sit above every layer exactly as they sat after `@tailwind utilities` in v3. Do not wrap the plain classes in a layer.
+- **Every v4 default that moved a pixel is put back**, each with a comment in `app.css`: border colour (gray-200, not `currentColor`), pointer cursor on buttons, placeholder colour, `hover:` on touch screens, `ring` (3px blue-500/50), the `shadow`/`rounded`/`blur` scale renames, the transparent `outline-none`, the v3 `transition` property lists, the browser's own padding on `th`/`td`/`option`/the file button, `ltr:`/`rtl:` needing an explicit `dir`, the v3 `font-sans`/`font-display`/`font-mono` stacks (declared `@theme inline`, because the shell defines its own `--font-*` variables), the v3 palette hex values (`tailwind-v3-palette.css`; v4 moved to oklch) and the v3 colours of `prose`. The migration's rule is NO visual change: fix a difference in `app.css`, never by redesigning.
+- Things v4 does differently that a view can trip over, not compensated: `space-x-*`/`space-y-*` and `divide-*` put the margin or border on every child but the LAST instead of every child but the first (a hidden last child leaves a trailing gap); `bg-opacity-*`, `ring-opacity-*` and friends no longer exist (use `bg-black/5`); `flex-shrink-*`/`flex-grow-*` are `shrink-*`/`grow-*`; the important marker goes last (`grid!`); `scale-*`, `translate-*` and `rotate-*` set their own properties, not `transform`.
+- `@tailwindcss/typography` still pins a flagged `postcss-selector-parser`; `package.json` `overrides` pins it to ^7.1.6 so `npm audit --audit-level=moderate` is clean. Leave it until the plugin itself moves.
+- Browser floor: Chrome 111, Safari 16.4, Firefox 128 (cascade layers, `@property`, `color-mix`).
 
 ## Checks
 
