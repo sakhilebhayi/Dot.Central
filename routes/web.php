@@ -12,6 +12,7 @@ use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DispatchDecisionController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\ExceptionController;
+use App\Http\Controllers\GuardianHealthController;
 use App\Http\Controllers\IntegrationHealthController;
 use App\Http\Controllers\MemoryConnectionController;
 use App\Http\Controllers\MinesConnectionController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\SchedulerProbeController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
+use App\Http\Middleware\AuthenticateGuardian;
 use App\Livewire\FleetBoard;
 use App\Livewire\Lineup;
 use App\Livewire\Overview;
@@ -39,6 +41,13 @@ Route::get('/auth/ecosystem', [EcosystemAuthController::class, 'handle'])->name(
 
 // Signed deliveries from Dot.Mines (no session; verified by HMAC, see MinesWebhookController).
 Route::post('/webhooks/mines/{connection}', MinesWebhookController::class)->whereNumber('connection')->name('webhooks.mines');
+// Guardian observability report for Dot.Brain (dot-guardian/v1): operational
+// internals, so bearer-authenticated with a dedicated token (503 when none is
+// configured) rather than public like /up and /up/scheduler.
+Route::get('/guardian/health', GuardianHealthController::class)
+    ->middleware(AuthenticateGuardian::class)
+    ->name('guardian.health');
+
 Route::get('/', function () {
     return view('welcome');
 });
