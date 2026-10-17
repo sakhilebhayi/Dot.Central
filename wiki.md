@@ -83,7 +83,7 @@ Explicitly still out of scope (see §7): emitting any of this to an ecosystem ev
 
 Roles and policies (added 2026-10-15): the Jetstream team roles are now `operator`, `supervisor`, `manager`, `administrator` (`App\Support\Role`; legacy `admin`/`editor` memberships migrated). `ControlRoomPolicy` (`view`, `create`, `update`, `delete`, `manage`, `operate`, `supervise`) and the child policies (`AlertPolicy`, `DispatchDecisionPolicy`, `OperatorSessionPolicy`, `StaleSessionProposalPolicy`, `AuditEntryPolicy`) are enforced in every controller through `authorize()`; the role matrix is in `docs/dot-central/07-security-and-permissions.md` and `tests/Feature/RolePermissionsTest.php`. Team owners are administrators.
 
-**Shell (2026-10-15):** the authenticated layout is built by Vite (`resources/css/app.css` holds the tokens and shell styles; Tailwind v3 with preflight). The Tailwind Play CDN, the unpkg Alpine (Livewire 3 bundles Alpine) and the stock Jetstream `navigation-menu` were removed; the unused `@tailwindcss/vite` v4 package was dropped from `package.json`. Local dev server: `.claude/launch.json` entry `central` on port 8018.
+**Shell (2026-10-15):** the authenticated layout is built by Vite (`resources/css/app.css` holds the tokens and shell styles; Tailwind v3 with preflight at the time; Tailwind v4 since 2026-10-17, see the Tailwind CSS 4 section of README.md). The Tailwind Play CDN, the unpkg Alpine (Livewire 3 bundles Alpine) and the stock Jetstream `navigation-menu` were removed; the unused `@tailwindcss/vite` v4 package was dropped from `package.json` (it is the build plugin again since the v4 migration). Local dev server: `.claude/launch.json` entry `central` on port 8018.
 
 ## 4. What's Not Built Yet
 
