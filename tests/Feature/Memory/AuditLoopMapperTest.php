@@ -8,6 +8,7 @@ use App\Models\DowntimeClassification;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
 use App\Models\LineupFace;
 use App\Models\LineupStandby;
 use App\Models\MemoryConnection;
@@ -23,6 +24,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\AlertWorkflow;
 use App\Services\Audits;
+use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Services\Rules\ExceptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -236,5 +238,22 @@ class AuditLoopMapperTest extends TestCase
         app(AlertWorkflow::class)->escalate(Alert::factory()->for($this->room)->create(['source' => 'dot_mines', 'external_id' => '9']), $this->operator, 'x');
 
         $this->assertSame(0, MemoryOutboxRow::count());
+    }
+
+    public function test_a_line_up_time_correction_is_an_action_on_the_machine(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+        MemoryOutboxRow::query()->delete();
+
+        $service->correctTime($stint, LineupCorrection::ARRIVAL, '10:00', 'The move was clicked late', $this->operator);
+
+        $action = $this->payload('action');
+        $this->assertSame(['lineup.correct_time', 'dot-central', 'succeeded', 'dot-central:lineup:time-corrected'], [$action['action_kind'], $action['executor_platform'], $action['execution_status'], $action['signature']]);
+        $this->assertSame(['equipment', '701', 'dot-central:shift:'.$this->shift->id], [$action['subject_type'], $action['subject_id'], $action['loop_id']]);
+        $this->assertSame([LineupCorrection::ARRIVAL, 30], [$action['detail']['edge'], $action['detail']['minutes']]);
+        $this->assertStringContainsString('corrected from 10:30 to 10:00: The move was clicked late', (string) $action['detail']['reason']);
+        $this->assertSame(1, MemoryOutboxRow::where('stage', 'action')->count());
     }
 }

@@ -7,6 +7,7 @@ use App\Models\AuditEntry;
 use App\Models\DowntimeClassification;
 use App\Models\DowntimeReason;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
 use App\Models\LineupFace;
 use App\Models\LineupStandby;
 use App\Models\OperationalException;
@@ -38,6 +39,7 @@ final class AuditLoopMapper
             $subject instanceof Alert => $this->alert($entry, $subject),
             $subject instanceof DowntimeClassification => $this->downtime($entry, $subject),
             $subject instanceof ShiftLineup => $this->lineup($entry, $subject),
+            $subject instanceof LineupCorrection => $this->correction($entry, $subject),
             $subject instanceof ShiftOperatorAssignment => $this->assignment($entry, $subject),
             $subject instanceof Shift => $this->shift($entry, $subject),
             default => [],
@@ -200,6 +202,21 @@ final class AuditLoopMapper
             ['stage' => 'decision', 'payload' => $base('decision:v'.$version) + ['recommendation' => 'line-up v'.$version, 'confidence' => 1.0, 'risk' => 0.3, 'autonomy_level' => 'execute', 'requires_approval' => false]],
             ['stage' => 'action', 'payload' => $base('action:v'.$version) + ['action_kind' => 'lineup.confirm', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded']],
         ];
+    }
+
+    /** @return list<array{stage:string,payload:array<string,mixed>}> */
+    private function correction(AuditEntry $entry, LineupCorrection $c): array
+    {
+        if ($entry->action !== 'override') {
+            return [];
+        }
+
+        $payload = $this->withDetail($this->base($entry, $c, 'shift:'.$c->shift_id, 'dot-central:lineup:time-corrected', 'correction:'.$c->id), [
+            'edge' => $c->edge, 'old_at' => $c->old_at->toIso8601String(), 'new_at' => $c->new_at->toIso8601String(),
+            'minutes' => (int) $c->old_at->diffInMinutes($c->new_at, true), 'allocation_id' => $c->lineup_allocation_id, 'partner_allocation_id' => $c->partner_allocation_id,
+        ]);
+
+        return [['stage' => 'action', 'payload' => $payload + ['action_kind' => 'lineup.correct_time', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded']]];
     }
 
     /**

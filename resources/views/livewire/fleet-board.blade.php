@@ -51,7 +51,7 @@
                         <div style="font-size:var(--t-xs);color:var(--text-faint);margin-top:0.3rem;">{{ RoleClass::label($row['role_class']) }} · heard {{ Format::age($e->last_heard_at) }}</div>
                         @if($row['lineup'])
                             <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">
-                                {{ $row['available'] ? 'Available' : 'Not available' }} · {{ match($row['lineup']) { 'PLACED' => $row['face'], 'STANDBY' => 'standby: '.$row['standby'], 'DOWN' => 'down', default => 'free — not on the line-up' } }}
+                                {{ $row['available'] ? 'Available' : 'Not available' }} · {{ match($row['lineup']) { 'PLACED' => $row['face'].($row['since'] ? ' · since '.$row['since']->copy()->setTimezone($timezone)->format('H:i') : ''), 'STANDBY' => 'standby: '.$row['standby'], 'DOWN' => 'down', default => 'free — not on the line-up' } }}
                                 @if($row['operator']) · {{ $row['operator']->name() }}@endif
                             </div>
                         @endif

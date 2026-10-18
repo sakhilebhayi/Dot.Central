@@ -84,6 +84,7 @@ class FleetBoard extends Component
                     'role_class' => $unit->role_class,
                     'lineup' => $lineupState,
                     'face' => $p !== null && $p['placement'] !== null ? $p['placement']->face?->label() : null,
+                    'since' => $p !== null && $p['placement'] !== null ? $p['placement']->from_at : null,
                     'operator' => $p['operator'] ?? null,
                     'standby' => $p !== null && $p['standby'] !== null ? $p['standby']->reason?->name : null,
                     'available' => $down === null,
