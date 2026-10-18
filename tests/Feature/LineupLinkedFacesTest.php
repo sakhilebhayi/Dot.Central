@@ -20,8 +20,11 @@ use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Services\Shifts\ShiftService;
 use App\Support\RoleClass;
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -395,5 +398,32 @@ class LineupLinkedFacesTest extends TestCase
         $this->assertStringContainsString('LU-05 Overlaps another entry: EX-02 was on Face 2 — Loading area 1 — Parting · C1 / B2 08:30–now, and the standby next to this move would cover it.', $message);
         $this->assertSame('08:00', LineupStandby::withoutGlobalScopes()->where('equipment_id', $other->id)->firstOrFail()->to_at->format('H:i'));
         $this->assertSame(['1@08:00-open', '2@08:30-open'], $this->history($other));
+    }
+
+    public function test_a_placement_and_an_edit_lock_the_machine_then_the_face_before_reading(): void
+    {
+        $transactions = [];
+        Event::listen(TransactionBeginning::class, function () use (&$transactions): void {
+            $transactions[] = [];
+        });
+        DB::listen(function ($query) use (&$transactions): void {
+            if ($transactions !== []) {
+                $transactions[array_key_last($transactions)][] = $query->sql;
+            }
+        });
+        $empty = $this->third();
+        $transactions = [];
+
+        $this->service->place($this->shift, $empty, $this->truck1, $this->user, '09:00');
+        $this->service->editFace($empty->fresh(), ['kind' => 'LOADING', 'material' => 'Coal', 'cut' => 'C2', 'blocks' => ['B5'], 'notes' => 'wet'], $this->user);
+        $this->service->editFace($this->seam->fresh(), ['kind' => 'LOADING', 'material' => 'Seam', 'cut' => 'C1', 'blocks' => ['B1', 'B2'], 'notes' => 'dry'], $this->user);
+
+        $this->assertCount(3, $transactions, 'one transaction each');
+        [$placement, $editOfEmptyFace, $editOfLoadedFace] = $transactions;
+        $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $placement[0], 'the machine first');
+        $this->assertStringStartsWith('update "lineup_faces" set "updated_at"', $placement[2], 'then the face (the equipment row is read between)');
+        $this->assertStringStartsWith('update "lineup_faces" set "updated_at"', $editOfEmptyFace[0], 'nothing to lock but the face: its write is the first statement');
+        $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $editOfLoadedFace[0], 'the loading unit first');
+        $this->assertStringStartsWith('update "lineup_faces" set "updated_at"', $editOfLoadedFace[2]);
     }
 }
