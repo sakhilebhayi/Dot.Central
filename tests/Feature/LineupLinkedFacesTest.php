@@ -4,10 +4,14 @@ namespace Tests\Feature;
 
 use App\Livewire\FleetBoard;
 use App\Livewire\Lineup;
+use App\Models\AuditEntry;
 use App\Models\ControlRoom;
+use App\Models\DowntimeReason;
 use App\Models\Equipment;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
 use App\Models\LineupFace;
+use App\Models\LineupStandby;
 use App\Models\MinesConnection;
 use App\Models\Shift;
 use App\Models\ShiftType;
@@ -20,6 +24,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /** I-29 linked faces: one loading unit on two faces at the same cut and block (15-lineup-corrections-design.md §4). */
@@ -193,5 +198,165 @@ class LineupLinkedFacesTest extends TestCase
         $this->assertSame(['Face 1'], $faces[1]['linked_with']);
         $this->actingAs($this->user)->get(route('control-rooms.shifts.start', $this->room))->assertOk()
             ->assertSee('Previous faces (2)')->assertSee('Seam · C1 / B1 B2 · same loading unit as Face 2');
+    }
+    // ---- a loader on linked faces moves as one (slice 2, gap A) -----------------------------------------------
+
+    private function third(string $name = 'Loading area 3', string $cut = 'C2'): LineupFace
+    {
+        return $this->service->addFace($this->shift, ['location' => 'default:'.$name, 'kind' => 'LOADING', 'material' => 'Coal', 'cut' => $cut, 'blocks' => ['B5']], $this->user, '07:00');
+    }
+
+    /** @return list<string> "<face seq>@<from>-<to>" in time order */
+    private function history(Equipment $unit): array
+    {
+        return LineupAllocation::withoutGlobalScopes()->with('face')->where('equipment_id', $unit->id)->orderBy('from_at')->orderBy('lineup_face_id')->get()
+            ->map(fn (LineupAllocation $a) => $a->face->seq.'@'.$a->from_at->format('H:i').'-'.($a->to_at?->format('H:i') ?? 'open'))->all();
+    }
+
+    private function stint(LineupFace $face, ?Equipment $unit = null): LineupAllocation
+    {
+        return LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('equipment_id', ($unit ?? $this->loader)->id)->orderByDesc('id')->firstOrFail();
+    }
+
+    private function movedToThird(): LineupFace
+    {
+        $third = $this->third();
+        $this->service->place($this->shift, $third, $this->loader, $this->user, '10:30', true);
+
+        return $third;
+    }
+
+    public function test_a_loader_on_two_linked_faces_moves_to_a_third_face_as_one_move(): void
+    {
+        $this->movedToThird();
+
+        $this->assertSame(['1@07:00-10:30', '2@07:00-10:30', '3@10:30-open'], $this->history($this->loader));
+    }
+
+    public function test_correcting_the_arrival_on_the_new_face_moves_both_departures_with_it(): void
+    {
+        $third = $this->movedToThird();
+
+        $correction = $this->service->correctTime($this->stint($third), LineupCorrection::ARRIVAL, '10:00', 'The move was clicked late', $this->user);
+
+        $this->assertSame(['1@07:00-10:00', '2@07:00-10:00', '3@10:00-open'], $this->history($this->loader));
+        $this->assertSame(1, LineupCorrection::withoutGlobalScopes()->count());
+        $this->assertSame([$this->stint($this->seam)->id, $this->stint($this->parting)->id], $correction->movedWithIds());
+        $this->assertSame('EX-01 on Face 3 — Loading area 3 — Coal · C2 / B5 at 10:00 (was 10:30); off Face 1 — Loading area 1 — Seam · C1 / B1 B2 and Face 2 — Loading area 1 — Parting · C1 / B2 at the same time.', $this->service->describeCorrection($correction));
+        $audit = AuditEntry::where('entity_type', LineupCorrection::class)->where('entity_id', $correction->id)->firstOrFail();
+        $this->assertSame('override', $audit->action);
+        $this->assertSame(['partner_to_at', 'also_to_at_'.$this->stint($this->parting)->id], array_values(array_filter(array_keys($audit->changes), fn ($k) => str_starts_with($k, 'partner_') || str_starts_with($k, 'also_'))));
+    }
+
+    public function test_correcting_either_departure_moves_the_other_departure_and_the_arrival_too(): void
+    {
+        $third = $this->movedToThird();
+        $this->service->correctTime($this->stint($this->parting), LineupCorrection::DEPARTURE, '10:45', 'Left later than clicked', $this->user);
+        $this->assertSame(['1@07:00-10:45', '2@07:00-10:45', '3@10:45-open'], $this->history($this->loader), 'later: the third face is reached later');
+
+        $this->service->correctTime($this->stint($this->seam), LineupCorrection::DEPARTURE, '09:15', 'Earlier after all', $this->user);
+        $this->assertSame(['1@07:00-09:15', '2@07:00-09:15', '3@09:15-open'], $this->history($this->loader));
+        $this->assertSame(2, LineupCorrection::withoutGlobalScopes()->count());
+        $this->assertSame($third->id, $this->stint($third)->lineup_face_id);
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function routes(): array
+    {
+        return ['the arrival on the new face' => [LineupCorrection::ARRIVAL, 'third'], 'the departure from the seam' => [LineupCorrection::DEPARTURE, 'seam'], 'the departure from the parting' => [LineupCorrection::DEPARTURE, 'parting']];
+    }
+
+    #[DataProvider('routes')]
+    public function test_the_reviewers_late_move_of_a_shared_loader_can_be_corrected_by_every_route(string $edge, string $which): void
+    {
+        $third = $this->movedToThird();
+        $row = match ($which) {
+            'third' => $this->stint($third), 'seam' => $this->stint($this->seam), default => $this->stint($this->parting),
+        };
+
+        $this->service->correctTime($row, $edge, '10:00', 'late', $this->user);
+
+        $this->assertSame(['1@07:00-10:00', '2@07:00-10:00', '3@10:00-open'], $this->history($this->loader));
+    }
+
+    public function test_two_separate_removals_at_one_minute_are_not_one_move_unless_something_arrived_then(): void
+    {
+        $this->service->release($this->stint($this->seam), 'Finished', $this->user, '10:30');
+        $this->service->release($this->stint($this->parting), 'Finished', $this->user, '10:30');
+
+        $this->service->correctTime($this->stint($this->seam), LineupCorrection::DEPARTURE, '10:00', 'Clicked late', $this->user);
+
+        $this->assertSame(['1@07:00-10:00', '2@07:00-10:30'], $this->history($this->loader), 'nothing arrived at 10:30, so only the corrected stint moves');
+        $this->assertNull(LineupCorrection::withoutGlobalScopes()->firstOrFail()->partner_allocation_id);
+    }
+
+    public function test_moving_onto_two_linked_faces_corrects_as_one_move_too(): void
+    {
+        $third = $this->third();
+        $other = Equipment::factory()->for($this->room)->create(['name' => 'EX-02', 'role_class' => RoleClass::LOADER, 'mines_status' => 'active', 'last_heard_at' => now()]);
+        $this->service->place($this->shift, $third, $other, $this->user, '07:00');
+        $this->service->place($this->shift, $this->seam, $other, $this->user, '10:30', true);
+        $this->service->place($this->shift, $this->parting, $other, $this->user, '10:30', true);
+        $this->assertSame(['3@07:00-10:30', '1@10:30-open', '2@10:30-open'], $this->history($other));
+
+        $this->service->correctTime($this->stint($this->seam, $other), LineupCorrection::ARRIVAL, '10:00', 'Clicked late', $this->user);
+
+        $this->assertSame(['3@07:00-10:00', '1@10:00-open', '2@10:00-open'], $this->history($other));
+    }
+
+    public function test_a_standby_that_follows_two_linked_stints_follows_their_correction(): void
+    {
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $this->service->setStandby($this->shift, $this->loader, $reason, $this->user, '10:30');
+        $this->assertSame(['1@07:00-10:30', '2@07:00-10:30'], $this->history($this->loader));
+
+        $this->service->correctTime($this->stint($this->seam), LineupCorrection::DEPARTURE, '10:00', 'Clicked late', $this->user);
+
+        $this->assertSame(['1@07:00-10:00', '2@07:00-10:00'], $this->history($this->loader));
+        $this->assertSame('10:00', LineupStandby::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->firstOrFail()->from_at->format('H:i'));
+    }
+
+    public function test_the_refusals_for_a_move_of_linked_stints_stay_for_genuine_conflicts(): void
+    {
+        $third = $this->movedToThird();
+
+        $this->assertStringContainsString('LU-05 Times out of order: EX-01 only arrived on Face 1 — Loading area 1 — Seam · C1 / B1 B2 at 07:00. Correct that time first, or pick a time after it.', $this->refusal(fn () => $this->service->correctTime($this->stint($third), LineupCorrection::ARRIVAL, '07:00', 'x', $this->user)));
+        $this->assertStringContainsString('Nothing to change', $this->refusal(fn () => $this->service->correctTime($this->stint($third), LineupCorrection::ARRIVAL, '10:30', 'x', $this->user)));
+        $this->assertSame(['1@07:00-10:30', '2@07:00-10:30', '3@10:30-open'], $this->history($this->loader), 'a refusal changes nothing');
+        $this->assertSame(0, LineupCorrection::withoutGlobalScopes()->count());
+
+        $fourth = $this->third('Loading area 4', 'C3');
+        $this->service->release($this->stint($third), 'Finished', $this->user, '11:00');
+        $this->service->place($this->shift, $fourth, $this->loader, $this->user, '11:30');
+        $this->assertStringContainsString('LU-05 Overlaps another entry: EX-01 was on Face 3 — Loading area 3 — Coal · C2 / B5 10:30–11:00', $this->refusal(fn () => $this->service->correctTime($this->stint($fourth), LineupCorrection::ARRIVAL, '10:45', 'x', $this->user)));
+    }
+
+    public function test_a_late_move_to_a_fourth_face_cannot_pass_the_arrival_it_follows(): void
+    {
+        $third = $this->movedToThird();
+        $fourth = $this->third('Loading area 4', 'C3');
+        $this->service->place($this->shift, $fourth, $this->loader, $this->user, '10:45', true);
+
+        $this->assertStringContainsString('LU-05 Times out of order: EX-01 only arrived on Face 3 — Loading area 3 — Coal · C2 / B5 at 10:30. Correct that time first, or pick a time after it.', $this->refusal(fn () => $this->service->correctTime($this->stint($fourth), LineupCorrection::ARRIVAL, '10:15', 'x', $this->user)));
+        $this->service->correctTime($this->stint($third), LineupCorrection::ARRIVAL, '10:00', 'x', $this->user);
+        $this->service->correctTime($this->stint($fourth), LineupCorrection::ARRIVAL, '10:15', 'x', $this->user);
+
+        $this->assertSame(['1@07:00-10:00', '2@07:00-10:00', '3@10:00-10:15', '4@10:15-open'], $this->history($this->loader));
+    }
+
+    public function test_the_page_corrects_a_linked_move_and_the_report_notes_every_stint_that_moved_with_it(): void
+    {
+        $third = $this->movedToThird();
+        $this->actingAs($this->user);
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('startCorrection', $this->stint($third)->id, 'ARRIVAL')
+            ->set('correction.time', '10:00')->set('correction.reason', 'The move was clicked late')
+            ->call('saveCorrection')
+            ->assertSee('EX-01 on Face 3 — Loading area 3 — Coal · C2 / B5 at 10:00 (was 10:30); off Face 1 — Loading area 1 — Seam · C1 / B1 B2 and Face 2 — Loading area 1 — Parting · C1 / B2 at the same time.');
+
+        $report = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->getContent();
+        $this->assertSame(2, substr_count($report, 'moved with a correction (The move was clicked late)'), 'both departures say they moved with the arrival');
+        $this->assertSame(1, substr_count($report, 'arrival corrected from 10:30'));
     }
 }

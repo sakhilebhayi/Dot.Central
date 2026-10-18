@@ -22,7 +22,7 @@ class LineupCorrectionsSchemaTest extends TestCase
 
     public function test_corrections_table_and_face_split_column_exist(): void
     {
-        foreach (['control_room_id', 'shift_id', 'lineup_allocation_id', 'partner_allocation_id', 'equipment_id', 'edge', 'old_at', 'new_at', 'reason', 'corrected_by'] as $column) {
+        foreach (['control_room_id', 'shift_id', 'lineup_allocation_id', 'partner_allocation_id', 'also_allocation_ids', 'equipment_id', 'edge', 'old_at', 'new_at', 'reason', 'corrected_by'] as $column) {
             $this->assertTrue(Schema::hasColumn('lineup_corrections', $column), $column);
         }
         $this->assertTrue(Schema::hasColumn('lineup_faces', 'split_from_face_id'));

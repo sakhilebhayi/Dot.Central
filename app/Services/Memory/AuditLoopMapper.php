@@ -213,7 +213,7 @@ final class AuditLoopMapper
 
         $payload = $this->withDetail($this->base($entry, $c, 'shift:'.$c->shift_id, 'dot-central:lineup:time-corrected', 'correction:'.$c->id), [
             'edge' => $c->edge, 'old_at' => $c->old_at->toIso8601String(), 'new_at' => $c->new_at->toIso8601String(),
-            'minutes' => (int) $c->old_at->diffInMinutes($c->new_at, true), 'allocation_id' => $c->lineup_allocation_id, 'partner_allocation_id' => $c->partner_allocation_id,
+            'minutes' => (int) $c->old_at->diffInMinutes($c->new_at, true), 'allocation_id' => $c->lineup_allocation_id, 'partner_allocation_id' => $c->partner_allocation_id, 'also_allocation_ids' => $c->also_allocation_ids ?? [],
         ]);
 
         return [['stage' => 'action', 'payload' => $payload + ['action_kind' => 'lineup.correct_time', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded']]];

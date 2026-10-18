@@ -139,7 +139,7 @@ class ReportController extends Controller
         $corrections = LineupCorrection::withoutGlobalScopes()->where('shift_id', $shift->id)->orderBy('id')->get();
         $noteFor = function (LineupAllocation $a) use ($corrections, $tz): ?string {
             $own = $corrections->where('lineup_allocation_id', $a->id)->map(fn (LineupCorrection $c) => ($c->edge === LineupCorrection::ARRIVAL ? 'arrival' : 'departure').' corrected from '.$c->old_at->copy()->setTimezone($tz)->format('H:i').' ('.$tz.'): '.$c->reason);
-            $moved = $corrections->where('partner_allocation_id', $a->id)->map(fn (LineupCorrection $c) => 'moved with a correction ('.$c->reason.')');
+            $moved = $corrections->filter(fn (LineupCorrection $c) => in_array($a->id, $c->movedWithIds(), true))->map(fn (LineupCorrection $c) => 'moved with a correction ('.$c->reason.')');
             $notes = collect([$a->ended_reason])->merge($own)->merge($moved)->filter();
 
             return $notes->isEmpty() ? null : $notes->implode('; ');
