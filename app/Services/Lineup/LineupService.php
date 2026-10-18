@@ -937,13 +937,24 @@ final class LineupService
     // ---- helpers ---------------------------------------------------------------------------------------------
 
     /**
-     * A write to the machine's stints in this shift, made before anything is
-     * read: it serialises concurrent changes to the same machine on both
-     * databases (lockForUpdate compiles to nothing on SQLite).
+     * Serialises concurrent changes to one machine in a shift, on both
+     * databases, before anything is read:
+     *
+     * 1. an UPDATE of the machine's stints: on SQLite it takes the single
+     *    write lock (lockForUpdate compiles to nothing there); on Postgres it
+     *    row-locks the stints that exist;
+     * 2. a locking read of the machine's own row, for Postgres: a machine
+     *    with no stint yet (a first placement) has nothing to lock in (1). On
+     *    SQLite it is a plain read inside the write lock.
+     *
+     * Constraint: the lock relies on its UPDATE being the first statement of
+     * the transaction. A caller that reads first must set the SQLite
+     * transaction_mode to IMMEDIATE or lock explicitly before it reads.
      */
     private function lockMachine(Shift $shift, int $equipmentId): void
     {
         LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $equipmentId)->toBase()->update(['updated_at' => now()]);
+        Equipment::withoutGlobalScopes()->whereKey($equipmentId)->lockForUpdate()->value('id');
     }
 
     /**

@@ -470,4 +470,20 @@ class LineupServiceTest extends TestCase
         $this->service->closeFace($face->fresh(), 'Done', $this->user, '11:30');
         $this->assertTrue($face->fresh()->isClosed());
     }
+
+    public function test_the_first_statement_of_a_placement_is_the_machines_write_lock_and_a_machine_with_no_stint_is_locked_through_its_own_row(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $statements = [];
+        DB::listen(function ($query) use (&$statements): void {
+            $statements[] = strtolower($query->sql);
+        });
+
+        $this->service->place($this->shift, $face, $this->truck2, $this->user, '10:00');
+
+        $inTransaction = array_values(array_filter($statements, fn (string $sql) => str_contains($sql, 'lineup_allocations') || str_contains($sql, 'from "equipment"')));
+        $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $inTransaction[0], 'a write comes first: it takes the SQLite write lock');
+        $this->assertStringContainsString('from "equipment"', $inTransaction[1], 'then the machine row itself, so Postgres serialises a first placement that has no stint to lock');
+        $this->assertStringContainsString('select', $inTransaction[2]);
+    }
 }
