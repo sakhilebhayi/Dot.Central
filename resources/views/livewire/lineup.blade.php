@@ -28,10 +28,10 @@
             @if(($fix['move'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="place({{ $fix['move'] }}, true, {{ $fix['face'] }})">Move here</button></div>
             @elseif(($fix['face_move'] ?? false) === true)
-                <div style="margin-top:0.5rem;"><button type="button" id="face-move" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="saveFace(true)" aria-label="{{ $fix['label'] ?? 'Move the loading unit here' }}">Move the loading unit here</button></div>
+                <div style="margin-top:0.5rem;"><button type="button" id="face-move" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="saveFace(true, {{ ($fix['material_correction'] ?? false) ? 'true' : 'false' }})" aria-label="{{ $fix['label'] ?? 'Move the loading unit here' }}">Move the loading unit here</button></div>
             @elseif(($fix['material_at'] ?? null) !== null)
                 <div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
-                    <button type="button" id="material-correct" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="saveFace(false, true)">The material was wrong — correct it</button>
+                    <button type="button" id="material-correct" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="saveFace({{ ($fix['edit_move'] ?? false) ? 'true' : 'false' }}, true)">The material was wrong — correct it</button>
                     <button type="button" id="material-split" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="splitFromForm">It changed at {{ $fix['material_at'] }} — new face from then</button>
                 </div>
             @elseif(($fix['operator'] ?? null) !== null)

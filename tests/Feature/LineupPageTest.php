@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\FleetBoard;
 use App\Livewire\Lineup;
 use App\Models\Alert;
+use App\Models\AuditEntry;
 use App\Models\ControlRoom;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
@@ -393,6 +394,57 @@ class LineupPageTest extends TestCase
         $page->assertSee('The material is 65 characters; keep it to 64 or fewer.');
         $this->assertSame(['ACTIVE', 'Overburden'], [$face->fresh()->status, $face->fresh()->material]);
         $this->assertSame(1, LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->count());
+    }
+
+    public function test_changing_the_material_and_the_cut_of_a_linked_face_is_resolved_by_one_click_on_each_button(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $first = $this->workingFace();
+        $second = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Parting', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $second->id)->set('faceForm.material', 'Waste')->set('faceForm.cut', 'C9')->set('faceForm.blocks', 'B7')->call('saveFace')
+            ->assertSee('LU-14')->assertSeeHtml('wire:click="saveFace(false, true)"')
+            ->call('saveFace', false, true)
+            ->assertSee('LU-01 EX-01 also loads')->assertDontSee('LU-14')
+            ->assertSeeHtml('wire:click="saveFace(true, true)"')->assertDispatched('lineup-focus', id: 'face-move');
+        $page->call('saveFace', true, true)->assertSee('Saved Face 2')->assertDontSee('LU-14')->assertDontSee('LU-01');
+
+        $this->assertSame(['Waste', 'C9'], [$second->fresh()->material, $second->fresh()->cut]);
+        $this->assertSame([$second->id], LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->whereNull('to_at')->pluck('lineup_face_id')->all(), 'the loading unit moved to the edited face');
+        $this->assertSame(1, AuditEntry::where('entity_type', LineupFace::class)->where('entity_id', $second->id)->where('action', 'override')->count());
+        $this->assertSame('Overburden', $first->fresh()->material);
+    }
+
+    public function test_a_move_chosen_first_keeps_the_material_decision_for_the_next_click(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $this->workingFace();
+        $second = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Parting', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+
+        // a face form that was already refused for the link, then the material changed too
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $second->id)->set('faceForm.cut', 'C9')->set('faceForm.blocks', 'B7')->call('saveFace')
+            ->assertSeeHtml('wire:click="saveFace(true, false)"')
+            ->set('faceForm.material', 'Waste')->call('saveFace', true, false)
+            ->assertSee('LU-14')->assertSeeHtml('wire:click="saveFace(true, true)"')
+            ->call('saveFace', true, true)->assertSee('Saved Face 2');
+        $this->assertSame(['Waste', 'C9'], [$second->fresh()->material, $second->fresh()->cut]);
+    }
+
+    public function test_the_split_button_uses_the_time_it_names_and_editing_the_time_withdraws_the_question(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->set('changeAt', '11:30')
+            ->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->call('saveFace')
+            ->assertSee('It changed at 11:30 — new face from then');
+        $page->set('changeAt', '09:00')->assertDontSee('It changed at 11:30')->assertDontSee('The material was wrong')->assertDontSee('LU-14');
+        $page->call('splitFromForm');
+        $this->assertSame('2026-10-15 09:00:00', LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('seq', 2)->firstOrFail()->active_from->toDateTimeString(), 'with no question on the screen the time typed now is the time used');
     }
 
     /** @return array<string, array{0: string, 1: string}> */

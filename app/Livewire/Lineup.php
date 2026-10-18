@@ -121,9 +121,9 @@ class Lineup extends Component
                 } catch (ValidationException $e) {
                     if (str_starts_with($e->errors()['lineup'][0] ?? '', 'LU-01')) {
                         $names = $face->allocations()->with('equipment')->whereNull('to_at')->where('role', 'LOADER')->get()->map(fn (LineupAllocation $a) => $a->equipment?->name)->filter()->implode(' and ');
-                        $this->fix = ['face_move' => true, 'label' => 'Move the loading unit here: keep '.($names !== '' ? $names : 'it').' on '.$face->label().' and take it off the other face'];
+                        $this->fix = ['face_move' => true, 'material_correction' => $materialCorrection, 'label' => 'Move the loading unit here: keep '.($names !== '' ? $names : 'it').' on '.$face->label().' and take it off the other face'];
                     } elseif (str_starts_with($e->errors()['lineup'][0] ?? '', 'LU-14')) {
-                        $this->fix = ['material_at' => $service->changeAt($this->shift, $this->changeAt ?: null)->setTimezone($this->shift->controlRoom->timezone())->format('H:i')];
+                        $this->fix = ['edit_move' => $move, 'material_at' => $service->changeAt($this->shift, $this->changeAt ?: null)->setTimezone($this->shift->controlRoom->timezone())->format('H:i')];
                     }
                     throw $e;
                 }
@@ -164,7 +164,7 @@ class Lineup extends Component
                 return;
             }
             $label = $face->label();
-            $new = $service->splitFace($face, (string) $form['material'], auth()->user(), $this->changeAt ?: $named, null);
+            $new = $service->splitFace($face, (string) $form['material'], auth()->user(), $named ?? ($this->changeAt ?: null), null);
             $timezone = $this->shift->controlRoom->timezone();
             $at = $new->active_from->copy()->setTimezone($timezone)->format('H:i');
             $carried = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $new->id)->whereNull('to_at')->count();
@@ -404,6 +404,15 @@ class Lineup extends Component
             app(RuleEngine::class)->evaluate($this->shift->controlRoom, $this->shift);
             $this->notice = 'Line-up confirmed (version '.$lineup->version.'). Every later change is recorded with its time.';
         });
+    }
+
+    /** A question that names a time is withdrawn when the time is edited: asking again names the new one. */
+    public function updatedChangeAt(): void
+    {
+        if (($this->fix['material_at'] ?? null) !== null) {
+            $this->refusal = null;
+            $this->fix = [];
+        }
     }
 
     public function useNow(): void
