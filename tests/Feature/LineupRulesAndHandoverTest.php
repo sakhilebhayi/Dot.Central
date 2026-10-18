@@ -168,6 +168,33 @@ class LineupRulesAndHandoverTest extends TestCase
             ->assertSee('Line-up times corrected (1)')->assertSee('HT-01 on Face 1 — Loading area 1 — Coal at 10:00 (was 10:30).');
     }
 
+    public function test_the_handover_shows_linked_faces_and_where_a_split_face_came_from(): void
+    {
+        $service = app(LineupService::class);
+        $seam = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Parting', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $service->place($this->shift, $seam, $this->truck, $this->operator, '07:30');
+        $service->splitFace($seam, 'Dirty coal', $this->operator, '10:00');
+        $this->actingAs($this->operator);
+
+        $report = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk();
+        $report->assertSee('Face 3 — Loading area 1 — Dirty coal · C1 / B1 · same loading unit as Face 2 · carries on from Face 1 (Coal until 10:00)', false)
+            ->assertSee('Face changed material');
+
+        Carbon::setTestNow('2026-10-15 18:30:00');
+        Equipment::withoutGlobalScopes()->where('control_room_id', $this->room->id)->update(['last_heard_at' => '2026-10-15 18:25:00']);
+        $faces = collect(app(ShiftService::class)->close($this->shift, null, $this->operator)->fresh('handover')->handover->snapshot['lineup']['faces'])->keyBy('label');
+
+        $this->assertSame('Face 1 (Coal until 10:00)', $faces['Face 3 — Loading area 1 — Dirty coal · C1 / B1']['split_from']);
+        $this->assertNull($faces['Face 2 — Loading area 1 — Parting · C1 / B1']['split_from']);
+        $this->assertSame(['Face 3'], $faces['Face 2 — Loading area 1 — Parting · C1 / B1']['linked_with']);
+        $this->assertSame(['Face 2'], $faces['Face 3 — Loading area 1 — Dirty coal · C1 / B1']['linked_with']);
+        $this->assertCount(2, $faces, 'the closed face is not in the handover');
+
+        $this->get(route('control-rooms.shifts.start', $this->room))->assertOk()
+            ->assertSee('Face 3 — Loading area 1 — Dirty coal · C1 / B1 · same loading unit as Face 2 · carries on from Face 1 (Coal until 10:00)', false);
+    }
+
     public function test_the_line_up_report_shows_times_on_the_room_clock_and_names_it(): void
     {
         $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();

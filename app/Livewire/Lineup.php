@@ -106,9 +106,9 @@ class Lineup extends Component
         $this->resetFaceForm();
     }
 
-    public function saveFace(bool $move = false): void
+    public function saveFace(bool $move = false, bool $materialCorrection = false): void
     {
-        $this->run(function (LineupService $service) use ($move): void {
+        $this->run(function (LineupService $service) use ($move, $materialCorrection): void {
             $attrs = [
                 'kind' => $this->faceForm['kind'], 'location' => (string) ($this->faceForm['location'] ?? ''),
                 'material' => $this->faceForm['material'] ?: null, 'activity' => $this->faceForm['activity'] ?: null, 'cut' => $this->faceForm['cut'] ?: null,
@@ -117,11 +117,13 @@ class Lineup extends Component
             if ($this->editingFaceId !== null) {
                 $face = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail($this->editingFaceId);
                 try {
-                    $service->editFace($face, $attrs, auth()->user(), move: $move, hhmm: $this->changeAt ?: null);
+                    $service->editFace($face, $attrs, auth()->user(), move: $move, hhmm: $this->changeAt ?: null, materialCorrection: $materialCorrection);
                 } catch (ValidationException $e) {
                     if (str_starts_with($e->errors()['lineup'][0] ?? '', 'LU-01')) {
                         $names = $face->allocations()->with('equipment')->whereNull('to_at')->where('role', 'LOADER')->get()->map(fn (LineupAllocation $a) => $a->equipment?->name)->filter()->implode(' and ');
-                        $this->fix = ['face_move' => true, 'label' => 'Move the loading unit here: keep '.($names !== '' ? $names : 'it').' on '.$face->label().' and take it off the other face'];
+                        $this->fix = ['face_move' => true, 'material_correction' => $materialCorrection, 'label' => 'Move the loading unit here: keep '.($names !== '' ? $names : 'it').' on '.$face->label().' and take it off the other face'];
+                    } elseif (str_starts_with($e->errors()['lineup'][0] ?? '', 'LU-14')) {
+                        $this->fix = ['edit_move' => $move, 'material_at' => $service->changeAt($this->shift, $this->changeAt ?: null)->setTimezone($this->shift->controlRoom->timezone())->format('H:i')];
                     }
                     throw $e;
                 }
@@ -135,6 +137,47 @@ class Lineup extends Component
             }
             $this->target = $face->id;
             $this->cancelFaceForm();
+            $this->dispatch('lineup-focus', id: 'face-'.$face->id.'-edit');
+        });
+        $this->focusFix();
+    }
+
+    /**
+     * "It changed at HH:MM — new face from then": only the material may differ from the face as it is, because the new
+     * face takes over everything else. The time is the one the button named (or "Changes recorded at").
+     */
+    public function splitFromForm(): void
+    {
+        $named = is_string($this->fix['material_at'] ?? null) ? $this->fix['material_at'] : null;
+        $this->run(function (LineupService $service) use ($named): void {
+            $face = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail((int) $this->editingFaceId);
+            $form = $this->faceForm;
+            $blocks = array_values(array_unique(array_filter(preg_split('/[\s,]+/', strtoupper(trim((string) $form['blocks']))) ?: [])));
+            $location = $face->location_source !== null ? $face->location_source.':'.($face->location_ref ?? $face->location_name) : '';
+            $loaders = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->map(fn ($id) => (string) $id)->sort()->values()->all();
+            $same = ($form['kind'] ?? null) === $face->kind && strtoupper(trim((string) $form['cut'])) === (string) $face->cut && $blocks === ($face->blocks ?? [])
+                && trim((string) $form['notes']) === (string) $face->notes && (string) $form['location'] === $location
+                && collect($form['loader_ids'] ?? [])->map(fn ($id) => (string) $id)->sort()->values()->all() === $loaders;
+            if (! $same) {
+                $this->refusal = 'LU-05 Change only the material for a split. The new face takes over the location, cut, blocks, notes and machines as they are now. Undo the other changes, split, then edit the new face.';
+
+                return;
+            }
+            $label = $face->label();
+            $new = $service->splitFace($face, (string) $form['material'], auth()->user(), $named ?? ($this->changeAt ?: null), null);
+            $timezone = $this->shift->controlRoom->timezone();
+            $at = $new->active_from->copy()->setTimezone($timezone)->format('H:i');
+            $carried = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $new->id)->whereNull('to_at')->count();
+            $with = match (true) {
+                $carried === 0 => ' carries on from '.$at.' (no machine was on it)',
+                $carried === 1 => ' carries on with the same machine from '.$at,
+                default => ' carries on with the same '.$carried.' machines from '.$at,
+            };
+            $twice = $service->ambiguityNote($this->shift, $new->active_from);
+            $this->notice = $label.' closed at '.$at.'; '.$new->label().$with.'.'.($twice !== null ? ' The time used was '.$twice.'.' : '');
+            $this->target = $new->id;
+            $this->cancelFaceForm();
+            $this->dispatch('lineup-focus', id: 'face-'.$new->id.'-edit');
         });
         $this->focusFix();
     }
@@ -144,6 +187,8 @@ class Lineup extends Component
     {
         if (($this->fix['face_move'] ?? false) === true) {
             $this->dispatch('lineup-focus', id: 'face-move');
+        } elseif (($this->fix['material_at'] ?? null) !== null) {
+            $this->dispatch('lineup-focus', id: 'material-correct');
         }
     }
 
@@ -361,6 +406,15 @@ class Lineup extends Component
         });
     }
 
+    /** A question that names a time is withdrawn when the time is edited: asking again names the new one. */
+    public function updatedChangeAt(): void
+    {
+        if (($this->fix['material_at'] ?? null) !== null) {
+            $this->refusal = null;
+            $this->fix = [];
+        }
+    }
+
     public function useNow(): void
     {
         $this->changeAt = '';
@@ -406,6 +460,7 @@ class Lineup extends Component
             'locations' => $locations->options($room),
             'timezone' => $room->timezone(),
             'linked' => $faces->mapWithKeys(fn (LineupFace $f) => [$f->id => $service->linkedLabel($f)])->filter()->all(),
+            'splitFrom' => $faces->mapWithKeys(fn (LineupFace $f) => [$f->id => $service->splitOrigin($f)])->filter()->all(),
             'correcting' => $this->correctionAllocation !== null ? LineupAllocation::query()->with(['face', 'equipment'])->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null,
             'movesWith' => $this->correctionAllocation !== null && ($row = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation)) !== null ? $service->movesWith($row, $this->correctionEdge) : ['other' => [], 'same' => []],
             'corrected' => LineupCorrection::withoutGlobalScopes()->where('shift_id', $this->shift->id)->orderBy('id')->get()

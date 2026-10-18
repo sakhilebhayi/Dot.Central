@@ -257,6 +257,46 @@ class AuditLoopMapperTest extends TestCase
         $this->assertSame(1, MemoryOutboxRow::where('stage', 'action')->count());
     }
 
+    public function test_a_material_split_is_an_action_on_the_shift(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        MemoryOutboxRow::query()->delete();
+
+        $service->splitFace($face, 'Interburden', $this->operator, '10:00', 'Hit the interburden');
+
+        $action = $this->payload('action');
+        $this->assertSame(['lineup.split_face', 'dot-central:lineup:face-split', 'shift', (string) $this->shift->id], [$action['action_kind'], $action['signature'], $action['subject_type'], $action['subject_id']]);
+        $this->assertSame([$face->id, 'Overburden', 'Interburden'], [$action['detail']['split_from_face_id'], $action['detail']['material_before'], $action['detail']['material_after']]);
+        $this->assertSame(['dot-central', 'succeeded', '2026-10-16T10:00:00+00:00'], [$action['executor_platform'], $action['execution_status'], $action['detail']['at']]);
+        $this->assertSame('Material changed to Interburden: Hit the interburden', $action['detail']['reason'], 'the operator\'s own words travel with the record');
+        $this->assertSame(1, MemoryOutboxRow::where('stage', 'action')->count(), 'ordinary face rows map to nothing');
+        $this->assertSame(1, MemoryOutboxRow::count(), 'closing the old face and moving its stints add nothing else');
+    }
+
+    public function test_correcting_the_material_of_a_split_face_in_place_is_not_a_second_split(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $next = $service->splitFace($face, 'Interburden', $this->operator, '10:00');
+        MemoryOutboxRow::query()->delete();
+
+        $service->editFace($next, ['material' => 'Softs'], $this->operator, materialCorrection: true);
+        $service->closeFace($next->fresh(), 'Finished', $this->operator, '11:00');
+
+        $this->assertSame(0, MemoryOutboxRow::count(), 'only the creation of the face that carries on is a split');
+    }
+
+    public function test_an_ordinary_face_and_a_material_correction_in_place_map_to_nothing(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $service->editFace($face, ['material' => 'Interburden'], $this->operator, materialCorrection: true);
+        $service->closeFace($face->fresh(), 'Finished', $this->operator, '09:00');
+
+        $this->assertSame(0, MemoryOutboxRow::count());
+    }
+
     public function test_the_loop_records_keep_their_own_detail_next_to_the_audit_context(): void
     {
         $exception = OperationalException::factory()->for($this->room)->create(['shift_id' => $this->shift->id, 'equipment_id' => $this->truck->id, 'rule_code' => 'TEL-01', 'severity' => 'CRITICAL', 'title' => 'No telemetry', 'message' => 'HT-01 sent nothing for an hour']);
