@@ -273,6 +273,14 @@ Built as §4.1 to §4.8 describe, with these differences and additions found whi
 - **Sentences print the room clock**, not UTC. A release or face-closing reason over 255 characters is refused like a correction reason (the inputs stop at 255).
 - **Verified** with a sequential fuzz (every operation, invariants checked after each) and a 4-process run on a file-based SQLite database (WAL, DEFERRED, 5 s busy timeout): no overlapping stints or standbys, no stint ending before it starts, no lock errors.
 
+Review fixes to slice 2:
+
+- **A work area breaks every link.** A link survives an edit only while the edited face stays a loading face at the same cut and block; turning a linked face into a work area is refused LU-01 ("… is a work area, so the faces cannot share a loading unit") with the same "Move the loading unit here" path. `linkedFaces` only knows loading faces.
+- **A placement before the face started** and **closing a face before it started or before a machine already left it** are refused (LU-05, room clock).
+- **Postgres lock order:** the machine's equipment row is locked before its stints (stints first deadlocked under three or more writers), machines in id order, then the face. SQLite keeps the UPDATE first.
+- **"Move the loading unit here"** has an accessible name that says which unit and face, and takes the keyboard focus when the refusal appears.
+- **Known limits (not changed):** a "Remove" and a later move of the same loading unit in the same minute read as one move when the stints are corrected (the correction moves every edge at that minute); link history is not versioned (derived from current cut and blocks and open stints); "Move here" at exactly the other stint's start deletes that zero-length stint; material, activity and cut lengths are not bounded in the service; the page's `loader_ids` are passed to `place()`, which refuses a machine of another room (LU-03).
+
 ## 5. Feature C: material split (time split)
 
 ### 5.1 What the user sees and does
