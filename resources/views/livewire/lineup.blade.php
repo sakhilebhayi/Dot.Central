@@ -56,7 +56,7 @@
                 <div class="dot-msg dot-msg--critical" role="alert" style="grid-column:1/-1;"><div class="dot-msg__title">Refused</div><div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div></div>
             @endif
             <div><label class="jet-label" for="corr-time">Time (HH:MM)</label><input id="corr-time" wire:model="correction.time" class="dot-input" inputmode="numeric" placeholder="HH:MM" required x-init="setTimeout(() => $el.focus(), 60)" /></div>
-            <div><label class="jet-label" for="corr-reason">Reason</label><input id="corr-reason" wire:model="correction.reason" class="dot-input" placeholder="e.g. the move was clicked late" required /></div>
+            <div><label class="jet-label" for="corr-reason">Reason</label><input id="corr-reason" wire:model="correction.reason" maxlength="255" class="dot-input" placeholder="e.g. the move was clicked late" required /></div>
             <div style="grid-column:1/-1;display:flex;gap:0.5rem;"><button type="submit" class="dot-btn dot-btn-primary">Correct the time</button><button type="button" class="dot-btn dot-btn-ghost" wire:click="cancelCorrection">Cancel</button></div>
         </form>
     @endif

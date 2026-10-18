@@ -41,6 +41,9 @@ final class LineupService
 {
     public const STOPPED = ['offline', 'maintenance'];
 
+    /** The width of lineup_corrections.reason. */
+    public const REASON_LENGTH = 255;
+
     public function __construct(private readonly Audits $audits, private readonly LocationCatalogue $locations, private readonly MinesClientFactory $clients) {}
 
     // ---- state -----------------------------------------------------------------------------------------------
@@ -467,6 +470,9 @@ final class LineupService
         }
         if (trim($reason) === '') {
             $this->refuse('LU-05', 'Say why the time is corrected, for example "the move was clicked late".');
+        }
+        if (mb_strlen(trim($reason)) > self::REASON_LENGTH) {
+            $this->refuse('LU-05', 'The reason is '.mb_strlen(trim($reason)).' characters; keep it to '.self::REASON_LENGTH.' or fewer.');
         }
         if (trim($hhmm) === '') {
             $this->refuse('LU-05', 'Enter the time it really happened (HH:MM).');

@@ -234,4 +234,18 @@ class LineupCorrectionTest extends TestCase
 
         $this->assertStringContainsString('LU-15', $this->refusal(fn () => $this->service->correctTime($moved->fresh(), LineupCorrection::ARRIVAL, '10:00', 'clicked late', $this->user)));
     }
+
+    public function test_a_reason_longer_than_the_column_is_refused_and_a_full_length_multibyte_one_is_kept(): void
+    {
+        $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $moved = $this->service->place($this->shift, $this->face2, $this->truck, $this->user, '10:30', true);
+
+        $tooLong = str_repeat('Ü', 256);
+        $this->assertStringContainsString('LU-05 The reason is 256 characters; keep it to 255 or fewer', $this->refusal(fn () => $this->service->correctTime($moved->fresh(), LineupCorrection::ARRIVAL, '10:00', $tooLong, $this->user)));
+        $this->assertSame('2026-10-15 10:30:00', $moved->fresh()->from_at->toDateTimeString(), 'nothing was changed');
+
+        $full = str_repeat('😀', 255);
+        $correction = $this->service->correctTime($moved->fresh(), LineupCorrection::ARRIVAL, '10:00', '  '.$full.'  ', $this->user);
+        $this->assertSame($full, $correction->fresh()->reason);
+    }
 }

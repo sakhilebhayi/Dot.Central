@@ -161,6 +161,7 @@ class LineupPageTest extends TestCase
             ->assertSee('When did HT-01 arrive on Face 2 — Loading area 2 — Overburden?')
             ->assertSee('Recorded 2026-10-15 10:30. A move is one moment: the face it came from is corrected with it.')
             ->assertSet('correction.time', '10:30')
+            ->assertSeeHtml('id="corr-reason" wire:model="correction.reason" maxlength="255"')
             ->set('correction.time', '10:00')
             ->call('saveCorrection')
             ->assertSee('Say why the time is corrected')
