@@ -468,6 +468,24 @@ class LineupMaterialSplitTest extends TestCase
         $this->assertSound();
     }
 
+    public function test_a_correction_across_the_split_moment_says_why_in_the_room_clock(): void
+    {
+        $new = $this->service->splitFace($this->face, 'Interburden', $this->user, '10:00');
+        $oldStint = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $this->face->id)->where('equipment_id', $this->truck1->id)->firstOrFail();
+        $newStint = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $new->id)->where('equipment_id', $this->truck1->id)->firstOrFail();
+        $why = 'Face 1 changed material at 10:00 and Face 2 carries on from then, so a move across that moment cannot be corrected past it.';
+
+        foreach ([[$newStint, LineupCorrection::ARRIVAL, '09:30'], [$newStint, LineupCorrection::ARRIVAL, '10:30'], [$oldStint, LineupCorrection::DEPARTURE, '10:30'], [$oldStint, LineupCorrection::DEPARTURE, '09:30']] as [$stint, $edge, $time]) {
+            $message = $this->refusal(fn () => $this->service->correctTime($stint, $edge, $time, 'Clicked late', $this->user));
+            $this->assertStringContainsString('Outside the life of the face', $message);
+            $this->assertStringContainsString($why, $message, $edge.' '.$time);
+        }
+
+        $plain = $this->refusal(fn () => $this->service->correctTime($oldStint, LineupCorrection::ARRIVAL, '06:30', 'Clicked late', $this->user));
+        $this->assertStringContainsString('Outside the life of the face', $plain);
+        $this->assertStringNotContainsString('changed material', $plain, 'a refusal that has nothing to do with a split does not mention one');
+    }
+
     public function test_a_split_changes_no_derived_figure_no_operator_row_and_calls_no_one(): void
     {
         $derived = fn (): array => app(ShiftDerivation::class)->unitSummaries($this->shift)->map(fn (array $u) => collect($u)->except('equipment')->all())->all();

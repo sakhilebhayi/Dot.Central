@@ -1051,9 +1051,31 @@ final class LineupService
     private function refuseOutsideLife(Shift $shift, LineupFace $face, Carbon $from, ?Carbon $to): void
     {
         $endsAfterClose = $face->isClosed() && $face->closed_at !== null && ($to === null || $to->greaterThan($face->closed_at));
-        if ($from->lessThan($face->active_from) || $endsAfterClose) {
-            $this->refuse('LU-05', 'Outside the life of the face: '.$face->label().' ran '.$this->hm($shift, $face->active_from).'–'.($face->isClosed() ? $this->hm($shift, $face->closed_at) : 'now').'. Pick a time while the face was working.');
+        $beforeStart = $from->lessThan($face->active_from);
+        if ($beforeStart || $endsAfterClose) {
+            $this->refuse('LU-05', 'Outside the life of the face: '.$face->label().' ran '.$this->hm($shift, $face->active_from).'–'.($face->isClosed() ? $this->hm($shift, $face->closed_at) : 'now').'. Pick a time while the face was working.'.$this->splitNote($shift, $face, $beforeStart));
         }
+    }
+
+    /**
+     * When the limit of a face's life is a material split (it carries on from
+     * another face, or closed because another carries on from it), say so:
+     * the other face's stint ends or begins at that moment.
+     */
+    private function splitNote(Shift $shift, LineupFace $face, bool $beforeStart): string
+    {
+        $old = null;
+        $new = null;
+        if ($beforeStart && $face->split_from_face_id !== null) {
+            [$old, $new] = [LineupFace::withoutGlobalScopes()->find($face->split_from_face_id), $face];
+        } elseif (! $beforeStart && $face->isClosed()) {
+            [$old, $new] = [$face, LineupFace::withoutGlobalScopes()->where('split_from_face_id', $face->id)->first()];
+        }
+        if ($old === null || $new === null || $old->closed_at === null || ! $old->closed_at->equalTo($new->active_from)) {
+            return '';
+        }
+
+        return ' '.'Face '.$old->seq.' changed material at '.$this->hm($shift, $new->active_from).' and '.'Face '.$new->seq.' carries on from then, so a move across that moment cannot be corrected past it.';
     }
 
     /** Standby recorded while the machine was really working is ended, removed or started later (Central's own rows, audited). */
