@@ -147,9 +147,10 @@ class ReportController extends Controller
         $rows = [];
         foreach ($this->lineup->faces($shift, true) as $face) {
             $link = $this->lineup->linkedLabel($face);
+            $origin = $this->lineup->splitOrigin($face);
             foreach ($face->allocations()->orderBy('from_at')->get() as $a) {
                 $p = $pool[$a->equipment_id] ?? null;
-                $rows[] = ['face' => $face->label().($link !== '' ? ' · same loading unit as '.$link : '').($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->copy()->setTimezone($tz)->format('Y-m-d H:i'), 'until' => $a->to_at?->copy()->setTimezone($tz)->format('Y-m-d H:i') ?? 'still there', 'note' => $noteFor($a)];
+                $rows[] = ['face' => $face->label().($link !== '' ? ' · same loading unit as '.$link : '').($origin !== null ? ' · carries on from '.$origin : '').($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->copy()->setTimezone($tz)->format('Y-m-d H:i'), 'until' => $a->to_at?->copy()->setTimezone($tz)->format('Y-m-d H:i') ?? 'still there', 'note' => $noteFor($a)];
             }
         }
         foreach ($pool->whereIn('state', ['FREE', 'STANDBY', 'DOWN']) as $p) {

@@ -80,7 +80,7 @@ class ShiftController extends Controller
             foreach ($this->lineup->faces($previous) as $face) {
                 $members = $face->allocations()->where(fn ($q) => $q->whereNull('to_at')->orWhere('to_at', '>=', $end))->get();
                 $names = fn (string $role) => $members->where('role', $role)->map(fn ($a) => $pool[$a->equipment_id]['equipment']->name ?? '?')->values()->all();
-                $faces[] = ['label' => $face->label(), 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT'), 'linked_with' => $this->lineup->linkedFaces($face)->map(fn (LineupFace $l) => 'Face '.$l->seq)->all()];
+                $faces[] = ['label' => $face->label(), 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT'), 'linked_with' => $this->lineup->linkedFaces($face)->map(fn (LineupFace $l) => 'Face '.$l->seq)->all(), 'split_from' => $this->lineup->splitOrigin($face)];
             }
         }
 

@@ -40,6 +40,7 @@ final class AuditLoopMapper
             $subject instanceof DowntimeClassification => $this->downtime($entry, $subject),
             $subject instanceof ShiftLineup => $this->lineup($entry, $subject),
             $subject instanceof LineupCorrection => $this->correction($entry, $subject),
+            $subject instanceof LineupFace => $this->faceSplit($entry, $subject),
             $subject instanceof ShiftOperatorAssignment => $this->assignment($entry, $subject),
             $subject instanceof Shift => $this->shift($entry, $subject),
             default => [],
@@ -217,6 +218,27 @@ final class AuditLoopMapper
         ]);
 
         return [['stage' => 'action', 'payload' => $payload + ['action_kind' => 'lineup.correct_time', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded']]];
+    }
+
+    /**
+     * A material time split is the one face row that means something: the
+     * new face names the face it carries on from. Ordinary faces map to nothing.
+     *
+     * @return list<array{stage:string,payload:array<string,mixed>}>
+     */
+    private function faceSplit(AuditEntry $entry, LineupFace $f): array
+    {
+        if ($entry->action !== 'created' || $f->split_from_face_id === null) {
+            return [];
+        }
+
+        $previous = LineupFace::withoutGlobalScopes()->find($f->split_from_face_id);
+        $payload = $this->withDetail($this->base($entry, $f, 'shift:'.$f->shift_id, 'dot-central:lineup:face-split', 'face-split:'.$f->id), [
+            'face_id' => $f->id, 'split_from_face_id' => $f->split_from_face_id, 'material_before' => $previous?->material, 'material_after' => $f->material,
+            'at' => $f->active_from->toIso8601String(), 'reason' => $previous?->close_reason,
+        ]);
+
+        return [['stage' => 'action', 'payload' => $payload + ['action_kind' => 'lineup.split_face', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded']]];
     }
 
     /**

@@ -94,7 +94,7 @@
                     @endif
                     @if($outstanding['faces'] !== [])
                         <h3 class="dot-readout__label">Previous faces ({{ count($outstanding['faces']) }}) — copied on the Line-up</h3>
-                        <p style="font-size:var(--t-sm);color:var(--text-quiet);">{{ collect($outstanding['faces'])->map(fn($f) => $f['label'].(($f['linked_with'] ?? []) !== [] ? ' · same loading unit as '.implode(' and ', $f['linked_with']) : '').' ('.(implode(' + ', $f['loaders']) ?: 'no loader').', '.count($f['trucks']).' trucks)')->implode(' · ') }}</p>
+                        <p style="font-size:var(--t-sm);color:var(--text-quiet);">{{ collect($outstanding['faces'])->map(fn($f) => $f['label'].(($f['linked_with'] ?? []) !== [] ? ' · same loading unit as '.implode(' and ', $f['linked_with']) : '').(($f['split_from'] ?? null) !== null ? ' · carries on from '.$f['split_from'] : '').' ('.(implode(' + ', $f['loaders']) ?: 'no loader').', '.count($f['trucks']).' trucks)')->implode(' · ') }}</p>
                     @endif
                 </div>
             </div>

@@ -7,6 +7,7 @@ use App\Models\ControlRoom;
 use App\Models\DowntimeClassification;
 use App\Models\Equipment;
 use App\Models\LineupCorrection;
+use App\Models\LineupFace;
 use App\Models\OperationalException;
 use App\Models\Shift;
 use App\Models\ShiftLineup;
@@ -38,6 +39,12 @@ final class LoopSubject
         }
 
         if ($model instanceof ShiftLineup) {
+            $shift = $model->shift()->withoutGlobalScopes()->first();
+
+            return ['type' => 'shift', 'id' => (string) $model->shift_id, 'label' => $shift?->label()];
+        }
+
+        if ($model instanceof LineupFace) {
             $shift = $model->shift()->withoutGlobalScopes()->first();
 
             return ['type' => 'shift', 'id' => (string) $model->shift_id, 'label' => $shift?->label()];

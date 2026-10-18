@@ -29,6 +29,11 @@
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="place({{ $fix['move'] }}, true, {{ $fix['face'] }})">Move here</button></div>
             @elseif(($fix['face_move'] ?? false) === true)
                 <div style="margin-top:0.5rem;"><button type="button" id="face-move" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="saveFace(true)" aria-label="{{ $fix['label'] ?? 'Move the loading unit here' }}">Move the loading unit here</button></div>
+            @elseif(($fix['material_at'] ?? null) !== null)
+                <div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <button type="button" id="material-correct" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="saveFace(false, true)">The material was wrong — correct it</button>
+                    <button type="button" id="material-split" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="splitFromForm">It changed at {{ $fix['material_at'] }} — new face from then</button>
+                </div>
             @elseif(($fix['operator'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="assignOperator({{ $fix['unit'] }}, '{{ $fix['operator'] }}', true)">Move operator to this machine</button></div>
             @endif
@@ -113,11 +118,11 @@
                     <div class="dot-panel__head" style="cursor:pointer;flex-wrap:wrap;" wire:click="setTarget({{ $face->id }})" role="button" tabindex="0" title="Click to send machines to this face" aria-pressed="{{ $target === $face->id ? 'true' : 'false' }}">
                         <div style="flex:1 1 14rem;min-width:0;">
                             <h2 class="dot-panel__title">{{ $face->label() }}</h2>
-                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif@if(($linked[$face->id] ?? '') !== '') · same loading unit as {{ $linked[$face->id] }}@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
+                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif@if(($linked[$face->id] ?? '') !== '') · same loading unit as {{ $linked[$face->id] }}@endif@if(isset($splitFrom[$face->id])) · carries on from {{ $splitFrom[$face->id] }}@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
                         </div>
                         @if($editable)
                             <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;" x-on:click.stop>
-                                <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="openFaceForm({{ $face->id }})">Edit</button>
+                                <button type="button" id="face-{{ $face->id }}-edit" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="openFaceForm({{ $face->id }})" aria-label="Edit {{ $face->label() }}">Edit</button>
                                 <input wire:model="closeReason.{{ $face->id }}" class="dot-input" placeholder="Why close?" style="width:9rem;" maxlength="255" aria-label="Reason for closing {{ $face->label() }}" />
                                 <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="closeFace({{ $face->id }})">Close face</button>
                             </div>

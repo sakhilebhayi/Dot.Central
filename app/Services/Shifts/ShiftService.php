@@ -221,7 +221,7 @@ final class ShiftService
         foreach ($this->lineup->faces($shift) as $face) {
             $members = $face->allocations()->whereNull('to_at')->get();
             $names = fn (string $role) => $members->where('role', $role)->map(fn ($a) => $pool[$a->equipment_id]['equipment']->name ?? '?')->values()->all();
-            $faces[] = ['label' => $face->label(), 'kind' => $face->kind, 'what' => $face->what(), 'cut' => $face->cut, 'blocks' => $face->blocks ?? [], 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT'), 'linked_with' => $this->lineup->linkedFaces($face)->map(fn ($l) => 'Face '.$l->seq)->all()];
+            $faces[] = ['label' => $face->label(), 'kind' => $face->kind, 'what' => $face->what(), 'cut' => $face->cut, 'blocks' => $face->blocks ?? [], 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT'), 'linked_with' => $this->lineup->linkedFaces($face)->map(fn ($l) => 'Face '.$l->seq)->all(), 'split_from' => $this->lineup->splitOrigin($face)];
         }
 
         return [

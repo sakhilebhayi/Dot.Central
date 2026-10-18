@@ -259,6 +259,155 @@ class LineupPageTest extends TestCase
         $this->assertSame('2026-10-15 10:00:00', $mine->fresh()->from_at->toDateTimeString());
     }
 
+    private function workingFace(): LineupFace
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $service->place($this->shift, $face, $this->truck, $this->operator, '07:30');
+
+        return $face;
+    }
+
+    public function test_a_material_change_on_a_working_face_asks_and_a_split_carries_the_machines_on(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->set('faceForm.cut', 'C2')->call('saveFace')
+            ->assertSee('LU-14')->assertSee('The material was wrong — correct it')->assertSee('It changed at 12:00 — new face from then')
+            ->call('splitFromForm')->assertSee('Change only the material for a split')
+            ->set('faceForm.cut', 'C1')->call('saveFace')->call('splitFromForm')
+            ->assertSee('Face 1 — Loading area 1 — Overburden · C1 / B1 closed at 12:00; Face 2 — Loading area 1 — Interburden · C1 / B1 carries on with the same 2 machines from 12:00.')
+            ->assertSee('carries on from Face 1 (Overburden until 12:00)')
+            ->assertSee('Material changed to Interburden');
+
+        $new = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('seq', 2)->firstOrFail();
+        $this->assertSame(2, LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $new->id)->whereNull('to_at')->count());
+    }
+
+    public function test_the_wrong_material_is_corrected_in_place_from_the_decision(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->call('saveFace')
+            ->assertSee('LU-14')->call('saveFace', false, true)
+            ->assertSee('Saved Face 1 — Loading area 1 — Interburden · C1 / B1.')->assertDontSee('LU-14');
+
+        $this->assertSame('Interburden', $face->fresh()->material);
+        $this->assertSame(1, LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->count(), 'a correction opens no new face');
+        $this->assertSame(2, LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->whereNull('to_at')->count());
+    }
+
+    public function test_the_decision_moves_the_keyboard_to_its_first_button_and_the_split_hands_it_back_to_the_face(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->call('saveFace')
+            ->assertDispatched('lineup-focus', id: 'material-correct')
+            ->assertSeeHtml('id="material-correct"')->assertSeeHtml('id="material-split"')
+            ->assertSeeHtml('role="alert"');
+        $html = $page->html();
+        $this->assertLessThan(strpos($html, 'id="material-split"'), strpos($html, 'id="material-correct"'), 'the two choices follow each other in tab order');
+
+        $page->call('splitFromForm');
+        $new = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('seq', 2)->firstOrFail();
+        $page->assertDispatched('lineup-focus', id: 'face-'.$new->id.'-edit')->assertSeeHtml('id="face-'.$new->id.'-edit"');
+    }
+
+    public function test_the_button_names_a_time_and_the_split_happens_at_that_time(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->call('saveFace')
+            ->assertSee('It changed at 12:00 — new face from then');
+        Carbon::setTestNow('2026-10-15 12:07:00');
+        $page->call('splitFromForm');
+
+        $this->assertSame('2026-10-15 12:00:00', LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('seq', 2)->firstOrFail()->active_from->toDateTimeString(), 'what the button said is what was recorded');
+
+        $face2 = $this->workingFaceAgain();
+        $set = Livewire::test(Lineup::class, ['shift' => $this->shift])->set('changeAt', '11:30')
+            ->call('openFaceForm', $face2->id)->set('faceForm.material', 'Softs')->call('saveFace')
+            ->assertSee('It changed at 11:30 — new face from then')->call('splitFromForm');
+        $this->assertSame('2026-10-15 11:30:00', LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('material', 'Softs')->firstOrFail()->active_from->toDateTimeString());
+        $set->assertSee('carries on from Face 3 (Parting until 11:30)');
+    }
+
+    private function workingFaceAgain(): LineupFace
+    {
+        $service = app(LineupService::class);
+
+        return $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Parting', 'cut' => 'C3', 'blocks' => ['B3']], $this->operator, '09:00');
+    }
+
+    public function test_a_split_cannot_be_pointed_at_another_room_a_machine_set_or_a_time_by_tampering(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+        $theirs = function (Team $team): LineupFace {
+            $room = ControlRoom::factory()->for($team)->create();
+            MinesConnection::factory()->for($room)->verified()->create(['timezone' => 'UTC']);
+            app(RoomProvisioner::class)->provision($room);
+            $type = ShiftType::where('control_room_id', $room->id)->where('code', 'DAY')->firstOrFail();
+            $shift = Shift::factory()->for($room)->for($type, 'shiftType')->create(['shift_date' => '2026-10-15', 'starts_at' => '2026-10-15 06:00:00', 'ends_at' => '2026-10-15 18:00:00', 'status' => 'OPEN']);
+
+            return LineupFace::create(['control_room_id' => $room->id, 'shift_id' => $shift->id, 'seq' => 1, 'kind' => 'LOADING', 'material' => 'Secret material', 'cut' => 'C1', 'blocks' => ['B1'], 'status' => 'ACTIVE', 'active_from' => '2026-10-15 06:00:00']);
+        };
+        $foreign = [$theirs($this->operator->currentTeam), $theirs(User::factory()->withPersonalTeam()->create()->currentTeam)];
+
+        foreach ($foreign as $other) {
+            foreach (['splitFromForm', 'saveFace'] as $method) {
+                $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->set('editingFaceId', $other->id);
+                try {
+                    $method === 'saveFace' ? $page->call('saveFace', false, true) : $page->call('splitFromForm');
+                    $this->fail('A face of another shift must not be split or corrected.');
+                } catch (ModelNotFoundException) {
+                    $this->assertTrue(true);
+                }
+                $page->assertDontSee('Secret material');
+            }
+            $this->assertSame(['ACTIVE', 'Secret material', null], [$other->fresh()->status, $other->fresh()->material, $other->fresh()->closed_at]);
+            $this->assertSame(1, LineupFace::withoutGlobalScopes()->where('shift_id', $other->shift_id)->count(), 'no face was opened in the other room');
+        }
+
+        // the shift cannot be swapped, and a forged time or a forged set of machines is refused like a typed one
+        try {
+            Livewire::test(Lineup::class, ['shift' => $this->shift])->set('shift', $foreign[0]->shift_id);
+            $this->fail('The shift must be locked.');
+        } catch (CannotUpdateLockedPropertyException) {
+            $this->assertTrue(true);
+        }
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->call('saveFace')->set('fix', ['material_at' => '99:99'])->call('splitFromForm');
+        $page->assertSee('is not a time');
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->set('faceForm.loader_ids', [])->call('splitFromForm');
+        $page->assertSee('Change only the material for a split');
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm', $face->id)->set('faceForm.material', str_repeat('x', 65))->call('splitFromForm');
+        $page->assertSee('The material is 65 characters; keep it to 64 or fewer.');
+        $this->assertSame(['ACTIVE', 'Overburden'], [$face->fresh()->status, $face->fresh()->material]);
+        $this->assertSame(1, LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->count());
+    }
+
+    public function test_managers_cannot_split_a_face_even_by_calling_the_action_and_still_read_where_it_came_from(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+        app(LineupService::class)->splitFace($face, 'Interburden', $this->operator, '10:00');
+
+        $this->actingAs($this->manager);
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift]);
+        $page->assertSee('carries on from Face 1 (Overburden until 10:00)')->assertDontSee('The material was wrong')->assertDontSeeHtml('id="face-')
+            ->set('editingFaceId', $face->id)->set('faceForm.material', 'Softs')->call('splitFromForm')->assertSee('SH-04')
+            ->call('saveFace', false, true)->assertSee('SH-04');
+        $this->assertSame(2, LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->count());
+    }
+
     public function test_placing_at_a_time_the_clocks_showed_twice_says_which_one_was_used(): void
     {
         $this->actingAs($this->operator);
