@@ -291,4 +291,33 @@ class LineupPageTest extends TestCase
             ->assertDontSee('no longer exists');
         $this->assertSame(1, LineupCorrection::withoutGlobalScopes()->count());
     }
+
+    public function test_the_correction_panel_is_built_for_keyboard_and_screen_reader_use(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face1 = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $face2 = $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $service->place($this->shift, $face1, $this->truck, $this->operator, '08:00');
+        $moved = $service->place($this->shift, $face2, $this->truck, $this->operator, '10:30', true);
+        $previous = LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck->id)->where('lineup_face_id', $face1->id)->firstOrFail();
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->assertSeeHtml('id="corr-'.$moved->id.'-arrival"')
+            ->assertSeeHtml('id="corr-'.$previous->id.'-departure"')
+            ->assertSeeHtml('>10:30</button>')
+            ->assertSeeHtml('aria-label="Correct when HT-01 arrived on Face 2 — Loading area 2 — Overburden (recorded 2026-10-15 10:30)"');
+
+        $page->call('startCorrection', $moved->id, LineupCorrection::ARRIVAL)
+            ->assertSeeHtml('id="corr-alert" role="alert"')
+            ->assertSeeHtml('wire:key="corr-time-field"')->assertSeeHtml('wire:key="corr-reason-field"')
+            ->set('correction.time', '07:30')->set('correction.reason', 'late')->call('saveCorrection')
+            ->assertSee('Times out of order')->assertDispatched('lineup-focus', id: 'corr-time')
+            ->set('correction.time', '10:00')->call('saveCorrection')
+            ->assertDispatched('lineup-focus', id: 'corr-'.$moved->id.'-arrival');
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('startCorrection', $previous->id, LineupCorrection::DEPARTURE)->call('cancelCorrection')
+            ->assertDispatched('lineup-focus', id: 'corr-'.$previous->id.'-departure');
+    }
 }

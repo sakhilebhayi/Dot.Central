@@ -238,6 +238,14 @@ class Lineup extends Component
 
     public function saveCorrection(): void
     {
+        $this->saveCorrectionNow();
+        if ($this->refusal !== null && $this->correctionAllocation !== null) {
+            $this->dispatch('lineup-focus', id: 'corr-time');
+        }
+    }
+
+    private function saveCorrectionNow(): void
+    {
         $this->run(function (LineupService $service): void {
             if ($this->correctionAllocation === null) {
                 $this->refusal = 'LU-05 Nothing to correct: the correction was already saved or cancelled.';
@@ -246,7 +254,7 @@ class Lineup extends Component
             }
             $allocation = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation);
             if ($allocation === null) {
-                $this->closeCorrection();
+                $this->closeCorrection(false);
                 $this->refusal = 'LU-15 That line-up entry no longer exists: someone removed it meanwhile.';
 
                 return;
@@ -257,8 +265,12 @@ class Lineup extends Component
         });
     }
 
-    private function closeCorrection(): void
+    /** Closing hands the keyboard back to the time button that opened the panel. */
+    private function closeCorrection(bool $focusOpener = true): void
     {
+        if ($focusOpener && $this->correctionAllocation !== null) {
+            $this->dispatch('lineup-focus', id: 'corr-'.$this->correctionAllocation.'-'.strtolower($this->correctionEdge));
+        }
         $this->correctionAllocation = null;
         $this->correctionEdge = '';
         $this->correctionExpected = '';
