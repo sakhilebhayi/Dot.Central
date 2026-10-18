@@ -256,4 +256,29 @@ class AuditLoopMapperTest extends TestCase
         $this->assertStringContainsString('corrected from 10:30 to 10:00: The move was clicked late', (string) $action['detail']['reason']);
         $this->assertSame(1, MemoryOutboxRow::where('stage', 'action')->count());
     }
+
+    public function test_the_loop_records_keep_their_own_detail_next_to_the_audit_context(): void
+    {
+        $exception = OperationalException::factory()->for($this->room)->create(['shift_id' => $this->shift->id, 'equipment_id' => $this->truck->id, 'rule_code' => 'TEL-01', 'severity' => 'CRITICAL', 'title' => 'No telemetry', 'message' => 'HT-01 sent nothing for an hour']);
+        $detail = $this->payload('event')['detail'];
+        $this->assertEqualsCanonicalizing(['audit_id', 'control_room_id', 'shift_id', 'reason', 'title', 'message', 'outcome', 'severity', 'raised_by'], array_keys($detail));
+        $this->assertSame(['No telemetry', 'HT-01 sent nothing for an hour', 'CRITICAL'], [$detail['title'], $detail['message'], $detail['severity']]);
+
+        MemoryOutboxRow::query()->delete();
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('counts_against_availability', true)->firstOrFail();
+        $this->actingAs($this->operator);
+        DowntimeClassification::create(['control_room_id' => $this->room->id, 'equipment_id' => $this->truck->id, 'shift_id' => $this->shift->id, 'downtime_reason_id' => $reason->id, 'started_at' => now()->subHour(), 'ended_at' => now(), 'note' => 'Tyre change', 'classified_by' => $this->operator->id]);
+        foreach (['decision', 'action'] as $stage) {
+            $detail = $this->payload($stage)['detail'];
+            $this->assertEqualsCanonicalizing(['audit_id', 'control_room_id', 'shift_id', 'reason', 'reason_name', 'category', 'counts_against_availability', 'note', 'started_at', 'ended_at'], array_keys($detail), $stage);
+            $this->assertSame([$reason->name, true, 'Tyre change'], [$detail['reason_name'], $detail['counts_against_availability'], $detail['note']]);
+        }
+
+        MemoryOutboxRow::query()->delete();
+        $op = Operator::factory()->for($this->room)->create();
+        ShiftOperatorAssignment::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'equipment_id' => $this->truck->id, 'operator_id' => $op->id, 'from_at' => now(), 'assigned_by' => $this->operator->id, 'pushed_to_source' => true, 'push_note' => 'pushed to Dot.Mines']);
+        $detail = $this->payload('action')['detail'];
+        $this->assertEqualsCanonicalizing(['audit_id', 'control_room_id', 'shift_id', 'reason', 'push_note', 'operator_id'], array_keys($detail));
+        $this->assertSame(['pushed to Dot.Mines', $op->id, $this->shift->id], [$detail['push_note'], $detail['operator_id'], $detail['shift_id']]);
+    }
 }

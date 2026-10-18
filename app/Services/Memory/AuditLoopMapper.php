@@ -100,7 +100,7 @@ final class AuditLoopMapper
         $status = $this->newValue($entry, 'status');
 
         if ($entry->action === 'created') {
-            return [['stage' => 'event', 'payload' => $base('raised') + ['detail' => $base('raised')['detail'] + ['title' => $e->title, 'message' => $e->message, 'outcome' => $e->outcome, 'severity' => $e->severity, 'raised_by' => $e->raised_by]]]];
+            return [['stage' => 'event', 'payload' => $this->withDetail($base('raised'), ['title' => $e->title, 'message' => $e->message, 'outcome' => $e->outcome, 'severity' => $e->severity, 'raised_by' => $e->raised_by])]];
         }
 
         if ($status === 'EXPLAINED') {
@@ -173,11 +173,11 @@ final class AuditLoopMapper
 
         $reason = DowntimeReason::withoutGlobalScopes()->find($d->downtime_reason_id);
         $signature = 'dot-central:downtime:'.($reason->code ?? 'unknown');
-        $detail = ['reason' => $reason?->name, 'category' => $reason?->category, 'counts_against_availability' => (bool) $reason?->counts_against_availability, 'note' => $d->note, 'started_at' => $d->started_at->toIso8601String(), 'ended_at' => $d->ended_at?->toIso8601String()];
+        $detail = ['reason_name' => $reason?->name, 'category' => $reason?->category, 'counts_against_availability' => (bool) $reason?->counts_against_availability, 'note' => $d->note, 'started_at' => $d->started_at->toIso8601String(), 'ended_at' => $d->ended_at?->toIso8601String()];
 
         return [
-            ['stage' => 'decision', 'payload' => $this->base($entry, $d, 'downtime:'.$d->id, $signature, 'decision') + ['recommendation' => (string) ($reason->name ?? 'classified'), 'confidence' => 1.0, 'risk' => $reason?->counts_against_availability ? 0.5 : 0.2, 'autonomy_level' => 'execute', 'requires_approval' => false, 'detail' => $detail]],
-            ['stage' => 'action', 'payload' => $this->base($entry, $d, 'downtime:'.$d->id, $signature, 'action') + ['action_kind' => 'downtime.classify', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded', 'detail' => $detail]],
+            ['stage' => 'decision', 'payload' => $this->withDetail($this->base($entry, $d, 'downtime:'.$d->id, $signature, 'decision'), $detail) + ['recommendation' => (string) ($reason->name ?? 'classified'), 'confidence' => 1.0, 'risk' => $reason?->counts_against_availability ? 0.5 : 0.2, 'autonomy_level' => 'execute', 'requires_approval' => false]],
+            ['stage' => 'action', 'payload' => $this->withDetail($this->base($entry, $d, 'downtime:'.$d->id, $signature, 'action'), $detail) + ['action_kind' => 'downtime.classify', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded']],
         ];
     }
 
@@ -221,7 +221,8 @@ final class AuditLoopMapper
 
     /**
      * base() already carries a detail key and PHP's array union keeps the
-     * left one, so specific detail is merged into it here.
+     * left one, so specific detail is merged into it here (and wins on a
+     * shared key such as shift_id).
      *
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $detail
@@ -229,7 +230,7 @@ final class AuditLoopMapper
      */
     private function withDetail(array $payload, array $detail): array
     {
-        $payload['detail'] = (array) ($payload['detail'] ?? []) + $detail;
+        $payload['detail'] = $detail + (array) ($payload['detail'] ?? []);
 
         return $payload;
     }
@@ -241,7 +242,7 @@ final class AuditLoopMapper
             return [];
         }
 
-        return [['stage' => 'action', 'payload' => $this->base($entry, $s, 'shift:'.$s->shift_id, 'dot-central:operator:assign', 'assignment:'.$s->id) + ['action_kind' => 'operator.assign', 'executor_platform' => $s->pushed_to_source ? 'dot-mines' : 'dot-central', 'approval_status' => 'not_required', 'execution_status' => $s->pushed_to_source ? 'succeeded' : 'pending', 'detail' => ['push_note' => $s->push_note, 'operator_id' => $s->operator_id, 'shift_id' => $s->shift_id]]]];
+        return [['stage' => 'action', 'payload' => $this->withDetail($this->base($entry, $s, 'shift:'.$s->shift_id, 'dot-central:operator:assign', 'assignment:'.$s->id), ['push_note' => $s->push_note, 'operator_id' => $s->operator_id, 'shift_id' => $s->shift_id]) + ['action_kind' => 'operator.assign', 'executor_platform' => $s->pushed_to_source ? 'dot-mines' : 'dot-central', 'approval_status' => 'not_required', 'execution_status' => $s->pushed_to_source ? 'succeeded' : 'pending']]];
     }
 
     /** @return list<array{stage:string,payload:array<string,mixed>}> */
