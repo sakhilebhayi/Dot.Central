@@ -106,9 +106,9 @@ class Lineup extends Component
         $this->resetFaceForm();
     }
 
-    public function saveFace(): void
+    public function saveFace(bool $move = false): void
     {
-        $this->run(function (LineupService $service): void {
+        $this->run(function (LineupService $service) use ($move): void {
             $attrs = [
                 'kind' => $this->faceForm['kind'], 'location' => (string) ($this->faceForm['location'] ?? ''),
                 'material' => $this->faceForm['material'] ?: null, 'activity' => $this->faceForm['activity'] ?: null, 'cut' => $this->faceForm['cut'] ?: null,
@@ -116,7 +116,14 @@ class Lineup extends Component
             ];
             if ($this->editingFaceId !== null) {
                 $face = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail($this->editingFaceId);
-                $service->editFace($face, $attrs, auth()->user());
+                try {
+                    $service->editFace($face, $attrs, auth()->user(), move: $move, hhmm: $this->changeAt ?: null);
+                } catch (ValidationException $e) {
+                    if (str_starts_with($e->errors()['lineup'][0] ?? '', 'LU-01')) {
+                        $this->fix = ['face_move' => true];
+                    }
+                    throw $e;
+                }
                 foreach (array_map('intval', $this->faceForm['loader_ids']) as $id) {
                     $service->place($this->shift, $face, Equipment::withoutGlobalScopes()->findOrFail($id), auth()->user(), $this->changeAt ?: null, true);
                 }
@@ -174,7 +181,8 @@ class Lineup extends Component
                 throw $e;
             }
             $this->target = $face->id;
-            $this->notice = $unit->name.' → '.$face->label().($allocation->from_at->equalTo($this->shift->starts_at) ? '' : ' at '.$allocation->from_at->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i')).'.'.(! $allocation->from_at->equalTo($this->shift->starts_at) && ($twice = $service->ambiguityNote($this->shift, $allocation->from_at)) !== null ? ' The time used was '.$twice.'.' : '');
+            $linked = $allocation->role === 'LOADER' ? $service->alsoLoads($unit, $face) : '';
+            $this->notice = $unit->name.' → '.$face->label().($allocation->from_at->equalTo($this->shift->starts_at) ? '' : ' at '.$allocation->from_at->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i')).($linked !== '' ? ' (also loads '.$linked.': same cut and block)' : '').'.'.(! $allocation->from_at->equalTo($this->shift->starts_at) && ($twice = $service->ambiguityNote($this->shift, $allocation->from_at)) !== null ? ' The time used was '.$twice.'.' : '');
         });
     }
 
@@ -387,6 +395,7 @@ class Lineup extends Component
             'standbyReasons' => DowntimeReason::where('control_room_id', $room->id)->where('is_active', true)->whereIn('category', LineupStandby::CATEGORIES)->orderBy('name')->get(),
             'locations' => $locations->options($room),
             'timezone' => $room->timezone(),
+            'linked' => $faces->mapWithKeys(fn (LineupFace $f) => [$f->id => $service->linkedLabel($f)])->filter()->all(),
             'correcting' => $this->correctionAllocation !== null ? LineupAllocation::query()->with(['face', 'equipment'])->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null,
             'corrected' => LineupCorrection::withoutGlobalScopes()->where('shift_id', $this->shift->id)->orderBy('id')->get()
                 ->groupBy(fn (LineupCorrection $c) => $c->lineup_allocation_id.':'.$c->edge)

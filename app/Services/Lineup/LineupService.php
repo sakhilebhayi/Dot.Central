@@ -121,6 +121,42 @@ final class LineupService
     }
 
     /**
+     * Faces worked by the same loading unit at the same cut and block at the
+     * same time (a seam and its parting): the other ACTIVE faces of the shift
+     * that share an open LOADER stint with this face and pass
+     * sameWorkplaceAs(). A face that took over after a split is never linked
+     * to its predecessor (that one is CLOSED). Derived, never stored.
+     *
+     * @return Collection<int, LineupFace>
+     */
+    public function linkedFaces(LineupFace $face): Collection
+    {
+        $loaders = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->all();
+        if ($loaders === []) {
+            return collect();
+        }
+        $faceIds = LineupAllocation::withoutGlobalScopes()->where('shift_id', $face->shift_id)->where('role', 'LOADER')->whereNull('to_at')
+            ->whereIn('equipment_id', $loaders)->where('lineup_face_id', '!=', $face->id)->pluck('lineup_face_id')->unique()->all();
+
+        return LineupFace::withoutGlobalScopes()->whereIn('id', $faceIds)->where('status', 'ACTIVE')->orderBy('seq')->get()
+            ->filter(fn (LineupFace $other) => $other->sameWorkplaceAs($face))->values();
+    }
+
+    /** "Face 2" or "Face 2 and Face 3": the faces that share this face's loading unit, or '' for a face on its own. */
+    public function linkedLabel(LineupFace $face): string
+    {
+        return $this->linkedFaces($face)->map(fn (LineupFace $other) => 'Face '.$other->seq)->implode(' and ');
+    }
+
+    /** "Face 1" or "Face 1 and Face 3": the other faces this loading unit is working with $face, or '' when it is on this face alone. */
+    public function alsoLoads(Equipment $unit, LineupFace $face): string
+    {
+        return LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $face->shift_id)->where('equipment_id', $unit->id)->where('role', 'LOADER')
+            ->whereNull('to_at')->where('lineup_face_id', '!=', $face->id)->get()->sortBy(fn (LineupAllocation $a) => $a->face?->seq)
+            ->map(fn (LineupAllocation $a) => $a->face !== null ? 'Face '.$a->face->seq : null)->filter()->implode(' and ');
+    }
+
+    /**
      * DOWN at a moment: Dot.Mines reported the machine offline / in
      * maintenance (observed status events), or an availability-counting
      * classification covers the moment.
@@ -238,8 +274,8 @@ final class LineupService
             'kind' => $attrs['kind'] ?? 'LOADING',
             'material' => ($attrs['kind'] ?? 'LOADING') === 'LOADING' ? ($attrs['material'] ?? null) : null,
             'activity' => ($attrs['kind'] ?? 'LOADING') === 'AREA' ? ($attrs['activity'] ?? null) : null,
-            'cut' => isset($attrs['cut']) && $attrs['cut'] !== '' ? strtoupper(trim($attrs['cut'])) : null,
-            'blocks' => array_values(array_unique(array_map('strtoupper', array_filter(array_map('trim', $attrs['blocks'] ?? []))))) ?: null,
+            'cut' => $this->normaliseCut($attrs['cut'] ?? null),
+            'blocks' => $this->normaliseBlocks($attrs['blocks'] ?? null),
             'notes' => isset($attrs['notes']) && trim($attrs['notes']) !== '' ? trim($attrs['notes']) : null,
             'status' => 'ACTIVE', 'active_from' => $at,
         ]);
@@ -253,8 +289,15 @@ final class LineupService
         return $face;
     }
 
-    /** @param  array{location?: string|null, kind?: string, material?: string|null, activity?: string|null, cut?: string|null, blocks?: list<string>|null, notes?: string|null}  $attrs */
-    public function editFace(LineupFace $face, array $attrs, User $user): LineupFace
+    /**
+     * A change of cut or blocks that would leave a loading unit on two faces
+     * that no longer share a cut and block is refused (LU-01); with $move the
+     * loading unit stays on the edited face and is taken off the other one at
+     * $hhmm ("Move the loading unit here").
+     *
+     * @param  array{location?: string|null, kind?: string, material?: string|null, activity?: string|null, cut?: string|null, blocks?: list<string>|null, notes?: string|null}  $attrs
+     */
+    public function editFace(LineupFace $face, array $attrs, User $user, bool $move = false, ?string $hhmm = null): LineupFace
     {
         $shift = $face->shift;
         $this->guardWritable($shift);
@@ -268,17 +311,52 @@ final class LineupService
             $this->refuse('LU-03', 'Trucks are still on '.$face->label().'. Take them off before turning it into a work area.');
         }
 
+        $cut = $this->normaliseCut($attrs['cut'] ?? null);
+        $blocks = $this->normaliseBlocks($attrs['blocks'] ?? null);
         $location = isset($attrs['location']) ? $this->locations->resolve($shift->controlRoom, $attrs['location']) : [];
-        $face->fill($location + [
-            'kind' => $kind,
-            'material' => $kind === 'LOADING' ? ($attrs['material'] ?? null) : null,
-            'activity' => $kind === 'AREA' ? ($attrs['activity'] ?? null) : null,
-            'cut' => isset($attrs['cut']) && $attrs['cut'] !== '' ? strtoupper(trim($attrs['cut'])) : null,
-            'blocks' => array_values(array_unique(array_map('strtoupper', array_filter(array_map('trim', $attrs['blocks'] ?? []))))) ?: null,
-            'notes' => isset($attrs['notes']) && trim($attrs['notes']) !== '' ? trim($attrs['notes']) : null,
-        ])->save();
+        $planning = $this->isPlanning($shift);
+        $at = $move && ! $planning ? $this->changeAt($shift, $hhmm) : null;
 
-        return $face;
+        // Locked before anything is read inside the transaction (see lockMachine); read again under the locks.
+        $lock = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->sort()->values()->all();
+
+        return DB::transaction(function () use ($face, $shift, $user, $move, $at, $planning, $location, $kind, $attrs, $cut, $blocks, $lock): LineupFace {
+            foreach ($lock as $equipmentId) {
+                $this->lockMachine($shift, $equipmentId);
+            }
+            $mine = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->all();
+            if (array_diff($mine, $lock) !== []) {
+                $this->refuse('LU-15', 'Someone changed the loading units on '.$face->label().' meanwhile. Check the face and save again.');
+            }
+
+            $strays = $kind === 'LOADING' ? $this->linkedFaces($face)->reject(fn (LineupFace $other) => (new LineupFace(['cut' => $cut, 'blocks' => $blocks]))->sameWorkplaceAs($other))->values() : collect();
+            $shared = $strays->isEmpty() ? collect() : LineupAllocation::withoutGlobalScopes()->with('equipment')->whereIn('lineup_face_id', $strays->pluck('id')->all())
+                ->where('role', 'LOADER')->whereNull('to_at')->whereIn('equipment_id', $mine)->get();
+
+            if ($shared->isNotEmpty()) {
+                $labels = $strays->map(fn (LineupFace $f) => $f->label())->implode(' and ');
+                if (! $move) {
+                    $this->refuse('LU-01', $shared->map(fn (LineupAllocation $a) => $a->equipment?->name)->unique()->implode(' and ').' also loads '.$labels.'. After this change the faces are no longer at the same cut and block, so it cannot work both. Choose "Move the loading unit here" to take it off '.$labels.', or keep the cut and blocks.');
+                }
+                foreach ($shared as $allocation) {
+                    if ($at !== null && $at->lessThan($allocation->from_at)) {
+                        $this->refuse('LU-05', 'Time before the machine arrived: '.$allocation->equipment?->name.' only arrived on '.$strays->firstWhere('id', $allocation->lineup_face_id)?->label().' at '.$this->hm($shift, $allocation->from_at).'. Record the move at that time or later, or first correct when it arrived (select its time on that face).');
+                    }
+                    $this->endAllocation($allocation, $at ?? $shift->starts_at, 'Moved: '.$face->label().' changed cut / blocks', $user, $planning);
+                }
+            }
+
+            $face->fill($location + [
+                'kind' => $kind,
+                'material' => $kind === 'LOADING' ? ($attrs['material'] ?? null) : null,
+                'activity' => $kind === 'AREA' ? ($attrs['activity'] ?? null) : null,
+                'cut' => $cut,
+                'blocks' => $blocks,
+                'notes' => isset($attrs['notes']) && trim($attrs['notes']) !== '' ? trim($attrs['notes']) : null,
+            ])->save();
+
+            return $face;
+        });
     }
 
     public function closeFace(LineupFace $face, string $reason, User $user, ?string $hhmm = null): void
@@ -887,21 +965,28 @@ final class LineupService
         $pool = $this->pool($shift);
         $open = LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->whereNull('to_at')->get()->groupBy('lineup_face_id');
 
-        foreach ($this->faces($shift) as $face) {
-            if ($face->kind !== 'LOADING') {
-                continue;
-            }
-            $rows = $open->get($face->id, collect());
-            $loaders = $rows->where('role', 'LOADER')->count();
-            $trucks = $rows->where('role', 'HAUL')->count();
+        $loadersByFace = $open->map(fn ($rows) => $rows->where('role', 'LOADER')->pluck('equipment_id')->all())->all();
+        foreach ($this->linkGroups($this->faces($shift)->where('kind', 'LOADING')->values(), $loadersByFace) as $group) {
+            $groupRows = collect($group)->flatMap(fn (LineupFace $f) => $open->get($f->id, collect()));
+            $groupLoaders = $groupRows->where('role', 'LOADER')->pluck('equipment_id')->unique()->count();
+            $groupTrucks = $groupRows->where('role', 'HAUL')->count();
 
-            if ($loaders > 0 && $trucks === 0) {
-                $out->push($this->check('LU-06', 'WARNING', 'SUSPICIOUS', $face->label().' has no trucks', 'Its loading unit has no trucks allocated.', 'Click trucks in the fleet panel to put them on this face, or close the face.', null, $face->id));
-            } elseif ($trucks > 0 && $loaders === 0) {
-                $out->push($this->check('LU-06', 'WARNING', 'SUSPICIOUS', $face->label().' has '.$trucks.' truck(s) but no loading unit', 'Trucks are allocated to a face without a machine to load them.', 'Edit the face and pick its loading unit, or move the trucks.', null, $face->id));
+            foreach ($group as $face) {
+                $rows = $open->get($face->id, collect());
+                $loaders = $rows->where('role', 'LOADER')->count();
+                $trucks = $rows->where('role', 'HAUL')->count();
+
+                if ($loaders > 0 && $trucks === 0 && $groupTrucks === 0) {
+                    $out->push($this->check('LU-06', 'WARNING', 'SUSPICIOUS', $face->label().' has no trucks', 'Its loading unit has no trucks allocated.', 'Click trucks in the fleet panel to put them on this face, or close the face.', null, $face->id));
+                } elseif ($trucks > 0 && $loaders === 0) {
+                    $out->push($this->check('LU-06', 'WARNING', 'SUSPICIOUS', $face->label().' has '.$trucks.' truck(s) but no loading unit', 'Trucks are allocated to a face without a machine to load them.', 'Edit the face and pick its loading unit, or move the trucks.', null, $face->id));
+                }
             }
-            if ($loaders > 0 && $trucks > $ceiling * $loaders) {
-                $out->push($this->check('LU-07', 'WARNING', 'SUSPICIOUS', $trucks.' trucks on '.$face->label().' for '.$loaders.' loading unit(s)', 'The room ceiling is '.$ceiling.' trucks per loading unit.', 'Move trucks to another face, or raise the ceiling under Administration if the mine runs more.', null, $face->id));
+
+            if ($groupLoaders > 0 && $groupTrucks > $ceiling * $groupLoaders) {
+                $first = $group[0];
+                $where = count($group) > 1 ? collect($group)->map(fn (LineupFace $f) => 'Face '.$f->seq)->implode(' + ') : $first->label();
+                $out->push($this->check('LU-07', 'WARNING', 'SUSPICIOUS', $groupTrucks.' trucks on '.$where.' for '.$groupLoaders.' loading unit(s)', 'The room ceiling is '.$ceiling.' trucks per loading unit.', 'Move trucks to another face, or raise the ceiling under Administration if the mine runs more.', null, $first->id));
             }
         }
 
@@ -1026,6 +1111,64 @@ final class LineupService
             $until = $this->hm($shift, $clash->to_at);
             $this->refuse('LU-05', 'Overlaps an earlier entry: '.$unit->name.' was on '.$clash->face?->label().' until '.$until.'. Record the change at '.$until.' or later, or first correct when it left that face (select its time under "Moved off this face").');
         }
+    }
+
+    /**
+     * Loading faces grouped by a shared loading unit at the same cut and block
+     * (union-find); a face on its own is a group of one. Groups and the faces
+     * in them keep the faces' seq order.
+     *
+     * @param  Collection<int, LineupFace>  $faces  in seq order
+     * @param  array<int|string, list<int>>  $loadersByFace  the loading units on each face, by face id
+     * @return list<list<LineupFace>>
+     */
+    private function linkGroups(Collection $faces, array $loadersByFace): array
+    {
+        /** @var array<int, int> $parent */
+        $parent = [];
+        foreach ($faces as $face) {
+            $parent[$face->id] = $face->id;
+        }
+        $root = static function (int $id) use (&$parent): int {
+            while ($parent[$id] !== $id) {
+                $parent[$id] = $parent[$parent[$id]];
+                $id = $parent[$id];
+            }
+
+            return $id;
+        };
+        $loadersOf = fn (LineupFace $f): array => $loadersByFace[$f->id] ?? [];
+
+        foreach ($faces->values() as $i => $a) {
+            foreach ($faces->values()->slice($i + 1) as $b) {
+                if ($a->sameWorkplaceAs($b) && array_intersect($loadersOf($a), $loadersOf($b)) !== []) {
+                    $parent[$root($a->id)] = $root($b->id);
+                }
+            }
+        }
+
+        $groups = [];
+        foreach ($faces as $face) {
+            $groups[$root($face->id)][] = $face;
+        }
+
+        return array_values($groups);
+    }
+
+    private function normaliseCut(?string $cut): ?string
+    {
+        return $cut !== null && trim($cut) !== '' ? strtoupper(trim($cut)) : null;
+    }
+
+    /**
+     * @param  list<string>|null  $blocks
+     * @return list<string>|null
+     */
+    private function normaliseBlocks(?array $blocks): ?array
+    {
+        $out = array_values(array_unique(array_map('strtoupper', array_filter(array_map('trim', $blocks ?? [])))));
+
+        return $out === [] ? null : $out;
     }
 
     private function guardWritable(Shift $shift): void

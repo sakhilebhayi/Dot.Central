@@ -27,6 +27,8 @@
             <div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div>
             @if(($fix['move'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="place({{ $fix['move'] }}, true, {{ $fix['face'] }})">Move here</button></div>
+            @elseif(($fix['face_move'] ?? false) === true)
+                <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="saveFace(true)">Move the loading unit here</button></div>
             @elseif(($fix['operator'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="assignOperator({{ $fix['unit'] }}, '{{ $fix['operator'] }}', true)">Move operator to this machine</button></div>
             @endif
@@ -111,7 +113,7 @@
                     <div class="dot-panel__head" style="cursor:pointer;" wire:click="setTarget({{ $face->id }})" role="button" tabindex="0" title="Click to send machines to this face" aria-pressed="{{ $target === $face->id ? 'true' : 'false' }}">
                         <div>
                             <h2 class="dot-panel__title">{{ $face->label() }}</h2>
-                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
+                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif@if(($linked[$face->id] ?? '') !== '') · same loading unit as {{ $linked[$face->id] }}@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
                         </div>
                         @if($editable)
                             <div style="display:flex;gap:0.4rem;align-items:center;" wire:click.stop>
@@ -235,7 +237,7 @@
                         <h3 class="dot-readout__label" style="margin:0.5rem 0 0.3rem;">{{ RoleClass::label($class) }}s ({{ $byClass[$class]->count() }})</h3>
                         <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
                             @foreach($byClass[$class] as $p)
-                                <button type="button" class="dot-btn dot-btn-sm {{ $p['state'] === 'PLACED' ? 'dot-btn-primary' : 'dot-btn-ghost' }}" style="{{ $p['state'] === 'DOWN' ? 'border-color:var(--bad);color:var(--bad);' : ($p['state'] === 'STANDBY' ? 'opacity:.6;' : '') }}" @disabled(! $editable) wire:click="place({{ $p['equipment']->id }})" aria-label="{{ $p['equipment']->name }} ({{ strtolower($p['state']) }}) — put on the target face" title="{{ $p['down']['cause'] ?? ($p['placement']?->face?->label() ?? ($p['standby']?->reason?->name ?? 'free')) }}">
+                                <button type="button" class="dot-btn dot-btn-sm {{ $p['state'] === 'PLACED' ? 'dot-btn-primary' : 'dot-btn-ghost' }}" style="{{ $p['state'] === 'DOWN' ? 'border-color:var(--bad);color:var(--bad);' : ($p['state'] === 'STANDBY' ? 'opacity:.6;' : '') }}" @disabled(! $editable) wire:click="place({{ $p['equipment']->id }})" aria-label="{{ $p['equipment']->name }} ({{ $p['state'] === 'PLACED' ? 'placed on '.$p['placements']->map(fn ($a) => 'Face '.$a->face->seq)->implode(' and ') : strtolower($p['state']) }}) — put on the target face" title="{{ $p['down']['cause'] ?? ($p['placement']?->face?->label() ?? ($p['standby']?->reason?->name ?? 'free')) }}">
                                     {{ $p['equipment']->name }} <small style="font-weight:400;opacity:.8;">{{ $p['state'] === 'PLACED' ? 'face '.$p['placements']->map(fn ($a) => $a->face->seq)->implode('+') : strtolower($p['state']) }}</small>
                                 </button>
                             @endforeach

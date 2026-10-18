@@ -21,7 +21,7 @@
                     <thead><tr><th>#</th><th>Material / work</th><th>Loading units</th><th>Trucks</th><th>Support</th><th>Cut / blocks</th></tr></thead>
                     <tbody>
                     @forelse($lineupFaces as $row)
-                        <tr><td class="num">{{ $row['face']->seq }}</td><td>{{ $row['face']->what() }}</td><td>{{ implode(' + ', $row['loaders']) ?: '—' }}</td><td>{{ count($row['trucks']) }}{{ $row['trucks'] ? ': '.implode(', ', $row['trucks']) : '' }}</td><td>{{ implode(', ', $row['support']) ?: '—' }}</td><td class="dot-ledger__key">{{ trim(($row['face']->cut ?? '').' '.implode(' ', $row['face']->blocks ?? [])) ?: '—' }}</td></tr>
+                        <tr><td class="num">{{ $row['face']->seq }}</td><td>{{ $row['face']->what() }}</td><td>{{ implode(' + ', $row['loaders']) ?: '—' }}@if($row['linked'] !== []) (also {{ implode(', ', $row['linked']) }})@endif</td><td>{{ count($row['trucks']) }}{{ $row['trucks'] ? ': '.implode(', ', $row['trucks']) : '' }}</td><td>{{ implode(', ', $row['support']) ?: '—' }}</td><td class="dot-ledger__key">{{ trim(($row['face']->cut ?? '').' '.implode(' ', $row['face']->blocks ?? [])) ?: '—' }}</td></tr>
                     @empty
                         <tr><td colspan="6" class="dot-ledger__empty">No faces yet — build them on the Shift Line-up.</td></tr>
                     @endforelse

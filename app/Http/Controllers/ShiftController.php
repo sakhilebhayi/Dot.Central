@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\EquipmentStatusEvent;
+use App\Models\LineupFace;
 use App\Models\LineupStandby;
 use App\Models\OperationalException;
 use App\Models\Shift;
@@ -79,7 +80,7 @@ class ShiftController extends Controller
             foreach ($this->lineup->faces($previous) as $face) {
                 $members = $face->allocations()->where(fn ($q) => $q->whereNull('to_at')->orWhere('to_at', '>=', $end))->get();
                 $names = fn (string $role) => $members->where('role', $role)->map(fn ($a) => $pool[$a->equipment_id]['equipment']->name ?? '?')->values()->all();
-                $faces[] = ['label' => $face->label(), 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT')];
+                $faces[] = ['label' => $face->label(), 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT'), 'linked_with' => $this->lineup->linkedFaces($face)->map(fn (LineupFace $l) => 'Face '.$l->seq)->all()];
             }
         }
 
@@ -99,7 +100,7 @@ class ShiftController extends Controller
         foreach ($this->lineup->faces($shift) as $face) {
             $members = $face->allocations()->whereNull('to_at')->get();
             $names = fn (string $role) => $members->where('role', $role)->map(fn ($a) => $pool[$a->equipment_id]['equipment']->name ?? '?')->values()->all();
-            $rows[] = ['face' => $face, 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT')];
+            $rows[] = ['face' => $face, 'loaders' => $names('LOADER'), 'trucks' => $names('HAUL'), 'support' => $names('SUPPORT'), 'linked' => $this->lineup->linkedFaces($face)->map(fn (LineupFace $l) => 'Face '.$l->seq)->all()];
         }
 
         return $rows;
