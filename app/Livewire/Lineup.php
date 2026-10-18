@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
 use App\Models\LineupFace;
 use App\Models\LineupStandby;
 use App\Models\Operator;
@@ -55,6 +56,9 @@ class Lineup extends Component
 
     /** @var array<int, string> */
     public array $closeReason = [];
+
+    /** @var array{allocation?: int, edge?: string, expected?: string, time?: string, reason?: string} */
+    public array $correction = [];
 
     public function mount(Shift $shift): void
     {
@@ -142,6 +146,12 @@ class Lineup extends Component
             }
             $face = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail($faceId);
             $unit = Equipment::withoutGlobalScopes()->where('control_room_id', $this->shift->control_room_id)->findOrFail($unitId);
+            $here = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('lineup_face_id', $face->id)->where('equipment_id', $unit->id)->whereNull('to_at')->first();
+            if ($here !== null) {
+                $this->alreadyHere($service, $here, $unit);
+
+                return;
+            }
             try {
                 $allocation = $service->place($this->shift, $face, $unit, auth()->user(), $this->changeAt ?: null, $move);
             } catch (ValidationException $e) {
@@ -183,6 +193,64 @@ class Lineup extends Component
             $service->endStandby($standby, auth()->user(), $this->changeAt ?: null);
             $this->notice = 'Standby ended.';
         });
+    }
+
+    // ---- corrections (I-29) ---------------------------------------------------------------------------------
+
+    public function startCorrection(int $allocationId, string $edge, ?string $time = null): void
+    {
+        $this->clearMessages();
+        if (! $this->editable()) {
+            $this->refusal = 'SH-04 '.$this->shift->label().' is '.$this->shift->status.' or your role cannot change the line-up.';
+
+            return;
+        }
+        $allocation = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail($allocationId);
+        $old = $edge === LineupCorrection::ARRIVAL ? $allocation->from_at : $allocation->to_at;
+        if ($old === null) {
+            $this->refusal = 'LU-05 '.$allocation->equipment?->name.' is still on this face. Take it off with "Remove" at the time it left.';
+
+            return;
+        }
+        $this->correction = [
+            'allocation' => $allocation->id, 'edge' => $edge, 'expected' => $old->toIso8601String(),
+            'time' => $time ?? $old->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i'), 'reason' => '',
+        ];
+    }
+
+    public function cancelCorrection(): void
+    {
+        $this->correction = [];
+        $this->clearMessages();
+    }
+
+    public function saveCorrection(): void
+    {
+        $this->run(function (LineupService $service): void {
+            $allocation = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find((int) ($this->correction['allocation'] ?? 0));
+            if ($allocation === null) {
+                $this->correction = [];
+                $this->refusal = 'LU-15 That line-up entry no longer exists: someone removed it meanwhile.';
+
+                return;
+            }
+            $result = $service->correctTime($allocation, (string) ($this->correction['edge'] ?? ''), (string) ($this->correction['time'] ?? ''), (string) ($this->correction['reason'] ?? ''), auth()->user(), ((string) ($this->correction['expected'] ?? '')) ?: null);
+            $this->correction = [];
+            $this->notice = $result === null ? 'Nothing changed: that is already the recorded time.' : $service->describeCorrection($result);
+        });
+    }
+
+    /** Clicking a machine that is already on the face: offer the correction when "Changes recorded at" is earlier than its arrival. */
+    private function alreadyHere(LineupService $service, LineupAllocation $here, Equipment $unit): void
+    {
+        $planning = $service->isPlanning($this->shift);
+        if (! $planning && $this->changeAt !== '' && $service->changeAt($this->shift, $this->changeAt)->lessThan($here->from_at)) {
+            $this->startCorrection($here->id, LineupCorrection::ARRIVAL, $this->changeAt);
+
+            return;
+        }
+        $since = $here->from_at->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i');
+        $this->notice = $unit->name.' is already on this face'.($planning ? '.' : ' (since '.$since.'; select that time on its row to correct it).');
     }
 
     // ---- operators ---------------------------------------------------------------------------------------
@@ -282,6 +350,11 @@ class Lineup extends Component
             'standbyReasons' => DowntimeReason::where('control_room_id', $room->id)->where('is_active', true)->whereIn('category', LineupStandby::CATEGORIES)->orderBy('name')->get(),
             'locations' => $locations->options($room),
             'timezone' => $room->timezone(),
+            'correcting' => ($this->correction['allocation'] ?? null) !== null ? LineupAllocation::withoutGlobalScopes()->with(['face', 'equipment'])->find($this->correction['allocation']) : null,
+            'corrected' => LineupCorrection::withoutGlobalScopes()->where('shift_id', $this->shift->id)->orderBy('id')->get()
+                ->groupBy(fn (LineupCorrection $c) => $c->lineup_allocation_id.':'.$c->edge)
+                ->map(fn ($rows) => $rows->map(fn (LineupCorrection $c) => 'was '.$c->old_at->copy()->setTimezone($room->timezone())->format('H:i').': '.$c->reason)->implode('; '))
+                ->all(),
         ]);
     }
 

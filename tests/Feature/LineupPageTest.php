@@ -10,6 +10,7 @@ use App\Models\DowntimeReason;
 use App\Models\Equipment;
 use App\Models\EquipmentStatusEvent;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
 use App\Models\MinesConnection;
 use App\Models\OperationalException;
 use App\Models\Operator;
@@ -139,5 +140,62 @@ class LineupPageTest extends TestCase
 
         $page->set('filter', 'available')->assertSee('HT-01')->assertDontSee('DZ-01');
         $page->set('filter', 'free')->assertDontSee('HT-01')->assertSee('Every machine has a place or a reason.');
+    }
+
+    public function test_a_late_move_is_corrected_from_its_since_time_and_refusals_stay_in_the_panel(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face1 = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $face2 = $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $service->place($this->shift, $face1, $this->truck, $this->operator, '08:00');
+        $moved = $service->place($this->shift, $face2, $this->truck, $this->operator, '10:30', true);
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->assertSeeHtml('aria-label="Correct when HT-01 arrived on Face 2 — Loading area 2 — Overburden (recorded 2026-10-15 10:30)"')
+            ->assertSeeHtml('aria-label="Correct when HT-01 left Face 1 — Loading area 1 — Overburden (recorded 2026-10-15 10:30)"')
+            ->call('startCorrection', $moved->id, LineupCorrection::ARRIVAL)
+            ->assertSee('When did HT-01 arrive on Face 2 — Loading area 2 — Overburden?')
+            ->assertSee('Recorded 2026-10-15 10:30. A move is one moment: the face it came from is corrected with it.')
+            ->assertSet('correction.time', '10:30')
+            ->set('correction.time', '10:00')
+            ->call('saveCorrection')
+            ->assertSee('Say why the time is corrected')
+            ->assertSee('When did HT-01 arrive on Face 2')
+            ->set('correction.reason', 'The move was clicked late')
+            ->call('saveCorrection')
+            ->assertSee('HT-01 on Face 2 — Loading area 2 — Overburden at 10:00 (was 10:30); off Face 1 — Loading area 1 — Overburden at the same time.')
+            ->assertDontSee('When did HT-01 arrive')
+            ->assertSeeHtml('>corrected</span>');
+
+        $this->assertSame('2026-10-15 10:00:00', $moved->fresh()->from_at->toDateTimeString());
+    }
+
+    public function test_clicking_a_machine_already_on_the_face_with_an_earlier_time_opens_the_correction(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('place', $this->truck->id, false, $face->id)
+            ->assertSee('HT-01 is already on this face (since 10:30; select that time on its row to correct it).')
+            ->set('changeAt', '09:45')
+            ->call('place', $this->truck->id, false, $face->id)
+            ->assertSee('When did HT-01 arrive on Face 1 — Loading area 1 — Overburden?')
+            ->assertSet('correction.time', '09:45');
+    }
+
+    public function test_managers_see_times_as_text_and_cannot_open_a_correction(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+
+        Livewire::actingAs($this->manager)->test(Lineup::class, ['shift' => $this->shift])
+            ->assertSee('2026-10-15 10:30')->assertDontSeeHtml('wire:click="startCorrection')
+            ->call('startCorrection', $stint->id, LineupCorrection::ARRIVAL)
+            ->assertSee('SH-04')->assertSet('correction', []);
     }
 }
