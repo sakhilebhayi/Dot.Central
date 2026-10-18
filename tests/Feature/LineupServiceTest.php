@@ -418,6 +418,8 @@ class LineupServiceTest extends TestCase
         $this->assertNull($this->service->ambiguityNote($night, Carbon::parse('2026-10-24 22:30:00')));
         $this->assertSame('01:40 GMT, the second time the clock showed 01:40', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 01:40:00')));
         $this->assertSame('01:50 BST, the first time the clock showed 01:50', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 00:50:00')));
+        $this->assertSame('01:50 BST, the first time the clock showed 01:50', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 00:50:27')), 'seconds do not change the pass');
+        $this->assertSame('01:40 GMT, the second time the clock showed 01:40', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 01:40:27')));
 
         $face = $this->service->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '18:00');
         $placed = $this->service->place($night, $face, $this->truck1, $this->user, '01:40');

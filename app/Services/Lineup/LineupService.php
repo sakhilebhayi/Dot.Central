@@ -1002,7 +1002,7 @@ final class LineupService
             return null;
         }
 
-        return $local->format('H:i T').', the '.($at->equalTo($first) ? 'first' : 'second').' time the clock showed '.$local->format('H:i');
+        return $local->format('H:i T').', the '.($at->copy()->startOfMinute()->equalTo($first) ? 'first' : 'second').' time the clock showed '.$local->format('H:i');
     }
 
     /** HH:MM on the control room's clock ("now" for an open end). */
