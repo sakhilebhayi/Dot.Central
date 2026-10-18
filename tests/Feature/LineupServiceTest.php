@@ -439,4 +439,35 @@ class LineupServiceTest extends TestCase
         $this->assertSame('02:30 AEST, the second time the clock showed 02:30', $this->service->ambiguityNote($night, Carbon::parse('2026-04-04 16:30:00')));
         $this->assertSame('2026-04-04 12:00:00', $this->service->changeAt($night, '23:00')->toDateTimeString(), 'a control that is not repeated: 23:00 AEDT');
     }
+
+    public function test_a_placement_recorded_before_the_machine_went_on_standby_is_refused(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $standby = $this->service->setStandby($this->shift, $this->truck1, $reason, $this->user, '11:00');
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:00'));
+
+        $this->assertStringContainsString('LU-05 Time before the standby began: HT-01 has been on standby since 11:00', $message);
+        $this->assertNull($standby->fresh()->to_at, 'the standby is untouched');
+        $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck1->id)->count());
+
+        $this->service->place($this->shift, $face, $this->truck1, $this->user, '11:30');
+        $this->assertSame('2026-10-15 11:30:00', $standby->fresh()->to_at->toDateTimeString());
+    }
+
+    public function test_closing_a_face_before_a_machine_arrived_on_it_is_refused_instead_of_deleting_its_stint(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $stint = $this->service->place($this->shift, $face, $this->truck1, $this->user, '11:00');
+
+        $message = $this->refusal(fn () => $this->service->closeFace($face->fresh(), 'Done', $this->user, '10:00'));
+
+        $this->assertStringContainsString('LU-05 Time before the machine arrived: HT-01 only arrived on Face 1 — Loading area 1 — Overburden at 11:00', $message);
+        $this->assertNotNull(LineupAllocation::withoutGlobalScopes()->find($stint->id), 'the stint is kept');
+        $this->assertFalse($face->fresh()->isClosed(), 'the face stays open');
+
+        $this->service->closeFace($face->fresh(), 'Done', $this->user, '11:30');
+        $this->assertTrue($face->fresh()->isClosed());
+    }
 }

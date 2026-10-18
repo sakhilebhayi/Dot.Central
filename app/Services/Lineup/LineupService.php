@@ -289,8 +289,15 @@ final class LineupService
             $this->refuse('LU-05', 'Say why the face is closing (material finished, loading unit moved, breakdown …).');
         }
         $at = $this->changeAt($shift, $hhmm);
+        $open = $face->allocations()->whereNull('to_at')->get();
+        if (! $this->isPlanning($shift)) {
+            $early = $open->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
+            if ($early !== null) {
+                $this->refuse('LU-05', 'Time before the machine arrived: '.$early->equipment?->name.' only arrived on '.$face->label().' at '.$this->hm($shift, $early->from_at).'. Close the face at that time or later, or first correct when it arrived (select its time on the face).');
+            }
+        }
 
-        foreach ($face->allocations()->whereNull('to_at')->get() as $allocation) {
+        foreach ($open as $allocation) {
             $this->endAllocation($allocation, $at, 'Face closed: '.$reason, $user, $this->isPlanning($shift));
         }
 
@@ -368,8 +375,11 @@ final class LineupService
             }
 
             $standby = LineupStandby::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->first();
+            if ($standby !== null && ! $planning && $at->lessThan($standby->from_at)) {
+                $this->refuse('LU-05', 'Time before the standby began: '.$unit->name.' has been on standby since '.$this->hm($shift, $standby->from_at).'. Record the placement at that time or later, or first end the standby.');
+            }
             if ($standby !== null) {
-                $planning ? $standby->delete() : $standby->fill(['to_at' => $at, 'ended_by' => $user->id])->save();
+                $planning || $at->lessThanOrEqualTo($standby->from_at) ? $standby->delete() : $standby->fill(['to_at' => $at, 'ended_by' => $user->id])->save();
             }
 
             $this->lineup($shift)->save();
