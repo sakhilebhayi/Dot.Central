@@ -41,13 +41,21 @@ return new class extends Migration
     {
         DB::transaction(function (): void {
             $this->holdTheWriteLock();
-            $this->renumberDuplicates();
+            $changes = $this->renumberDuplicates();
 
             if (! Schema::hasIndex('lineup_faces', self::INDEX)) {
                 Schema::table('lineup_faces', function (Blueprint $table): void {
                     $table->unique(['shift_id', 'seq'], self::INDEX);
                 });
             }
+
+            // Logged once the whole transaction (this one and the migrator's) has committed:
+            // a migration that rolled back must not claim it renumbered anything.
+            DB::afterCommit(function () use ($changes): void {
+                foreach ($changes as $change) {
+                    Log::info('I-34 lineup face renumbered: the number was used twice in the shift', $change);
+                }
+            });
         });
     }
 
@@ -76,8 +84,13 @@ return new class extends Migration
         }
     }
 
-    private function renumberDuplicates(): void
+    /**
+     * @return list<array{face_id: int, shift_id: int, old_seq: int, new_seq: int}>
+     */
+    private function renumberDuplicates(): array
     {
+        $changes = [];
+
         $shiftIds = DB::table('lineup_faces')
             ->select('shift_id')
             ->groupBy('shift_id', 'seq')
@@ -103,33 +116,46 @@ return new class extends Migration
 
                 $new = $next++;
                 DB::table('lineup_faces')->where('id', $face->id)->update(['seq' => $new]);
-                $this->record((int) $face->id, (int) $shiftId, (int) $face->control_room_id, $old, $new);
+                $change = ['face_id' => (int) $face->id, 'shift_id' => (int) $shiftId, 'old_seq' => $old, 'new_seq' => $new];
+                $changes[] = $change;
+                $this->audit($change, (int) $face->control_room_id);
             }
         }
+
+        return $changes;
     }
 
-    private function record(int $faceId, int $shiftId, int $controlRoomId, int $old, int $new): void
+    /**
+     * The audit trail is a record of the change, never a reason to fail the deploy: each row is
+     * written in its own savepoint (Postgres aborts the whole transaction on an error otherwise)
+     * and a failure is logged, with the numbers, and skipped.
+     *
+     * @param  array{face_id: int, shift_id: int, old_seq: int, new_seq: int}  $change
+     */
+    private function audit(array $change, int $controlRoomId): void
     {
-        Log::info('I-34 lineup face renumbered: the number was used twice in the shift', [
-            'face_id' => $faceId, 'shift_id' => $shiftId, 'old_seq' => $old, 'new_seq' => $new,
-        ]);
-
-        DB::table('audit_log')->insert([
-            'occurred_at' => now(),
-            'user_id' => null,
-            'user_role' => null,
-            'team_id' => DB::table('control_rooms')->where('id', $controlRoomId)->value('team_id'),
-            'control_room_id' => $controlRoomId,
-            'shift_id' => $shiftId,
-            'entity_type' => 'App\\Models\\LineupFace',
-            'entity_id' => $faceId,
-            'action' => 'updated',
-            'changes' => json_encode(['seq' => ['old' => $old, 'new' => $new]]),
-            'reason' => "Face number made unique so the shift's numbers can be indexed (I-34): was Face {$old}, now Face {$new}. The face is the same face.",
-            'automatic' => true,
-            'approved_by' => null,
-            'ip' => null,
-            'created_at' => now(),
-        ]);
+        try {
+            DB::transaction(function () use ($change, $controlRoomId): void {
+                DB::table('audit_log')->insert([
+                    'occurred_at' => now(),
+                    'user_id' => null,
+                    'user_role' => null,
+                    'team_id' => DB::table('control_rooms')->where('id', $controlRoomId)->value('team_id'),
+                    'control_room_id' => $controlRoomId,
+                    'shift_id' => $change['shift_id'],
+                    'entity_type' => 'App\\Models\\LineupFace',
+                    'entity_id' => $change['face_id'],
+                    'action' => 'updated',
+                    'changes' => json_encode(['seq' => ['old' => $change['old_seq'], 'new' => $change['new_seq']]]),
+                    'reason' => "Face number made unique so the shift's numbers can be indexed (I-34): was Face {$change['old_seq']}, now Face {$change['new_seq']}. The face is the same face.",
+                    'automatic' => true,
+                    'approved_by' => null,
+                    'ip' => null,
+                    'created_at' => now(),
+                ]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('I-34 lineup face renumbered but its audit row could not be written', $change + ['error' => $e->getMessage()]);
+        }
     }
 };

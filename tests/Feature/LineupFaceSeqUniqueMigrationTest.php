@@ -311,13 +311,20 @@ class LineupFaceSeqUniqueMigrationTest extends TestCase
         $this->assertSame(2, DB::table('lineup_faces')->where('shift_id', $other->id)->count());
     }
 
-    public function test_a_failure_while_renumbering_leaves_the_data_and_the_schema_as_they_were(): void
+    /** Makes the index step fail: another table already owns the index name (index names are schema-wide). */
+    private function blockTheIndexName(): void
+    {
+        DB::statement('create index '.self::INDEX.' on lineup_allocations (id)');
+    }
+
+    public function test_a_failure_while_creating_the_index_rolls_the_renumbering_back_and_logs_nothing_as_done(): void
     {
         $this->previousState();
         $this->duplicatedFixture();
         $before = DB::table('lineup_faces')->orderBy('id')->get()->map(fn ($r) => (array) $r)->all();
-        // A failing audit insert (the trail is a table of its own) must roll the renumbering back.
-        Schema::drop('audit_log');
+        $audits = AuditEntry::count();
+        $this->blockTheIndexName();
+        Log::spy();
 
         try {
             Artisan::call('migrate', ['--force' => true]);
@@ -327,7 +334,8 @@ class LineupFaceSeqUniqueMigrationTest extends TestCase
         }
 
         $this->assertSame($before, DB::table('lineup_faces')->orderBy('id')->get()->map(fn ($r) => (array) $r)->all());
-        $this->assertFalse(Schema::hasIndex('lineup_faces', self::INDEX));
+        $this->assertSame($audits, AuditEntry::count());
+        Log::shouldNotHaveReceived('info');
     }
 
     public function test_called_directly_a_failure_still_rolls_the_renumbering_back(): void
@@ -335,7 +343,8 @@ class LineupFaceSeqUniqueMigrationTest extends TestCase
         $this->previousState();
         $this->duplicatedFixture();
         $before = DB::table('lineup_faces')->orderBy('id')->get()->map(fn ($r) => (array) $r)->all();
-        Schema::drop('audit_log');
+        $this->blockTheIndexName();
+        Log::spy();
         $migration = require base_path(self::MIGRATION);
 
         try {
@@ -346,13 +355,62 @@ class LineupFaceSeqUniqueMigrationTest extends TestCase
         }
 
         $this->assertSame($before, DB::table('lineup_faces')->orderBy('id')->get()->map(fn ($r) => (array) $r)->all());
-        $this->assertFalse(Schema::hasIndex('lineup_faces', self::INDEX));
+        Log::shouldNotHaveReceived('info');
+    }
+
+    /** SQLite: the audit insert for one face is made to fail (a trigger), the others succeed. */
+    private function failAuditInsertFor(int $faceId): void
+    {
+        DB::unprepared("create trigger i34_forced_failure before insert on audit_log when new.entity_id = {$faceId} and new.action = 'updated' begin select raise(abort, 'forced audit failure'); end");
+    }
+
+    public function test_a_failing_audit_insert_never_fails_the_migration_the_numbers_and_the_index_still_land(): void
+    {
+        $this->onlyOnSqlite();
+        $this->previousState();
+        $ids = $this->duplicatedFixture();
+        $failed = $ids['a'][3];
+        $this->failAuditInsertFor($failed);
+        Log::spy();
+
+        $this->assertSame(0, Artisan::call('migrate', ['--force' => true]));
+
+        $this->assertSame([$ids['a'][0] => 1, $ids['a'][1] => 2, $ids['a'][2] => 4, $ids['a'][3] => 5, $ids['a'][4] => 3, $ids['a'][5] => 6], $this->seqs($this->shifts['a']));
+        $this->assertSame([$ids['b'][0] => 1, $ids['b'][1] => 2], $this->seqs($this->shifts['b']));
+        $this->assertTrue(Schema::hasIndex('lineup_faces', self::INDEX, 'unique'));
+        $audited = $this->renumberAudits()->pluck('entity_id')->all();
+        $this->assertEqualsCanonicalizing([$ids['a'][2], $ids['a'][5], $ids['b'][1]], $audited, 'every other change is audited; the failed one is not');
+        Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => str_contains($message, 'I-34')
+            && $context['face_id'] === $failed && $context['shift_id'] === $this->shifts['a']->id && $context['old_seq'] === 1 && $context['new_seq'] === 5)->once();
+        Log::shouldHaveReceived('warning')->times(1);
+        // the change is still logged as done: the log is the other record
+        Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context = []) => ($context['face_id'] ?? null) === $failed)->once();
+    }
+
+    public function test_a_failing_audit_insert_does_not_poison_the_transaction_for_the_next_one(): void
+    {
+        $this->onlyOnSqlite();
+        $this->previousState();
+        $ids = $this->duplicatedFixture();
+        $this->failAuditInsertFor($ids['a'][2]);
+
+        $this->assertSame(0, Artisan::call('migrate', ['--force' => true]));
+
+        $this->assertEqualsCanonicalizing([$ids['a'][3], $ids['a'][5], $ids['b'][1]], $this->renumberAudits()->pluck('entity_id')->all(), 'the audit inserts after the failed one still work');
+    }
+
+    private function onlyOnSqlite(): void
+    {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Uses SQLite triggers and a SQLite file.');
+        }
     }
 
     // ---- the real artisan path on a SQLite file -----------------------------------------------------------------
 
     public function test_on_a_sqlite_file_the_real_artisan_migrate_renumbers_creates_the_index_and_is_repeatable(): void
     {
+        $this->onlyOnSqlite();
         $file = tempnam(sys_get_temp_dir(), 'i34-').'.sqlite';
         touch($file);
         $this->useScratchSqlite($file);
@@ -396,6 +454,40 @@ class LineupFaceSeqUniqueMigrationTest extends TestCase
             DB::purge('i34_file');
             $this->assertTrue(Schema::hasIndex('lineup_faces', self::INDEX, 'unique'));
             $this->assertCount(4, $this->renumberAudits());
+        } finally {
+            config(['database.default' => 'sqlite']);
+            DB::purge('i34_file');
+            foreach (['', '-wal', '-shm'] as $suffix) {
+                @unlink($file.$suffix);
+            }
+        }
+    }
+
+    public function test_on_a_sqlite_file_a_failing_audit_insert_does_not_fail_the_real_artisan_migrate(): void
+    {
+        $this->onlyOnSqlite();
+        $file = tempnam(sys_get_temp_dir(), 'i34-').'.sqlite';
+        touch($file);
+        $this->useScratchSqlite($file);
+
+        try {
+            $this->assertSame(0, Artisan::call('migrate', ['--force' => true]));
+            $this->room = ControlRoom::factory()->for(User::factory()->withPersonalTeam()->create()->currentTeam)->create();
+            app(RoomProvisioner::class)->provision($this->room);
+            $this->previousState();
+            $ids = $this->duplicatedFixture();
+            $this->failAuditInsertFor($ids['a'][3]);
+
+            $run = $this->runArtisan('migrate', $file);
+
+            $this->assertSame(0, $run->getExitCode(), $run->getOutput().$run->getErrorOutput());
+            $this->assertStringContainsString('DONE', $run->getOutput());
+            $this->assertSame(1, substr_count($run->getErrorOutput(), 'WARNING'), 'one warning for the one failed audit insert');
+            $this->assertSame(4, substr_count($run->getErrorOutput(), 'INFO: I-34'), 'all four changes are logged as done, the failed audit one too: '.$run->getErrorOutput());
+            DB::purge('i34_file');
+            $this->assertSame([$ids['a'][0] => 1, $ids['a'][1] => 2, $ids['a'][2] => 4, $ids['a'][3] => 5, $ids['a'][4] => 3, $ids['a'][5] => 6], $this->seqs($this->shifts['a']));
+            $this->assertTrue(Schema::hasIndex('lineup_faces', self::INDEX, 'unique'));
+            $this->assertCount(3, $this->renumberAudits());
         } finally {
             config(['database.default' => 'sqlite']);
             DB::purge('i34_file');

@@ -1475,7 +1475,8 @@ final class LineupService
     {
         $driverMessage = $this->driverMessage($e);
 
-        return str_contains($driverMessage, 'lineup_faces') && str_contains($driverMessage, 'seq');
+        // Postgres names the constraint; SQLite names the columns.
+        return str_contains($driverMessage, 'lineup_faces_shift_id_seq_unique') || str_contains($driverMessage, 'lineup_faces.seq');
     }
 
     /** The database's own words, without the SQL and its values. */

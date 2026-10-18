@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use PDOException;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -197,6 +198,47 @@ class LineupFaceNumberClashTest extends TestCase
         try {
             $this->service->addFace($this->shift, ['location' => 'default:Loading area 3', 'kind' => 'LOADING', 'material' => 'Waste'], $this->user, '08:00');
         } finally {
+            $this->assertSame(1, $attempts);
+        }
+    }
+
+    /** A unique violation as the PDO driver words it. */
+    private function violation(string $driverMessage): UniqueConstraintViolationException
+    {
+        $pdo = new PDOException('driver');
+        $pdo->errorInfo = ['23505', 7, $driverMessage];
+
+        return new UniqueConstraintViolationException('pgsql', 'insert into "lineup_faces" ...', [], $pdo);
+    }
+
+    public function test_postgres_wording_with_the_constraint_name_is_a_number_clash_and_is_retried(): void
+    {
+        $attempts = 0;
+        LineupFace::creating(function () use (&$attempts): void {
+            if (++$attempts === 1) {
+                throw $this->violation('ERROR: duplicate key value violates unique constraint "lineup_faces_shift_id_seq_unique"');
+            }
+        });
+
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 3', 'kind' => 'LOADING', 'material' => 'Waste'], $this->user, '08:00');
+
+        $this->assertSame(2, $attempts);
+        $this->assertSame(3, $face->seq);
+    }
+
+    public function test_postgres_wording_of_another_constraint_is_not_a_number_clash(): void
+    {
+        $attempts = 0;
+        LineupFace::creating(function () use (&$attempts): void {
+            $attempts++;
+
+            throw $this->violation('ERROR: duplicate key value violates unique constraint "lineup_faces_pkey"');
+        });
+
+        try {
+            $this->service->addFace($this->shift, ['location' => 'default:Loading area 3', 'kind' => 'LOADING', 'material' => 'Waste'], $this->user, '08:00');
+            $this->fail('Expected the violation to pass through.');
+        } catch (UniqueConstraintViolationException) {
             $this->assertSame(1, $attempts);
         }
     }
