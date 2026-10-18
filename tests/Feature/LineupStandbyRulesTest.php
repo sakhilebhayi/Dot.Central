@@ -250,4 +250,57 @@ class LineupStandbyRulesTest extends TestCase
             ->assertSeeHtml('placeholder="why?" style="width:7rem;" maxlength="255" aria-label="Reason to take HT-01 off"');
         $this->assertNotNull($stint);
     }
+
+    public function test_releasing_a_stint_that_was_moved_meanwhile_is_reported_not_written_over_the_new_one(): void
+    {
+        $stale = $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $this->service->place($this->shift, $this->face2, $this->truck, $this->user, '10:30', true);
+
+        $this->assertStringContainsString('LU-15', $this->refusal(fn () => $this->service->release($stale, 'Finished', $this->user, '11:00')));
+
+        $this->assertSame('08:30', $stale->fresh()->to_at->format('H:i'), 'the move at 10:30 on the room clock (08:30 UTC) stands: the release did not write over it');
+    }
+
+    public function test_a_release_is_checked_again_under_the_machines_lock(): void
+    {
+        $stint = $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $fired = false;
+        Event::listen(TransactionBeginning::class, function () use (&$fired, $stint): void {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            // a second supervisor corrects the arrival to after the time being recorded, just before this one takes its lock
+            DB::table('lineup_allocations')->where('id', $stint->id)->update(['from_at' => '2026-10-15 08:15:00']);
+        });
+
+        $message = $this->refusal(fn () => $this->service->release($stint, 'Finished', $this->user, '10:00'));
+
+        $this->assertTrue($fired, 'the release runs in a transaction');
+        $this->assertSame('LU-05 Time before the machine arrived (10:15).', $message);
+        $this->assertNull($stint->fresh()->to_at);
+    }
+
+    public function test_closing_a_face_also_ends_a_machine_placed_on_it_meanwhile(): void
+    {
+        $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $late = Equipment::factory()->for($this->room)->create(['name' => 'HT-02', 'role_class' => RoleClass::HAUL, 'mines_status' => 'active', 'last_heard_at' => now()]);
+        $fired = false;
+        Event::listen(TransactionBeginning::class, function () use (&$fired, $late): void {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            // another operator puts a second truck on the face just before the closing takes its locks
+            DB::table('lineup_allocations')->insert(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'lineup_face_id' => $this->face1->id, 'equipment_id' => $late->id, 'role' => 'HAUL', 'from_at' => '2026-10-15 07:00:00', 'created_at' => now(), 'updated_at' => now()]);
+        });
+
+        $message = $this->refusal(fn () => $this->service->closeFace($this->face1, 'Finished', $this->user, '10:00'));
+
+        $this->assertTrue($fired);
+        $this->assertStringContainsString('LU-15', $message);
+        $this->assertFalse($this->face1->fresh()->isClosed(), 'nothing half done: the face stays open for a second try');
+        $this->service->closeFace($this->face1->fresh(), 'Finished', $this->user, '10:00');
+        $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $this->face1->id)->whereNull('to_at')->count());
+    }
 }

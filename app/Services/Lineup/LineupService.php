@@ -372,19 +372,36 @@ final class LineupService
         }
         $this->refuseLongReason($reason);
         $at = $this->changeAt($shift, $hhmm);
-        $open = $face->allocations()->whereNull('to_at')->get();
-        if (! $this->isPlanning($shift)) {
-            $early = $open->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
-            if ($early !== null) {
-                $this->refuse('LU-05', 'Time before the machine arrived: '.$early->equipment?->name.' only arrived on '.$face->label().' at '.$this->hm($shift, $early->from_at).'. Close the face at that time or later, or first correct when it arrived (select its time on the face).');
+        $planning = $this->isPlanning($shift);
+
+        // Read before the transaction, locked first inside it (see lockMachine), then read again under the locks.
+        $lock = $face->allocations()->whereNull('to_at')->pluck('equipment_id')->unique()->sort()->values()->all();
+
+        DB::transaction(function () use ($face, $shift, $reason, $user, $at, $planning, $lock): void {
+            foreach ($lock as $equipmentId) {
+                $this->lockMachine($shift, $equipmentId);
             }
-        }
+            $current = $this->lockFace($face);
+            if ($current->isClosed()) {
+                $this->refuse('LU-05', $current->label().' is already closed.');
+            }
+            $open = $current->allocations()->with('equipment')->whereNull('to_at')->get();
+            if ($open->contains(fn (LineupAllocation $a) => ! in_array($a->equipment_id, $lock, true))) {
+                $this->refuse('LU-15', 'Someone put a machine on '.$current->label().' meanwhile. Check the face and close it again.');
+            }
+            if (! $planning) {
+                $early = $open->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
+                if ($early !== null) {
+                    $this->refuse('LU-05', 'Time before the machine arrived: '.$early->equipment?->name.' only arrived on '.$current->label().' at '.$this->hm($shift, $early->from_at).'. Close the face at that time or later, or first correct when it arrived (select its time on the face).');
+                }
+            }
 
-        foreach ($open as $allocation) {
-            $this->endAllocation($allocation, $at, 'Face closed: '.$reason, $user, $this->isPlanning($shift));
-        }
+            foreach ($open as $allocation) {
+                $this->endAllocation($allocation, $at, 'Face closed: '.$reason, $user, $planning);
+            }
 
-        $face->fill(['status' => 'CLOSED', 'closed_at' => $at, 'close_reason' => trim($reason), 'closed_by' => $user->id])->save();
+            $face->fill(['status' => 'CLOSED', 'closed_at' => $at, 'close_reason' => trim($reason), 'closed_by' => $user->id])->save();
+        });
     }
 
     // ---- placements ------------------------------------------------------------------------------------------
@@ -491,11 +508,20 @@ final class LineupService
             $this->refuseLongReason((string) $reason);
         }
         $at = $this->changeAt($shift, $hhmm);
-        if (! $planning && $at->lessThan($allocation->from_at)) {
-            $this->refuse('LU-05', 'Time before the machine arrived ('.$this->hm($shift, $allocation->from_at).').');
-        }
 
-        $this->endAllocation($allocation, $at, $planning ? 'Removed while planning' : trim((string) $reason), $user, $planning);
+        DB::transaction(function () use ($shift, $allocation, $reason, $user, $at, $planning): void {
+            // Read again under the machine's lock: the stint may have been moved, corrected or ended since the screen showed it.
+            $this->lockMachine($shift, $allocation->equipment_id);
+            $current = LineupAllocation::withoutGlobalScopes()->find($allocation->id);
+            if ($current === null || $current->to_at !== null) {
+                $this->refuse('LU-15', 'Someone changed this entry meanwhile: '.(Equipment::withoutGlobalScopes()->whereKey($allocation->equipment_id)->value('name') ?? 'the machine').' is no longer on the face. Check the line-up before changing it again.');
+            }
+            if (! $planning && $at->lessThan($current->from_at)) {
+                $this->refuse('LU-05', 'Time before the machine arrived ('.$this->hm($shift, $current->from_at).').');
+            }
+
+            $this->endAllocation($current, $at, $planning ? 'Removed while planning' : trim((string) $reason), $user, $planning);
+        });
     }
 
     private function endAllocation(LineupAllocation $allocation, Carbon $at, string $reason, User $user, bool $planning): void
