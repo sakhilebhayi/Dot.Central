@@ -21,10 +21,12 @@ use App\Services\Mines\Exceptions\MinesException;
 use App\Services\Mines\Exceptions\MinesRefused;
 use App\Services\Mines\MinesClientFactory;
 use App\Support\RoleClass;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -275,7 +277,8 @@ final class LineupService
         $location = $this->locations->resolve($shift->controlRoom, $attrs['location'] ?? null);
 
         // The next number is read under the shift's lock, so two faces added (or split) at once never share a number.
-        $face = DB::transaction(function () use ($shift, $location, $attrs, $at): LineupFace {
+        // The unique index (I-34) is the last guard: a clash is tried once more, with a fresh number.
+        $face = $this->numberingFaces($shift, fn (): LineupFace => DB::transaction(function () use ($shift, $location, $attrs, $at): LineupFace {
             $this->lockShiftFaces($shift);
             $kind = $attrs['kind'] ?? 'LOADING';
             $face = LineupFace::create($location + [
@@ -291,7 +294,7 @@ final class LineupService
             $this->lineup($shift)->save();
 
             return $face;
-        });
+        }));
 
         foreach ($attrs['loader_ids'] ?? [] as $id) {
             $unit = Equipment::withoutGlobalScopes()->where('control_room_id', $shift->control_room_id)->findOrFail($id);
@@ -453,7 +456,7 @@ final class LineupService
         // Read before the transaction, locked first inside it (see lockMachine), then read again under the locks.
         $lock = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->pluck('equipment_id')->unique()->sort()->values()->all();
 
-        return DB::transaction(function () use ($shift, $face, $material, $user, $at, $closeReason, $planning, $lock): LineupFace {
+        return $this->numberingFaces($shift, fn (): LineupFace => DB::transaction(function () use ($shift, $face, $material, $user, $at, $closeReason, $planning, $lock): LineupFace {
             foreach ($lock as $equipmentId) {
                 $this->lockMachine($shift, $equipmentId);
             }
@@ -500,7 +503,7 @@ final class LineupService
             $this->lineup($shift)->save();
 
             return $new;
-        });
+        }));
     }
 
     /** The rules a split must meet, read from the face as it is now ($at null: only the ones that need no time). */
@@ -1433,6 +1436,52 @@ final class LineupService
             return;
         }
         Shift::withoutGlobalScopes()->whereKey($shift->id)->lock('for no key update')->value('id');
+    }
+
+    /**
+     * lineup_faces (shift_id, seq) is unique (I-34). The numbering lock keeps two
+     * writers apart, so the index should never reject a number; if it does, the
+     * whole step (a transaction that has rolled back) is run once more, which
+     * reads the highest number again. A second clash is refused in plain words.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $attempt
+     * @return T
+     */
+    private function numberingFaces(Shift $shift, callable $attempt): mixed
+    {
+        try {
+            return $attempt();
+        } catch (UniqueConstraintViolationException $e) {
+            if (! $this->isFaceNumberClash($e)) {
+                throw $e;
+            }
+            Log::warning('lineup: face number already taken, trying once more with a fresh number', ['shift_id' => $shift->id, 'error' => $this->driverMessage($e)]);
+        }
+
+        try {
+            return $attempt();
+        } catch (UniqueConstraintViolationException $e) {
+            if (! $this->isFaceNumberClash($e)) {
+                throw $e;
+            }
+            Log::warning('lineup: face number taken again on the retry, refused', ['shift_id' => $shift->id, 'error' => $this->driverMessage($e)]);
+            $this->refuse('LU-15', 'The face could not be numbered because another change took its number at the same moment. Nothing was saved; check the line-up and try again.');
+        }
+    }
+
+    private function isFaceNumberClash(UniqueConstraintViolationException $e): bool
+    {
+        $driverMessage = $this->driverMessage($e);
+
+        return str_contains($driverMessage, 'lineup_faces') && str_contains($driverMessage, 'seq');
+    }
+
+    /** The database's own words, without the SQL and its values. */
+    private function driverMessage(UniqueConstraintViolationException $e): string
+    {
+        return (string) ($e->errorInfo[2] ?? $e->getMessage());
     }
 
     private function nextSeq(Shift $shift): int
