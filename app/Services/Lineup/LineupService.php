@@ -332,45 +332,51 @@ final class LineupService
             $this->refuse('LU-02', $unit->name.' is down: '.$down['cause'].($down['since'] ? ' since '.$down['since']->format('H:i') : '').'. It cannot be put on a face until Dot.Mines reports it running again or the stoppage is reclassified as not counting against availability.');
         }
 
-        $open = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->get();
-        $here = $open->first(fn (LineupAllocation $a) => $a->lineup_face_id === $face->id);
-        if ($here !== null) {
-            return $here;
-        }
+        return DB::transaction(function () use ($shift, $face, $unit, $user, $move, $at, $role): LineupAllocation {
+            // Read again under the machine's lock: another operator may have placed or moved it since the screen showed it.
+            $this->lockMachine($shift, $unit->id);
 
-        $elsewhere = $open->filter(fn (LineupAllocation $a) => $a->face !== null && ! $a->face->isClosed());
-        $shared = $role === 'LOADER' && $elsewhere->isNotEmpty() && $elsewhere->every(fn (LineupAllocation $a) => $a->role === 'LOADER' && $a->face->sameWorkplaceAs($face));
-
-        if ($elsewhere->isNotEmpty() && ! $move && ! $shared) {
-            $this->refuse('LU-01', $unit->name.' is already on '.$elsewhere->map(fn (LineupAllocation $a) => $a->face->label())->implode(' and ').'. Choose "Move here" to move it at '.($this->isPlanning($shift) ? 'shift start' : $at->format('H:i')).'.');
-        }
-
-        $planning = $this->isPlanning($shift);
-        if (! $planning) {
-            $this->refuseOverlap($shift, $unit, $face, $role, $at);
-            $early = $shared ? null : $elsewhere->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
-            if ($early !== null) {
-                $this->refuse('LU-05', 'Time before the machine arrived: '.$unit->name.' only arrived on '.$early->face?->label().' at '.$this->hm($shift, $early->from_at).'. Record the move at that time or later, or first correct when it arrived (select its time on that face).');
+            $open = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->get();
+            $here = $open->first(fn (LineupAllocation $a) => $a->lineup_face_id === $face->id);
+            if ($here !== null) {
+                return $here;
             }
-        }
 
-        if (! $shared) {
-            foreach ($elsewhere as $allocation) {
-                $this->endAllocation($allocation, $at, 'Moved to '.$face->label(), $user, $planning);
+            $elsewhere = $open->filter(fn (LineupAllocation $a) => $a->face !== null && ! $a->face->isClosed());
+            $shared = $role === 'LOADER' && $elsewhere->isNotEmpty() && $elsewhere->every(fn (LineupAllocation $a) => $a->role === 'LOADER' && $a->face->sameWorkplaceAs($face));
+
+            if ($elsewhere->isNotEmpty() && ! $move && ! $shared) {
+                $this->refuse('LU-01', $unit->name.' is already on '.$elsewhere->map(fn (LineupAllocation $a) => $a->face->label())->implode(' and ').'. Choose "Move here" to move it at '.($this->isPlanning($shift) ? 'shift start' : $at->format('H:i')).'.');
             }
-        }
 
-        $standby = LineupStandby::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->first();
-        if ($standby !== null) {
-            $planning ? $standby->delete() : $standby->fill(['to_at' => $at, 'ended_by' => $user->id])->save();
-        }
+            $planning = $this->isPlanning($shift);
+            if (! $planning) {
+                $this->refuseOverlap($shift, $unit, $face, $role, $at);
+                $early = $shared ? null : $elsewhere->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
+                if ($early !== null) {
+                    $this->refuse('LU-05', 'Time before the machine arrived: '.$unit->name.' only arrived on '.$early->face?->label().' at '.$this->hm($shift, $early->from_at).'. Record the move at that time or later, or first correct when it arrived (select its time on that face).');
+                }
+            }
 
-        $this->lineup($shift)->save();
+            if (! $shared) {
+                foreach ($elsewhere as $allocation) {
+                    $this->endAllocation($allocation, $at, 'Moved to '.$face->label(), $user, $planning);
+                }
+            }
 
-        return LineupAllocation::create([
-            'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'lineup_face_id' => $face->id, 'equipment_id' => $unit->id,
-            'role' => $role, 'from_at' => $at, 'created_by' => $user->id,
-        ]);
+            $standby = LineupStandby::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->first();
+            if ($standby !== null) {
+                $planning ? $standby->delete() : $standby->fill(['to_at' => $at, 'ended_by' => $user->id])->save();
+            }
+
+            $this->lineup($shift)->save();
+
+            return LineupAllocation::create([
+                'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'lineup_face_id' => $face->id, 'equipment_id' => $unit->id,
+                'role' => $role, 'from_at' => $at, 'created_by' => $user->id,
+            ]);
+
+        });
     }
 
     public function release(LineupAllocation $allocation, ?string $reason, User $user, ?string $hhmm = null): void
@@ -466,77 +472,82 @@ final class LineupService
             $this->refuse('LU-05', 'Enter the time it really happened (HH:MM).');
         }
         $at = $this->changeAt($shift, $hhmm);
-        $arrival = $edge === LineupCorrection::ARRIVAL;
-        $field = $arrival ? 'from_at' : 'to_at';
-        $partnerField = $arrival ? 'to_at' : 'from_at';
-        $face = LineupFace::withoutGlobalScopes()->findOrFail($allocation->lineup_face_id);
-        $unit = Equipment::withoutGlobalScopes()->findOrFail($allocation->equipment_id);
-        $who = $unit->name;
-        $old = $arrival ? $allocation->from_at : $allocation->to_at;
 
-        if ($expected !== null && ($old === null || ! $old->equalTo(Carbon::parse($expected)))) {
-            $this->refuse('LU-15', 'Someone changed this time meanwhile: '.$who.' is now recorded '.($arrival ? 'on ' : 'off ').$face->label().' at '.$this->hm($shift, $old).'. Check it and correct again if it is still wrong.');
-        }
-        if ($old === null) {
-            $this->refuse('LU-05', $who.' is still on '.$face->label().'. Take it off with "Remove" at the time it left.');
-        }
-        if ($at->equalTo($old)) {
-            return null;
-        }
+        return DB::transaction(function () use ($shift, $allocation, $edge, $reason, $user, $expected, $at): ?LineupCorrection {
+            // Everything below is read again under the machine's lock: another supervisor may have changed this stint, the one
+            // it moves with or a neighbour since the screen showed them (SQLite: the write takes its single lock, so every later
+            // read sees the latest commit; Postgres: the same write row-locks the machine's stints until this commits).
+            $this->lockMachine($shift, $allocation->equipment_id);
+            $allocation = LineupAllocation::withoutGlobalScopes()->find($allocation->id);
+            if ($allocation === null) {
+                $this->refuse('LU-15', 'Someone removed this entry meanwhile. Check the line-up and correct again if it is still wrong.');
+            }
+            $arrival = $edge === LineupCorrection::ARRIVAL;
+            $field = $arrival ? 'from_at' : 'to_at';
+            $partnerField = $arrival ? 'to_at' : 'from_at';
+            $face = LineupFace::withoutGlobalScopes()->findOrFail($allocation->lineup_face_id);
+            $unit = Equipment::withoutGlobalScopes()->findOrFail($allocation->equipment_id);
+            $who = $unit->name;
+            $old = $arrival ? $allocation->from_at : $allocation->to_at;
 
-        $from = $arrival ? $at : $allocation->from_at;
-        $to = $arrival ? $allocation->to_at : $at;
-        if ($to !== null && $to->lessThanOrEqualTo($from)) {
-            $this->refuse('LU-05', 'Times out of order: '.$who.($arrival
-                ? ' left '.$face->label().' at '.$this->hm($shift, $to).'. Pick a time before that.'
-                : ' arrived on '.$face->label().' at '.$this->hm($shift, $from).'. Pick a time after that.'));
-        }
-        $this->refuseOutsideLife($shift, $face, $from, $to);
+            if ($expected !== null && ($old === null || ! $old->equalTo(Carbon::parse($expected)))) {
+                $this->refuse('LU-15', 'Someone changed this time meanwhile: '.$who.' is now recorded '.($arrival ? 'on ' : 'off ').$face->label().' at '.$this->hm($shift, $old).'. Check it and correct again if it is still wrong.');
+            }
+            if ($old === null) {
+                $this->refuse('LU-05', $who.' is still on '.$face->label().'. Take it off with "Remove" at the time it left.');
+            }
+            if ($at->equalTo($old)) {
+                return null;
+            }
 
-        $partner = LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)
-            ->where('id', '!=', $allocation->id)->where($partnerField, $old)->first();
-        $partnerFace = null;
-        $pFrom = $from;
-        $pTo = $to;
-        if ($partner !== null) {
-            $partnerFace = LineupFace::withoutGlobalScopes()->findOrFail($partner->lineup_face_id);
-            $pFrom = $arrival ? $partner->from_at : $at;
-            $pTo = $arrival ? $at : $partner->to_at;
-            if ($pTo !== null && $pTo->lessThanOrEqualTo($pFrom)) {
+            $from = $arrival ? $at : $allocation->from_at;
+            $to = $arrival ? $allocation->to_at : $at;
+            if ($to !== null && $to->lessThanOrEqualTo($from)) {
                 $this->refuse('LU-05', 'Times out of order: '.$who.($arrival
-                    ? ' only arrived on '.$partnerFace->label().' at '.$this->hm($shift, $pFrom).'. Correct that time first, or pick a time after it.'
-                    : ' left '.$partnerFace->label().' at '.$this->hm($shift, $pTo).'. Correct that time first, or pick a time before it.'));
+                    ? ' left '.$face->label().' at '.$this->hm($shift, $to).'. Pick a time before that.'
+                    : ' arrived on '.$face->label().' at '.$this->hm($shift, $from).'. Pick a time after that.'));
             }
-            $this->refuseOutsideLife($shift, $partnerFace, $pFrom, $pTo);
-        }
+            $this->refuseOutsideLife($shift, $face, $from, $to);
 
-        $end = $shift->ends_at;
-        $overlaps = fn (Carbon $aFrom, ?Carbon $aTo, Carbon $bFrom, ?Carbon $bTo): bool => $aFrom->lessThan($bTo ?? $end) && $bFrom->lessThan($aTo ?? $end);
-        $linkedOk = fn (LineupAllocation $x, LineupFace $f, string $role): bool => $x->role === 'LOADER' && $role === 'LOADER' && $x->face !== null && $x->face->sameWorkplaceAs($f);
-        $clash = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)
-            ->whereNotIn('id', array_values(array_filter([$allocation->id, $partner?->id])))->orderBy('from_at')->get()
-            ->first(fn (LineupAllocation $x): bool => ($overlaps($x->from_at, $x->to_at, $from, $to) && ! $linkedOk($x, $face, $allocation->role))
-                || ($partner !== null && $overlaps($x->from_at, $x->to_at, $pFrom, $pTo) && ! $linkedOk($x, $partnerFace, $partner->role)));
-        if ($clash !== null) {
-            $this->refuse('LU-05', 'Overlaps another entry: '.$who.' was on '.$clash->face?->label().' '.$this->hm($shift, $clash->from_at).'–'.$this->hm($shift, $clash->to_at).'. Correct that entry first, or pick a time that does not overlap it.');
-        }
+            $partner = LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)
+                ->where('id', '!=', $allocation->id)->where($partnerField, $old)->first();
+            $partnerFace = null;
+            $pFrom = $from;
+            $pTo = $to;
+            if ($partner !== null) {
+                $partnerFace = LineupFace::withoutGlobalScopes()->findOrFail($partner->lineup_face_id);
+                $pFrom = $arrival ? $partner->from_at : $at;
+                $pTo = $arrival ? $at : $partner->to_at;
+                if ($pTo !== null && $pTo->lessThanOrEqualTo($pFrom)) {
+                    $this->refuse('LU-05', 'Times out of order: '.$who.($arrival
+                        ? ' only arrived on '.$partnerFace->label().' at '.$this->hm($shift, $pFrom).'. Correct that time first, or pick a time after it.'
+                        : ' left '.$partnerFace->label().' at '.$this->hm($shift, $pTo).'. Correct that time first, or pick a time before it.'));
+                }
+                $this->refuseOutsideLife($shift, $partnerFace, $pFrom, $pTo);
+            }
 
-        /** @var array{0: Carbon, 1: Carbon}|null $gained the span the machine now spends on a face that it did not before */
-        $gained = $arrival
-            ? ($at->lessThan($old) ? [$at, $old] : ($partner !== null ? [$old, $at] : null))
-            : ($at->greaterThan($old) ? [$old, $at] : ($partner !== null ? [$at, $old] : null));
-        if ($gained !== null && ($down = $this->downDuring($unit, $gained[0], $gained[1])) !== null) {
-            $this->refuse('LU-02', $who.' was down then: '.$down['cause'].($down['since'] !== null ? ' since '.$this->hm($shift, $down['since']) : '').'. If the stoppage is wrong, correct it where it is recorded: Dot.Mines for its status, the Downtime page for a classification.');
-        }
+            $end = $shift->ends_at;
+            $overlaps = fn (Carbon $aFrom, ?Carbon $aTo, Carbon $bFrom, ?Carbon $bTo): bool => $aFrom->lessThan($bTo ?? $end) && $bFrom->lessThan($aTo ?? $end);
+            $linkedOk = fn (LineupAllocation $x, LineupFace $f, string $role): bool => $x->role === 'LOADER' && $role === 'LOADER' && $x->face !== null && $x->face->sameWorkplaceAs($f);
+            $clash = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)
+                ->whereNotIn('id', array_values(array_filter([$allocation->id, $partner?->id])))->orderBy('from_at')->get()
+                ->first(fn (LineupAllocation $x): bool => ($overlaps($x->from_at, $x->to_at, $from, $to) && ! $linkedOk($x, $face, $allocation->role))
+                    || ($partner !== null && $overlaps($x->from_at, $x->to_at, $pFrom, $pTo) && ! $linkedOk($x, $partnerFace, $partner->role)));
+            if ($clash !== null) {
+                $this->refuse('LU-05', 'Overlaps another entry: '.$who.' was on '.$clash->face?->label().' '.$this->hm($shift, $clash->from_at).'–'.$this->hm($shift, $clash->to_at).'. Correct that entry first, or pick a time that does not overlap it.');
+            }
 
-        // The first statements are compare-and-set writes: on SQLite (WAL, DEFERRED) they take the write lock and see the latest
-        // commit, so a lost race updates 0 rows and rolls back as LU-15; on Postgres the conditional UPDATE is atomic.
-        return DB::transaction(function () use ($shift, $allocation, $partner, $field, $partnerField, $old, $at, $arrival, $gained, $unit, $user, $reason, $face): LineupCorrection {
-            if (LineupAllocation::withoutGlobalScopes()->whereKey($allocation->id)->where($field, $old)->update([$field => $at]) !== 1) {
+            /** @var array{0: Carbon, 1: Carbon}|null $gained the span the machine now spends on a face that it did not before */
+            $gained = $arrival
+                ? ($at->lessThan($old) ? [$at, $old] : ($partner !== null ? [$old, $at] : null))
+                : ($at->greaterThan($old) ? [$old, $at] : ($partner !== null ? [$at, $old] : null));
+            if ($gained !== null && ($down = $this->downDuring($unit, $gained[0], $gained[1])) !== null) {
+                $this->refuse('LU-02', $who.' was down then: '.$down['cause'].($down['since'] !== null ? ' since '.$this->hm($shift, $down['since']) : '').'. If the stoppage is wrong, correct it where it is recorded: Dot.Mines for its status, the Downtime page for a classification.');
+            }
+
+            if (LineupAllocation::withoutGlobalScopes()->whereKey($allocation->id)->update([$field => $at]) !== 1
+                || ($partner !== null && LineupAllocation::withoutGlobalScopes()->whereKey($partner->id)->update([$partnerField => $at]) !== 1)) {
                 $this->refuse('LU-15', 'Someone changed this entry meanwhile. Check it and correct again if it is still wrong.');
-            }
-            if ($partner !== null && LineupAllocation::withoutGlobalScopes()->whereKey($partner->id)->where($partnerField, $old)->update([$partnerField => $at]) !== 1) {
-                $this->refuse('LU-15', 'Someone changed the entry it '.($arrival ? 'came from' : 'went to').' meanwhile. Check it and correct again if it is still wrong.');
             }
             if ($gained !== null) {
                 $this->trimStandby($shift, $unit, $gained[0], $gained[1], $user);
@@ -890,6 +901,16 @@ final class LineupService
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------
+
+    /**
+     * A write to the machine's stints in this shift, made before anything is
+     * read: it serialises concurrent changes to the same machine on both
+     * databases (lockForUpdate compiles to nothing on SQLite).
+     */
+    private function lockMachine(Shift $shift, int $equipmentId): void
+    {
+        LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $equipmentId)->toBase()->update(['updated_at' => now()]);
+    }
 
     /** HH:MM on the control room's clock ("now" for an open end). */
     private function hm(Shift $shift, ?Carbon $at): string

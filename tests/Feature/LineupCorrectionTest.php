@@ -21,8 +21,11 @@ use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Services\Shifts\ShiftDerivation;
 use App\Support\RoleClass;
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -197,5 +200,38 @@ class LineupCorrectionTest extends TestCase
         $this->service->correctTime($placed, LineupCorrection::ARRIVAL, '23:40', 'Clicked after midnight', $this->user);
 
         $this->assertSame('2026-10-15 23:40:00', $placed->fresh()->from_at->toDateTimeString());
+    }
+
+    public function test_a_stint_changed_by_someone_else_after_the_checks_never_ends_up_before_it_started(): void
+    {
+        $previous = $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $moved = $this->service->place($this->shift, $this->face2, $this->truck, $this->user, '10:30', true);
+        $fired = false;
+        Event::listen(TransactionBeginning::class, function () use (&$fired, $previous): void {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            // a second supervisor's correction of the first stint's arrival commits just before this one takes its lock
+            DB::table('lineup_allocations')->where('id', $previous->id)->update(['from_at' => '2026-10-15 10:15:00']);
+        });
+
+        $message = $this->refusal(fn () => $this->service->correctTime($moved->fresh(), LineupCorrection::ARRIVAL, '10:00', 'A: clicked late', $this->user, $moved->from_at->toIso8601String()));
+
+        $this->assertTrue($fired);
+        $this->assertStringContainsString('LU-05 Times out of order: HT-01 only arrived on Face 1', $message);
+        $this->assertSame('2026-10-15 10:30:00', $moved->fresh()->from_at->toDateTimeString(), 'nothing was written');
+        $this->assertSame(0, LineupCorrection::withoutGlobalScopes()->count());
+    }
+
+    public function test_a_stint_that_another_supervisor_removed_after_the_checks_is_reported_not_crashed_on(): void
+    {
+        $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $moved = $this->service->place($this->shift, $this->face2, $this->truck, $this->user, '10:30', true);
+        Event::listen(TransactionBeginning::class, function () use ($moved): void {
+            DB::table('lineup_allocations')->where('id', $moved->id)->delete();
+        });
+
+        $this->assertStringContainsString('LU-15', $this->refusal(fn () => $this->service->correctTime($moved->fresh(), LineupCorrection::ARRIVAL, '10:00', 'clicked late', $this->user)));
     }
 }

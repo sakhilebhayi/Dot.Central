@@ -20,8 +20,11 @@ use App\Models\User;
 use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Support\RoleClass;
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -378,5 +381,26 @@ class LineupServiceTest extends TestCase
         Carbon::setTestNow('2026-10-25 05:30:00');
         $autumn = $this->openShift('NIGHT', '2026-10-24', '2026-10-24 17:00:00', '2026-10-25 06:00:00');
         $this->assertSame('2026-10-25 00:30:00', $this->service->changeAt($autumn, '01:30')->toDateTimeString(), 'the first 01:30 (BST)');
+    }
+
+    public function test_a_placement_does_not_trust_what_it_read_before_the_lock(): void
+    {
+        $face1 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $face2 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->user, '07:00');
+        $fired = false;
+        Event::listen(TransactionBeginning::class, function () use (&$fired, $face2): void {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            // a second operator put the same truck on Face 2 just before this placement took its lock
+            DB::table('lineup_allocations')->insert(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'lineup_face_id' => $face2->id, 'equipment_id' => $this->truck1->id, 'role' => 'HAUL', 'from_at' => '2026-10-15 10:00:00', 'created_at' => now(), 'updated_at' => now()]);
+        });
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face1, $this->truck1, $this->user, '10:30'));
+
+        $this->assertTrue($fired);
+        $this->assertStringContainsString('LU-01 HT-01 is already on Face 2', $message);
+        $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face1->id)->where('equipment_id', $this->truck1->id)->count(), 'nothing was placed');
     }
 }
