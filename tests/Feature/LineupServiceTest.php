@@ -325,4 +325,58 @@ class LineupServiceTest extends TestCase
         $this->assertSame($this->op1->id, $row['mines_operator']->id);
         $this->assertSame('already current in Dot.Mines', $row['assignment']->push_note);
     }
+
+    public function test_a_placement_that_overlaps_an_earlier_stint_of_the_same_machine_is_refused(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $late = $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:30');
+        $this->service->release($late, 'Clicked late', $this->user);
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:00'));
+        $this->assertStringContainsString('LU-05 Overlaps an earlier entry: HT-01 was on Face 1 — Loading area 1 — Overburden until 12:00', $message);
+        $this->assertSame(1, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck1->id)->count(), 'nothing was written');
+
+        $this->service->place($this->shift, $face, $this->truck1, $this->user, '12:00');
+        $this->assertSame(2, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck1->id)->count(), 'from the end of the last stint is fine');
+    }
+
+    public function test_the_shared_loading_unit_of_a_linked_face_may_overlap_its_stint_on_the_partner_face(): void
+    {
+        $seam = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Seam', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->user, '08:00');
+        $stint = LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->firstOrFail();
+        $this->service->release($stint, 'Moved to the parting', $this->user, '11:00');
+        $parting = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Parting', 'cut' => 'C1', 'blocks' => ['B1']], $this->user, '09:00');
+
+        $shared = $this->service->place($this->shift, $parting, $this->loader, $this->user, '09:00');
+        $this->assertSame('2026-10-15 09:00:00', $shared->from_at->toDateTimeString());
+        $this->assertTrue($seam->sameWorkplaceAs($parting));
+    }
+
+    public function test_a_move_recorded_before_the_machine_arrived_where_it_is_is_refused_instead_of_deleting_that_stint(): void
+    {
+        $face1 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $face2 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->user, '07:00');
+        $stint = $this->service->place($this->shift, $face1, $this->truck1, $this->user, '11:00');
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face2, $this->truck1, $this->user, '10:50', true));
+        $this->assertStringContainsString('LU-05 Time before the machine arrived: HT-01 only arrived on Face 1 — Loading area 1 — Overburden at 11:00', $message);
+        $this->assertNotNull(LineupAllocation::withoutGlobalScopes()->find($stint->id), 'the stint is kept');
+    }
+
+    public function test_a_time_the_clocks_skipped_is_refused_and_the_repeated_hour_takes_its_first_occurrence(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+
+        Carbon::setTestNow('2026-03-29 04:30:00');
+        $spring = $this->openShift('NIGHT', '2026-03-28', '2026-03-28 18:00:00', '2026-03-29 05:00:00');
+        $message = $this->refusal(fn () => $this->service->changeAt($spring, '01:30'));
+        $this->assertStringContainsString('LU-05 01:30 did not happen on 29 Mar in Europe/London: the clocks went forward.', $message);
+        $this->assertSame('2026-03-29 01:00:00', $this->service->changeAt($spring, '02:00')->toDateTimeString());
+
+        $spring->forceFill(['status' => 'CLOSED'])->save();
+        Carbon::setTestNow('2026-10-25 05:30:00');
+        $autumn = $this->openShift('NIGHT', '2026-10-24', '2026-10-24 17:00:00', '2026-10-25 06:00:00');
+        $this->assertSame('2026-10-25 00:30:00', $this->service->changeAt($autumn, '01:30')->toDateTimeString(), 'the first 01:30 (BST)');
+    }
 }

@@ -93,6 +93,10 @@ final class LineupService
         if ($at->lessThan($startLocal)) {
             $at->addDay();
         }
+        $typed = sprintf('%02d:%02d', (int) $m[1], (int) $m[2]);
+        if ($at->format('H:i') !== $typed) {
+            $this->refuse('LU-05', $typed.' did not happen on '.$at->format('j M').' in '.$timezone.': the clocks went forward. Enter the time on the clock after the change.');
+        }
         $at = $at->utc();
 
         if ($at->lessThan($shift->starts_at) || $at->greaterThan($shift->ends_at)) {
@@ -340,6 +344,13 @@ final class LineupService
         }
 
         $planning = $this->isPlanning($shift);
+        if (! $planning) {
+            $this->refuseOverlap($shift, $unit, $face, $role, $at);
+            $early = $shared ? null : $elsewhere->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
+            if ($early !== null) {
+                $this->refuse('LU-05', 'Time before the machine arrived: '.$unit->name.' only arrived on '.$early->face?->label().' at '.$this->hm($shift, $early->from_at).'. Record the move at that time or later, or first correct when it arrived (select its time on that face).');
+            }
+        }
 
         if (! $shared) {
             foreach ($elsewhere as $allocation) {
@@ -693,6 +704,29 @@ final class LineupService
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------
+
+    /** HH:MM on the control room's clock ("now" for an open end). */
+    private function hm(Shift $shift, ?Carbon $at): string
+    {
+        return $at === null ? 'now' : $at->copy()->setTimezone($shift->controlRoom->timezone())->format('H:i');
+    }
+
+    /**
+     * A machine cannot start somewhere at $at while an earlier, ended stint
+     * has it elsewhere after $at; a loading unit may overlap only on a face
+     * at the same cut and block (a linked face).
+     */
+    private function refuseOverlap(Shift $shift, Equipment $unit, LineupFace $face, string $role, Carbon $at): void
+    {
+        $clash = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)
+            ->whereNotNull('to_at')->where('to_at', '>', $at)->orderBy('from_at')->get()
+            ->first(fn (LineupAllocation $a) => ! ($role === 'LOADER' && $a->role === 'LOADER' && $a->face !== null && $a->face->sameWorkplaceAs($face)));
+
+        if ($clash !== null) {
+            $until = $this->hm($shift, $clash->to_at);
+            $this->refuse('LU-05', 'Overlaps an earlier entry: '.$unit->name.' was on '.$clash->face?->label().' until '.$until.'. Record the change at '.$until.' or later, or first correct when it left that face (select its time under "Moved off this face").');
+        }
+    }
 
     private function guardWritable(Shift $shift): void
     {
