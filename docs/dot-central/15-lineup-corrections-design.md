@@ -262,6 +262,17 @@ None.
 - a link-breaking edit is refused, and "Move the loading unit here" works;
 - the page and the fleet board show the link.
 
+### 4.9 As built (slice 2, branch `feat/lineup-linked-faces`)
+
+Built as §4.1 to §4.8 describe, with these differences and additions found while building and testing it:
+
+- **The placement notice** names the other faces *this loading unit* works ("EX-02 → Face 2 — … (also loads Face 1: same cut and block)"), not every face linked to the target.
+- **A move or correction of a loading unit on linked faces is one move.** The stints on the other side of the move are all partners (a move from Face 1 + Face 2 to Face 3 at 10:30 ends both stints and starts Face 3 at 10:30; correcting any of the three edges moves all three). The loading unit's linked stints on *this* side join the moment only when the machine really moved or went on standby then; two separate "Remove" clicks in the same minute stay independent. Refusals for a genuine overlap are unchanged. `lineup_corrections.partner_allocation_id` keeps the first stint that moved with the corrected one and the additive column `also_allocation_ids` (JSON) keeps the rest, so the report, the handover and Memory name them all. The correction panel says which faces change with the time when there is more than one.
+- **A standby and a stint of one machine never overlap, closed or open.** A standby back-dated into a closed stint or a closed standby, a placement inside a closed standby, a correction that would drag the standby next to a move over another entry, and ending a standby at or before its start are all refused (LU-05) with the time to use instead. Ending a standby someone else already ended is LU-15.
+- **Locks.** `setStandby`, `endStandby`, `release`, `closeFace` and `editFace` run in a transaction that takes the machine lock first and reads again, like `place()` and `correctTime()`. `place()`, `closeFace()` and `editFace()` also lock the face (`lockFace`: machines first, then the face, so no two callers wait on each other) so an edit of the cut or blocks and a placement cannot interleave and leave a loading unit on two unrelated faces.
+- **Sentences print the room clock**, not UTC. A release or face-closing reason over 255 characters is refused like a correction reason (the inputs stop at 255).
+- **Verified** with a sequential fuzz (every operation, invariants checked after each) and a 4-process run on a file-based SQLite database (WAL, DEFERRED, 5 s busy timeout): no overlapping stints or standbys, no stint ending before it starts, no lock errors.
+
 ## 5. Feature C: material split (time split)
 
 ### 5.1 What the user sees and does
