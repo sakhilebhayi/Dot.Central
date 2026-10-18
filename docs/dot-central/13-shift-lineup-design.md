@@ -51,7 +51,7 @@ Line-up state per machine at a reference time (now clamped into the shift): DOWN
 
 - *Planning*: line-up DRAFT and now < shift start → every change is effective from shift start; a move replaces (the old row is deleted, audited "(planning)").
 - *Timed*: shift started or line-up confirmed → `from_at` = now clamped into the window, or the time the operator sets in "Changes recorded at" (HH:MM inside the shift, not in the future; LU-05 otherwise). A move ends the old allocation at that time.
-- Arrival / departure corrections and material splits of the prototype are not built (I-29).
+- Arrival / departure corrections and linked faces (slices 1 and 2, merged and live) and the material split as a time split (slice 3, on branch `feat/lineup-face-split` and its PR) are built: `15-lineup-corrections-design.md`.
 
 ## 7. Rules (added to `RuleEngine`, group "Line-up"; DT codes AL-xx become LU-xx because AL-01 is already the alert rule)
 
@@ -90,5 +90,5 @@ HAUL when model / manufacturer / name matches `/\b(adt|a\d{2}[a-z]?|b\d{2}[a-z]?
 
 - Operator identity, qualifications and medicals from Dot.Mines (I-28: Dot.Mines API additions proposed: `operators` + `operator_assignments` sync scopes; `POST /machines/{id}/operator-assignments` that calls `OperatorAssignmentService`).
 - Pushing the line-up's operator assignment back to Dot.Mines (depends on I-28).
-- Arrival / departure corrections, material splits, linked faces (I-29).
+- Material quantities per face are not derivable and not captured (D3); breakdowns at shift change are replaced by derived DOWN (15 §0, D-6).
 - Materials with load factors and tonnage valuation (needs Dot.Mines material data; I-24).
