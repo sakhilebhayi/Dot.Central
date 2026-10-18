@@ -542,6 +542,14 @@ final class LineupService
                 $this->refuseOutsideLife($shift, $partnerFace, $pFrom, $pTo);
             }
 
+            $standbyPartner = null;
+            if ($partner === null && ($candidate = LineupStandby::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)->where($partnerField, $old)->first()) !== null && (! $arrival || $at->greaterThan($old))) {
+                $standbyPartner = $candidate;
+                if (! $arrival && $candidate->to_at !== null && $candidate->to_at->lessThanOrEqualTo($at)) {
+                    $this->refuse('LU-05', 'Times out of order: '.$who.' was on standby until '.$this->hm($shift, $candidate->to_at).'. Correct that first, or pick a time before it.');
+                }
+            }
+
             $end = $shift->ends_at;
             $overlaps = fn (Carbon $aFrom, ?Carbon $aTo, Carbon $bFrom, ?Carbon $bTo): bool => $aFrom->lessThan($bTo ?? $end) && $bFrom->lessThan($aTo ?? $end);
             $linkedOk = fn (LineupAllocation $x, LineupFace $f, string $role): bool => $x->role === 'LOADER' && $role === 'LOADER' && $x->face !== null && $x->face->sameWorkplaceAs($f);
@@ -565,6 +573,9 @@ final class LineupService
                 || ($partner !== null && LineupAllocation::withoutGlobalScopes()->whereKey($partner->id)->update([$partnerField => $at]) !== 1)) {
                 $this->refuse('LU-15', 'Someone changed this entry meanwhile. Check it and correct again if it is still wrong.');
             }
+            if ($standbyPartner !== null) {
+                $standbyPartner->fill([$partnerField => $at])->save();
+            }
             if ($gained !== null) {
                 $this->trimStandby($shift, $unit, $gained[0], $gained[1], $user);
             }
@@ -577,6 +588,9 @@ final class LineupService
             $changes = [$field => ['old' => $old->toIso8601String(), 'new' => $at->toIso8601String()]];
             if ($partner !== null) {
                 $changes['partner_'.$partnerField] = ['old' => $old->toIso8601String(), 'new' => $at->toIso8601String()];
+            }
+            if ($standbyPartner !== null) {
+                $changes['standby_'.$partnerField] = ['old' => $old->toIso8601String(), 'new' => $at->toIso8601String()];
             }
             $text = ($arrival ? 'Arrival on ' : 'Departure from ').$face->label().' corrected from '.$this->hm($shift, $old).' to '.$this->hm($shift, $at).': '.trim($reason);
             $this->audits->record('override', $correction, $changes, $text, $shift->controlRoom, $user, shiftId: $shift->id);
@@ -596,7 +610,8 @@ final class LineupService
         $arrival = $correction->edge === LineupCorrection::ARRIVAL;
         $text = $name.' '.($arrival ? 'on ' : 'off ').($allocation?->face?->label() ?? 'its face').' at '.$this->hm($shift, $correction->new_at).' (was '.$this->hm($shift, $correction->old_at).')';
 
-        $text .= $partner?->face !== null ? '; '.($arrival ? 'off ' : 'on ').$partner->face->label().' at the same time.' : '.';
+        $standby = $partner === null ? LineupStandby::withoutGlobalScopes()->where('shift_id', $correction->shift_id)->where('equipment_id', $correction->equipment_id)->where($arrival ? 'to_at' : 'from_at', $correction->new_at)->exists() : false;
+        $text .= $partner?->face !== null ? '; '.($arrival ? 'off ' : 'on ').$partner->face->label().' at the same time.' : ($standby ? '; on standby '.($arrival ? 'until' : 'from').' the same time.' : '.');
         $twice = $this->ambiguityNote($shift, $correction->new_at);
 
         return $twice !== null ? $text.' The time used was '.$twice.'.' : $text;

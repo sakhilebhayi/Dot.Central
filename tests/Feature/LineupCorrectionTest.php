@@ -281,4 +281,47 @@ class LineupCorrectionTest extends TestCase
         $this->assertSame(0, LineupCorrection::withoutGlobalScopes()->count());
         $this->assertSame('10:30:27', $moved->fresh()->from_at->format('H:i:s'));
     }
+
+    public function test_the_standby_that_followed_a_departure_follows_it_earlier_and_later(): void
+    {
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $stint = $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $standby = $this->service->setStandby($this->shift, $this->truck, $reason, $this->user, '10:30');
+        $this->assertSame('2026-10-15 10:30:00', $stint->fresh()->to_at->toDateTimeString());
+
+        $earlier = $this->service->correctTime($stint->fresh(), LineupCorrection::DEPARTURE, '10:00', 'Left at ten', $this->user);
+        $this->assertSame(['10:00', '10:00'], [$stint->fresh()->to_at->format('H:i'), $standby->fresh()->from_at->format('H:i')], 'the standby starts when the machine left');
+        $this->assertNull($standby->fresh()->to_at);
+        $this->assertStringContainsString('standby', $this->service->describeCorrection($earlier));
+
+        $this->service->correctTime($stint->fresh(), LineupCorrection::DEPARTURE, '10:45', 'Actually later', $this->user);
+        $this->assertSame(['10:45', '10:45'], [$stint->fresh()->to_at->format('H:i'), $standby->fresh()->from_at->format('H:i')]);
+
+        $audit = AuditEntry::where('entity_type', LineupCorrection::class)->latest('id')->firstOrFail();
+        $this->assertSame(['2026-10-15T10:00:00+00:00', '2026-10-15T10:45:00+00:00'], [$audit->changes['standby_from_at']['old'], $audit->changes['standby_from_at']['new']]);
+    }
+
+    public function test_the_standby_before_an_arrival_follows_it_later_and_is_trimmed_earlier(): void
+    {
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $standby = $this->service->setStandby($this->shift, $this->truck, $reason, $this->user, '08:00');
+        $placed = $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '10:30');
+
+        $this->service->correctTime($placed->fresh(), LineupCorrection::ARRIVAL, '11:00', 'Arrived later', $this->user);
+        $this->assertSame(['11:00', '11:00'], [$placed->fresh()->from_at->format('H:i'), $standby->fresh()->to_at->format('H:i')], 'the machine is not free in the gap');
+
+        $this->service->correctTime($placed->fresh(), LineupCorrection::ARRIVAL, '09:00', 'Arrived earlier', $this->user);
+        $this->assertSame(['09:00', '09:00'], [$placed->fresh()->from_at->format('H:i'), $standby->fresh()->to_at->format('H:i')]);
+    }
+
+    public function test_a_departure_cannot_be_moved_past_the_end_of_the_standby_that_followed_it(): void
+    {
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $stint = $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $standby = $this->service->setStandby($this->shift, $this->truck, $reason, $this->user, '10:00');
+        $this->service->endStandby($standby, $this->user, '10:30');
+
+        $this->assertStringContainsString('LU-05 Times out of order: HT-01 was on standby until 10:30', $this->refusal(fn () => $this->service->correctTime($stint->fresh(), LineupCorrection::DEPARTURE, '10:45', 'Left later', $this->user)));
+        $this->assertSame('10:00', $standby->fresh()->from_at->format('H:i'));
+    }
 }
