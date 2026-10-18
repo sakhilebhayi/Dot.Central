@@ -10,6 +10,8 @@ use App\Models\DowntimeReason;
 use App\Models\Equipment;
 use App\Models\EquipmentStatusEvent;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
+use App\Models\LineupFace;
 use App\Models\MinesConnection;
 use App\Models\OperationalException;
 use App\Models\Operator;
@@ -20,8 +22,10 @@ use App\Models\User;
 use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Support\RoleClass;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -139,5 +143,181 @@ class LineupPageTest extends TestCase
 
         $page->set('filter', 'available')->assertSee('HT-01')->assertDontSee('DZ-01');
         $page->set('filter', 'free')->assertDontSee('HT-01')->assertSee('Every machine has a place or a reason.');
+    }
+
+    public function test_a_late_move_is_corrected_from_its_since_time_and_refusals_stay_in_the_panel(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face1 = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $face2 = $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $service->place($this->shift, $face1, $this->truck, $this->operator, '08:00');
+        $moved = $service->place($this->shift, $face2, $this->truck, $this->operator, '10:30', true);
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->assertSeeHtml('aria-label="Correct when HT-01 arrived on Face 2 — Loading area 2 — Overburden (recorded 2026-10-15 10:30)"')
+            ->assertSeeHtml('aria-label="Correct when HT-01 left Face 1 — Loading area 1 — Overburden (recorded 2026-10-15 10:30)"')
+            ->call('startCorrection', $moved->id, LineupCorrection::ARRIVAL)
+            ->assertSee('When did HT-01 arrive on Face 2 — Loading area 2 — Overburden?')
+            ->assertSee('Recorded 2026-10-15 10:30. A move is one moment: the face it came from is corrected with it.')
+            ->assertSet('correction.time', '10:30')
+            ->assertSeeHtml('id="corr-reason" wire:model="correction.reason" maxlength="255"')
+            ->set('correction.time', '10:00')
+            ->call('saveCorrection')
+            ->assertSee('Say why the time is corrected')
+            ->assertSee('When did HT-01 arrive on Face 2')
+            ->set('correction.reason', 'The move was clicked late')
+            ->call('saveCorrection')
+            ->assertSee('HT-01 on Face 2 — Loading area 2 — Overburden at 10:00 (was 10:30); off Face 1 — Loading area 1 — Overburden at the same time.')
+            ->assertDontSee('When did HT-01 arrive')
+            ->assertSeeHtml('>corrected</span>');
+
+        $this->assertSame('2026-10-15 10:00:00', $moved->fresh()->from_at->toDateTimeString());
+    }
+
+    public function test_clicking_a_machine_already_on_the_face_with_an_earlier_time_opens_the_correction(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('place', $this->truck->id, false, $face->id)
+            ->assertSee('HT-01 is already on this face (since 10:30; select that time on its row to correct it).')
+            ->set('changeAt', '09:45')
+            ->call('place', $this->truck->id, false, $face->id)
+            ->assertSee('When did HT-01 arrive on Face 1 — Loading area 1 — Overburden?')
+            ->assertSet('correction.time', '09:45');
+    }
+
+    public function test_managers_see_times_as_text_and_cannot_open_a_correction(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+
+        Livewire::actingAs($this->manager)->test(Lineup::class, ['shift' => $this->shift])
+            ->assertSee('2026-10-15 10:30')->assertDontSeeHtml('wire:click="startCorrection')
+            ->call('startCorrection', $stint->id, LineupCorrection::ARRIVAL)
+            ->assertSee('SH-04')->assertSet('correction', []);
+    }
+
+    public function test_a_correction_cannot_be_pointed_at_another_room_or_team_by_tampering(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $mine = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+
+        $theirs = function (Team $team, string $name): LineupAllocation {
+            $room = ControlRoom::factory()->for($team)->create();
+            MinesConnection::factory()->for($room)->verified()->create(['timezone' => 'UTC']);
+            app(RoomProvisioner::class)->provision($room);
+            $type = ShiftType::where('control_room_id', $room->id)->where('code', 'DAY')->firstOrFail();
+            $shift = Shift::factory()->for($room)->for($type, 'shiftType')->create(['shift_date' => '2026-10-15', 'starts_at' => '2026-10-15 06:00:00', 'ends_at' => '2026-10-15 18:00:00', 'status' => 'OPEN']);
+            $unit = Equipment::factory()->for($room)->create(['name' => $name, 'role_class' => RoleClass::HAUL, 'mines_status' => 'active']);
+            $theirFace = LineupFace::create(['control_room_id' => $room->id, 'shift_id' => $shift->id, 'seq' => 1, 'kind' => 'LOADING', 'material' => 'Secret material', 'status' => 'ACTIVE', 'active_from' => '2026-10-15 06:00:00']);
+
+            return LineupAllocation::create(['control_room_id' => $room->id, 'shift_id' => $shift->id, 'lineup_face_id' => $theirFace->id, 'equipment_id' => $unit->id, 'role' => 'HAUL', 'from_at' => '2026-10-15 10:30:00']);
+        };
+        $sameTeam = $theirs($this->operator->currentTeam, 'HT-SAME-TEAM');
+        $otherTeam = $theirs(User::factory()->withPersonalTeam()->create()->currentTeam, 'HT-OTHER-TEAM');
+
+        foreach ([$sameTeam, $otherTeam] as $foreign) {
+            $page = Livewire::test(Lineup::class, ['shift' => $this->shift]);
+            try {
+                $page->call('startCorrection', $foreign->id, LineupCorrection::ARRIVAL);
+                $this->fail('A stint of another shift must not open.');
+            } catch (ModelNotFoundException) {
+                $this->assertTrue(true);
+            }
+            $page->assertDontSee('Secret material')->assertDontSee('HT-SAME-TEAM')->assertDontSee('HT-OTHER-TEAM');
+            $this->assertSame('2026-10-15 10:30:00', $foreign->fresh()->from_at->toDateTimeString());
+
+            try {
+                $page->set('correctionAllocation', $foreign->id);
+                $this->fail('The stint being corrected must not be client-settable.');
+            } catch (CannotUpdateLockedPropertyException) {
+                $this->assertTrue(true);
+            }
+            $page->assertDontSee('Secret material');
+        }
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->call('startCorrection', $mine->id, LineupCorrection::ARRIVAL);
+        foreach (['correctionAllocation' => $sameTeam->id, 'correctionEdge' => 'DEPARTURE', 'correctionExpected' => '2026-10-15T10:30:00+00:00', 'shift' => $sameTeam->shift_id] as $property => $value) {
+            try {
+                $page->set($property, $value);
+                $this->fail($property.' must be locked.');
+            } catch (CannotUpdateLockedPropertyException) {
+                $this->assertTrue(true);
+            }
+        }
+        $page->assertSee('When did HT-01 arrive')->assertDontSee('Secret material');
+        $page->set('correction', ['allocation' => $sameTeam->id, 'edge' => 'DEPARTURE', 'time' => '10:00', 'reason' => 'forged', 'expected' => ''])->call('saveCorrection')->assertDontSee('Secret material');
+        $this->assertSame('2026-10-15 10:30:00', $sameTeam->fresh()->from_at->toDateTimeString(), 'only the stint chosen with the button is ever corrected');
+        $this->assertSame('2026-10-15 10:00:00', $mine->fresh()->from_at->toDateTimeString());
+    }
+
+    public function test_placing_at_a_time_the_clocks_showed_twice_says_which_one_was_used(): void
+    {
+        $this->actingAs($this->operator);
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        Carbon::setTestNow('2026-10-25 01:45:00');
+        $type = ShiftType::where('control_room_id', $this->room->id)->where('code', 'NIGHT')->firstOrFail();
+        $night = Shift::factory()->for($this->room)->for($type, 'shiftType')->create(['shift_date' => '2026-10-24', 'starts_at' => '2026-10-24 17:00:00', 'ends_at' => '2026-10-25 06:00:00', 'status' => 'OPEN']);
+        $face = app(LineupService::class)->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '18:00');
+
+        Livewire::test(Lineup::class, ['shift' => $night])->set('changeAt', '01:40')->call('place', $this->truck->id, false, $face->id)
+            ->assertSee('HT-01 → Face 1')->assertSee('The time used was 01:40 GMT, the second time the clock showed 01:40.');
+    }
+
+    public function test_submitting_the_correction_twice_says_there_is_nothing_to_correct(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face1 = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $face2 = $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $service->place($this->shift, $face1, $this->truck, $this->operator, '08:00');
+        $moved = $service->place($this->shift, $face2, $this->truck, $this->operator, '10:30', true);
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('startCorrection', $moved->id, LineupCorrection::ARRIVAL)
+            ->set('correction.time', '10:00')->set('correction.reason', 'late')
+            ->call('saveCorrection')->assertSee('at 10:00 (was 10:30)')
+            ->call('saveCorrection')
+            ->assertSee('LU-05 Nothing to correct: the correction was already saved or cancelled.')
+            ->assertDontSee('no longer exists');
+        $this->assertSame(1, LineupCorrection::withoutGlobalScopes()->count());
+    }
+
+    public function test_the_correction_panel_is_built_for_keyboard_and_screen_reader_use(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face1 = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $face2 = $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $service->place($this->shift, $face1, $this->truck, $this->operator, '08:00');
+        $moved = $service->place($this->shift, $face2, $this->truck, $this->operator, '10:30', true);
+        $previous = LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck->id)->where('lineup_face_id', $face1->id)->firstOrFail();
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->assertSeeHtml('id="corr-'.$moved->id.'-arrival"')
+            ->assertSeeHtml('id="corr-'.$previous->id.'-departure"')
+            ->assertSeeHtml('>10:30</button>')
+            ->assertSeeHtml('aria-label="Correct when HT-01 arrived on Face 2 — Loading area 2 — Overburden (recorded 2026-10-15 10:30)"');
+
+        $page->call('startCorrection', $moved->id, LineupCorrection::ARRIVAL)
+            ->assertSeeHtml('id="corr-alert" role="alert"')
+            ->assertSeeHtml('wire:key="corr-time-field"')->assertSeeHtml('wire:key="corr-reason-field"')
+            ->set('correction.time', '07:30')->set('correction.reason', 'late')->call('saveCorrection')
+            ->assertSee('Times out of order')->assertDispatched('lineup-focus', id: 'corr-time')
+            ->set('correction.time', '10:00')->call('saveCorrection')
+            ->assertDispatched('lineup-focus', id: 'corr-'.$moved->id.'-arrival');
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('startCorrection', $previous->id, LineupCorrection::DEPARTURE)->call('cancelCorrection')
+            ->assertDispatched('lineup-focus', id: 'corr-'.$previous->id.'-departure');
     }
 }

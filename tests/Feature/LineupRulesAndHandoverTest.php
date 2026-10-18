@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\FleetBoard;
 use App\Models\ControlRoom;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
 use App\Models\EquipmentMetric;
 use App\Models\EquipmentStatusEvent;
+use App\Models\LineupCorrection;
 use App\Models\MinesConnection;
 use App\Models\OperationalException;
 use App\Models\Operator;
@@ -21,6 +23,7 @@ use App\Services\Shifts\ShiftService;
 use App\Support\RoleClass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 /** Line-up rules become exceptions; the handover carries the line-up; the next Start Shift shows what is outstanding. */
@@ -141,5 +144,66 @@ class LineupRulesAndHandoverTest extends TestCase
         $this->actingAs($this->operator)->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->assertSee('Shift line-up')->assertSee('Face 1 — Loading area 1 — Coal · C1 / B1')->assertSee('Operator One · E-1')->assertSee('down: Dot.Mines: maintenance')->assertSee($standby->name);
         $this->actingAs($this->operator)->get(route('shifts.show', $this->shift))->assertOk()->assertSee('Faces (line-up)')->assertSee('CONFIRMED');
         $this->actingAs($this->operator)->get('/dashboard')->assertOk()->assertSee('line-up');
+    }
+
+    public function test_corrections_are_on_the_fleet_board_the_report_the_handover_and_the_next_start(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+        $service->correctTime($stint, LineupCorrection::ARRIVAL, '10:00', 'The move was clicked late', $this->operator);
+        $this->actingAs($this->operator);
+
+        Livewire::test(FleetBoard::class, ['controlRoom' => $this->room])->assertSee('Face 1 — Loading area 1 — Coal · since 10:00');
+        $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->assertSee('arrival corrected from 10:30 (UTC): The move was clicked late');
+
+        Carbon::setTestNow('2026-10-15 18:30:00');
+        Equipment::withoutGlobalScopes()->where('control_room_id', $this->room->id)->update(['last_heard_at' => '2026-10-15 18:25:00']);
+        $closed = app(ShiftService::class)->close($this->shift, null, $this->operator);
+        $corrections = $closed->fresh('handover')->handover->snapshot['lineup']['corrections'];
+        $this->assertSame('HT-01 on Face 1 — Loading area 1 — Coal at 10:00 (was 10:30).', $corrections[0]['text']);
+        $this->assertSame('The move was clicked late', $corrections[0]['reason']);
+
+        $this->get(route('control-rooms.shifts.start', $this->room))->assertOk()
+            ->assertSee('Line-up times corrected (1)')->assertSee('HT-01 on Face 1 — Loading area 1 — Coal at 10:00 (was 10:30).');
+    }
+
+    public function test_the_line_up_report_shows_times_on_the_room_clock_and_names_it(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+        $service->correctTime($stint, LineupCorrection::ARRIVAL, '10:00', 'The move was clicked late', $this->operator);
+        $this->actingAs($this->operator);
+
+        $page = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk();
+        $page->assertSee('From (Europe/London)', false)->assertSee('Until (Europe/London)', false)
+            ->assertSee('2026-10-15 10:00')->assertDontSee('2026-10-15 09:00:00')
+            ->assertSee('arrival corrected from 10:30 (Europe/London): The move was clicked late');
+
+        $this->actingAs($this->member($this->room->team, 'supervisor'));
+        $csv = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id, 'export' => 'csv']));
+        $this->assertStringContainsString('From (Europe/London)', $csv->streamedContent());
+    }
+
+    public function test_free_text_in_the_line_up_csv_cannot_run_as_a_spreadsheet_formula(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '08:00');
+        $service->release($stint, '=HYPERLINK("http://example.invalid","click")', $this->operator, '09:00');
+        $this->actingAs($this->member($this->room->team, 'supervisor'));
+
+        $csv = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id, 'export' => 'csv']))->streamedContent();
+
+        $this->assertStringContainsString("\"'=HYPERLINK(", $csv);
+        $this->assertStringNotContainsString(',"=HYPERLINK', $csv);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", $csv)));
+        foreach ($rows as $row) {
+            foreach ($row as $cell) {
+                $this->assertDoesNotMatchRegularExpression('/^[=+@\t\r]|^-(?![0-9.])/', $cell, 'a cell starts like a formula: '.$cell);
+            }
+        }
     }
 }

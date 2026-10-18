@@ -7,6 +7,10 @@ use App\Models\ControlRoom;
 use App\Models\DowntimeClassification;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
+use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
+use App\Models\LineupFace;
+use App\Models\LineupStandby;
 use App\Models\MemoryConnection;
 use App\Models\MemoryOutboxRow;
 use App\Models\MinesConnection;
@@ -20,6 +24,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\AlertWorkflow;
 use App\Services\Audits;
+use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Services\Rules\ExceptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -183,6 +188,23 @@ class AuditLoopMapperTest extends TestCase
         $this->assertSame(['dot-central', 'pending'], [$this->payload('action')['executor_platform'], $this->payload('action')['execution_status']]);
     }
 
+    public function test_lineup_confirmation_reports_faces_machines_placed_and_on_standby(): void
+    {
+        $lineup = ShiftLineup::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'status' => 'CONFIRMED', 'version' => 1, 'confirmed_by' => $this->supervisor->id, 'confirmed_at' => now()]);
+        $face = LineupFace::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'seq' => 1, 'kind' => 'LOADING', 'material' => 'Overburden', 'status' => 'ACTIVE', 'active_from' => $this->shift->starts_at]);
+        LineupAllocation::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'lineup_face_id' => $face->id, 'equipment_id' => $this->truck->id, 'role' => 'HAUL', 'from_at' => $this->shift->starts_at]);
+        $dozer = Equipment::factory()->for($this->room)->create(['name' => 'DZ-01', 'mines_machine_id' => 702]);
+        $standby = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        LineupStandby::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'equipment_id' => $dozer->id, 'downtime_reason_id' => $standby->id, 'from_at' => $this->shift->starts_at]);
+        MemoryOutboxRow::query()->delete();
+
+        app(Audits::class)->record('approve', $lineup, ['version' => ['old' => 0, 'new' => 1]], 'Line-up confirmed (version 1)', $this->room, $this->supervisor);
+
+        $detail = $this->payload('decision')['detail'];
+        $this->assertSame([1, 1, 1, 1], [$detail['version'], $detail['faces'], $detail['placed'], $detail['standby']]);
+        $this->assertSame('Line-up confirmed (version 1)', $detail['reason'], 'the audit context is kept alongside');
+    }
+
     public function test_shift_start_close_approve_and_reopen(): void
     {
         MemoryOutboxRow::query()->delete();
@@ -216,5 +238,47 @@ class AuditLoopMapperTest extends TestCase
         app(AlertWorkflow::class)->escalate(Alert::factory()->for($this->room)->create(['source' => 'dot_mines', 'external_id' => '9']), $this->operator, 'x');
 
         $this->assertSame(0, MemoryOutboxRow::count());
+    }
+
+    public function test_a_line_up_time_correction_is_an_action_on_the_machine(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+        MemoryOutboxRow::query()->delete();
+
+        $service->correctTime($stint, LineupCorrection::ARRIVAL, '10:00', 'The move was clicked late', $this->operator);
+
+        $action = $this->payload('action');
+        $this->assertSame(['lineup.correct_time', 'dot-central', 'succeeded', 'dot-central:lineup:time-corrected'], [$action['action_kind'], $action['executor_platform'], $action['execution_status'], $action['signature']]);
+        $this->assertSame(['equipment', '701', 'dot-central:shift:'.$this->shift->id], [$action['subject_type'], $action['subject_id'], $action['loop_id']]);
+        $this->assertSame([LineupCorrection::ARRIVAL, 30], [$action['detail']['edge'], $action['detail']['minutes']]);
+        $this->assertStringContainsString('corrected from 10:30 to 10:00: The move was clicked late', (string) $action['detail']['reason']);
+        $this->assertSame(1, MemoryOutboxRow::where('stage', 'action')->count());
+    }
+
+    public function test_the_loop_records_keep_their_own_detail_next_to_the_audit_context(): void
+    {
+        $exception = OperationalException::factory()->for($this->room)->create(['shift_id' => $this->shift->id, 'equipment_id' => $this->truck->id, 'rule_code' => 'TEL-01', 'severity' => 'CRITICAL', 'title' => 'No telemetry', 'message' => 'HT-01 sent nothing for an hour']);
+        $detail = $this->payload('event')['detail'];
+        $this->assertEqualsCanonicalizing(['audit_id', 'control_room_id', 'shift_id', 'reason', 'title', 'message', 'outcome', 'severity', 'raised_by'], array_keys($detail));
+        $this->assertSame(['No telemetry', 'HT-01 sent nothing for an hour', 'CRITICAL'], [$detail['title'], $detail['message'], $detail['severity']]);
+
+        MemoryOutboxRow::query()->delete();
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('counts_against_availability', true)->firstOrFail();
+        $this->actingAs($this->operator);
+        DowntimeClassification::create(['control_room_id' => $this->room->id, 'equipment_id' => $this->truck->id, 'shift_id' => $this->shift->id, 'downtime_reason_id' => $reason->id, 'started_at' => now()->subHour(), 'ended_at' => now(), 'note' => 'Tyre change', 'classified_by' => $this->operator->id]);
+        foreach (['decision', 'action'] as $stage) {
+            $detail = $this->payload($stage)['detail'];
+            $this->assertEqualsCanonicalizing(['audit_id', 'control_room_id', 'shift_id', 'reason', 'reason_name', 'category', 'counts_against_availability', 'note', 'started_at', 'ended_at'], array_keys($detail), $stage);
+            $this->assertSame([$reason->name, true, 'Tyre change'], [$detail['reason_name'], $detail['counts_against_availability'], $detail['note']]);
+        }
+
+        MemoryOutboxRow::query()->delete();
+        $op = Operator::factory()->for($this->room)->create();
+        ShiftOperatorAssignment::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'equipment_id' => $this->truck->id, 'operator_id' => $op->id, 'from_at' => now(), 'assigned_by' => $this->operator->id, 'pushed_to_source' => true, 'push_note' => 'pushed to Dot.Mines']);
+        $detail = $this->payload('action')['detail'];
+        $this->assertEqualsCanonicalizing(['audit_id', 'control_room_id', 'shift_id', 'reason', 'push_note', 'operator_id'], array_keys($detail));
+        $this->assertSame(['pushed to Dot.Mines', $op->id, $this->shift->id], [$detail['push_note'], $detail['operator_id'], $detail['shift_id']]);
     }
 }

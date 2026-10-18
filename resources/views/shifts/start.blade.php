@@ -66,6 +66,12 @@
                         <p style="font-size:var(--t-sm);color:var(--text-quiet);">{{ collect($snap['fleet']['stopped_now'] ?? [])->map(fn($s) => $s['name'].' ('.$s['state'].')')->implode(', ') ?: 'none' }}</p>
                         <h3 class="dot-readout__label">Without telemetry at shift end ({{ count($snap['fleet']['unknown_now'] ?? []) }})</h3>
                         <p style="font-size:var(--t-sm);color:var(--text-quiet);">{{ implode(', ', $snap['fleet']['unknown_now'] ?? []) ?: 'none' }}</p>
+                        @if(($snap['lineup']['corrections'] ?? []) !== [])
+                            <h3 class="dot-readout__label">Line-up times corrected ({{ count($snap['lineup']['corrections']) }})</h3>
+                            <ul style="margin:0 0 0.8rem;padding-left:1rem;font-size:var(--t-sm);color:var(--text-quiet);">
+                                @foreach($snap['lineup']['corrections'] as $c)<li>{{ $c['text'] }} — {{ $c['reason'] }}{{ $c['by'] ? ' ('.$c['by'].')' : '' }}</li>@endforeach
+                            </ul>
+                        @endif
                         <p class="dot-readout__context">Issued {{ Format::stamp($previous->handover->issued_at, $timezone) }}{{ $previous->handover->acknowledged_at ? ' · acknowledged '.Format::stamp($previous->handover->acknowledged_at, $timezone) : ' · will be acknowledged when you start' }}</p>
                     @else
                         <p class="dot-page-head__lede">No previous handover.</p>

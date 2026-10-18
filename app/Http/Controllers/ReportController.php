@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\ControlRoom;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
 use App\Models\Shift;
 use App\Services\Audits;
 use App\Services\Lineup\LineupService;
 use App\Services\Mines\FreshnessEvaluator;
 use App\Services\Shifts\ShiftDerivation;
+use App\Support\Csv;
 use App\Support\EquipmentState;
 use App\Support\RoleClass;
 use Illuminate\Http\Request;
@@ -44,9 +46,9 @@ class ReportController extends Controller
 
             return response()->streamDownload(function () use ($columns, $rows): void {
                 $out = fopen('php://output', 'w');
-                fputcsv($out, array_values($columns));
+                fputcsv($out, Csv::row(array_values($columns)));
                 foreach ($rows as $row) {
-                    fputcsv($out, array_map(fn ($k) => $row[$k] ?? '', array_keys($columns)));
+                    fputcsv($out, Csv::row(array_map(fn ($k) => $row[$k] ?? '', array_keys($columns))));
                 }
                 fclose($out);
             }, $report.'.csv', ['Content-Type' => 'text/csv']);
@@ -133,11 +135,20 @@ class ReportController extends Controller
     private function lineupReport(Shift $shift): array
     {
         $pool = $this->lineup->pool($shift)->keyBy(fn (array $r) => $r['equipment']->id);
+        $tz = $shift->controlRoom->timezone();
+        $corrections = LineupCorrection::withoutGlobalScopes()->where('shift_id', $shift->id)->orderBy('id')->get();
+        $noteFor = function (LineupAllocation $a) use ($corrections, $tz): ?string {
+            $own = $corrections->where('lineup_allocation_id', $a->id)->map(fn (LineupCorrection $c) => ($c->edge === LineupCorrection::ARRIVAL ? 'arrival' : 'departure').' corrected from '.$c->old_at->copy()->setTimezone($tz)->format('H:i').' ('.$tz.'): '.$c->reason);
+            $moved = $corrections->where('partner_allocation_id', $a->id)->map(fn (LineupCorrection $c) => 'moved with a correction ('.$c->reason.')');
+            $notes = collect([$a->ended_reason])->merge($own)->merge($moved)->filter();
+
+            return $notes->isEmpty() ? null : $notes->implode('; ');
+        };
         $rows = [];
         foreach ($this->lineup->faces($shift, true) as $face) {
             foreach ($face->allocations()->orderBy('from_at')->get() as $a) {
                 $p = $pool[$a->equipment_id] ?? null;
-                $rows[] = ['face' => $face->label().($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->toDateTimeString(), 'until' => $a->to_at?->toDateTimeString() ?? 'still there', 'note' => $a->ended_reason];
+                $rows[] = ['face' => $face->label().($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->copy()->setTimezone($tz)->format('Y-m-d H:i'), 'until' => $a->to_at?->copy()->setTimezone($tz)->format('Y-m-d H:i') ?? 'still there', 'note' => $noteFor($a)];
             }
         }
         foreach ($pool->whereIn('state', ['FREE', 'STANDBY', 'DOWN']) as $p) {
@@ -146,7 +157,7 @@ class ReportController extends Controller
             }];
         }
 
-        return [['face' => 'Face', 'role' => 'Role', 'unit' => 'Machine', 'operator' => 'Operator', 'from' => 'From (UTC)', 'until' => 'Until (UTC)', 'note' => 'Note'], $rows, 'Shift line-up · '.$shift->label().' · '.$this->lineup->lineup($shift)->status];
+        return [['face' => 'Face', 'role' => 'Role', 'unit' => 'Machine', 'operator' => 'Operator', 'from' => 'From ('.$tz.')', 'until' => 'Until ('.$tz.')', 'note' => 'Note'], $rows, 'Shift line-up · '.$shift->label().' · '.$this->lineup->lineup($shift)->status];
     }
 
     /** @return array{0: array<string, string>, 1: list<array<string, mixed>>, 2: string} */

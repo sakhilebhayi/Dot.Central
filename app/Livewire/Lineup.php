@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
 use App\Models\LineupAllocation;
+use App\Models\LineupCorrection;
 use App\Models\LineupFace;
 use App\Models\LineupStandby;
 use App\Models\Operator;
@@ -15,6 +16,7 @@ use App\Services\Rules\RuleEngine;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -25,6 +27,7 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class Lineup extends Component
 {
+    #[Locked]
     public Shift $shift;
 
     public ?int $target = null;
@@ -55,6 +58,19 @@ class Lineup extends Component
 
     /** @var array<int, string> */
     public array $closeReason = [];
+
+    /** The stint, edge and time the open correction panel is about: set by startCorrection() only, never by the browser. */
+    #[Locked]
+    public ?int $correctionAllocation = null;
+
+    #[Locked]
+    public string $correctionEdge = '';
+
+    #[Locked]
+    public string $correctionExpected = '';
+
+    /** @var array{time?: string, reason?: string} what the operator types in the panel */
+    public array $correction = [];
 
     public function mount(Shift $shift): void
     {
@@ -142,6 +158,12 @@ class Lineup extends Component
             }
             $face = LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail($faceId);
             $unit = Equipment::withoutGlobalScopes()->where('control_room_id', $this->shift->control_room_id)->findOrFail($unitId);
+            $here = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->where('lineup_face_id', $face->id)->where('equipment_id', $unit->id)->whereNull('to_at')->first();
+            if ($here !== null) {
+                $this->alreadyHere($service, $here, $unit);
+
+                return;
+            }
             try {
                 $allocation = $service->place($this->shift, $face, $unit, auth()->user(), $this->changeAt ?: null, $move);
             } catch (ValidationException $e) {
@@ -152,7 +174,7 @@ class Lineup extends Component
                 throw $e;
             }
             $this->target = $face->id;
-            $this->notice = $unit->name.' → '.$face->label().($allocation->from_at->equalTo($this->shift->starts_at) ? '' : ' at '.$allocation->from_at->setTimezone($this->shift->controlRoom->timezone())->format('H:i')).'.';
+            $this->notice = $unit->name.' → '.$face->label().($allocation->from_at->equalTo($this->shift->starts_at) ? '' : ' at '.$allocation->from_at->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i')).'.'.(! $allocation->from_at->equalTo($this->shift->starts_at) && ($twice = $service->ambiguityNote($this->shift, $allocation->from_at)) !== null ? ' The time used was '.$twice.'.' : '');
         });
     }
 
@@ -183,6 +205,89 @@ class Lineup extends Component
             $service->endStandby($standby, auth()->user(), $this->changeAt ?: null);
             $this->notice = 'Standby ended.';
         });
+    }
+
+    // ---- corrections (I-29) ---------------------------------------------------------------------------------
+
+    public function startCorrection(int $allocationId, string $edge, ?string $time = null): void
+    {
+        $this->clearMessages();
+        if (! $this->editable()) {
+            $this->refusal = 'SH-04 '.$this->shift->label().' is '.$this->shift->status.' or your role cannot change the line-up.';
+
+            return;
+        }
+        $allocation = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->findOrFail($allocationId);
+        $old = $edge === LineupCorrection::ARRIVAL ? $allocation->from_at : $allocation->to_at;
+        if ($old === null) {
+            $this->refusal = 'LU-05 '.$allocation->equipment?->name.' is still on this face. Take it off with "Remove" at the time it left.';
+
+            return;
+        }
+        $this->correctionAllocation = $allocation->id;
+        $this->correctionEdge = $edge;
+        $this->correctionExpected = $old->toIso8601String();
+        $this->correction = ['time' => $time ?? $old->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i'), 'reason' => ''];
+    }
+
+    public function cancelCorrection(): void
+    {
+        $this->closeCorrection();
+        $this->clearMessages();
+    }
+
+    public function saveCorrection(): void
+    {
+        $this->saveCorrectionNow();
+        if ($this->refusal !== null && $this->correctionAllocation !== null) {
+            $this->dispatch('lineup-focus', id: 'corr-time');
+        }
+    }
+
+    private function saveCorrectionNow(): void
+    {
+        $this->run(function (LineupService $service): void {
+            if ($this->correctionAllocation === null) {
+                $this->refusal = 'LU-05 Nothing to correct: the correction was already saved or cancelled.';
+
+                return;
+            }
+            $allocation = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation);
+            if ($allocation === null) {
+                $this->closeCorrection(false);
+                $this->refusal = 'LU-15 That line-up entry no longer exists: someone removed it meanwhile.';
+
+                return;
+            }
+            $result = $service->correctTime($allocation, $this->correctionEdge, (string) ($this->correction['time'] ?? ''), (string) ($this->correction['reason'] ?? ''), auth()->user(), $this->correctionExpected !== '' ? $this->correctionExpected : null);
+            $this->closeCorrection();
+            $this->notice = $service->describeCorrection($result);
+        });
+    }
+
+    /** Closing hands the keyboard back to the time button that opened the panel. */
+    private function closeCorrection(bool $focusOpener = true): void
+    {
+        if ($focusOpener && $this->correctionAllocation !== null) {
+            $this->dispatch('lineup-focus', id: 'corr-'.$this->correctionAllocation.'-'.strtolower($this->correctionEdge));
+        }
+        $this->correctionAllocation = null;
+        $this->correctionEdge = '';
+        $this->correctionExpected = '';
+        $this->correction = [];
+    }
+
+    /** Clicking a machine that is already on the face: offer the correction when "Changes recorded at" is earlier than its arrival. */
+    private function alreadyHere(LineupService $service, LineupAllocation $here, Equipment $unit): void
+    {
+        $planning = $service->isPlanning($this->shift);
+        if (! $planning && $this->changeAt !== '' && $service->changeAt($this->shift, $this->changeAt)->lessThan($here->from_at)) {
+            $this->startCorrection($here->id, LineupCorrection::ARRIVAL, $this->changeAt);
+
+            return;
+        }
+        $since = $here->from_at->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i');
+        $this->notice = $unit->name.' is already on this face'.($planning ? '.' : ' (since '.$since.'; select that time on its row to correct it).');
     }
 
     // ---- operators ---------------------------------------------------------------------------------------
@@ -282,6 +387,11 @@ class Lineup extends Component
             'standbyReasons' => DowntimeReason::where('control_room_id', $room->id)->where('is_active', true)->whereIn('category', LineupStandby::CATEGORIES)->orderBy('name')->get(),
             'locations' => $locations->options($room),
             'timezone' => $room->timezone(),
+            'correcting' => $this->correctionAllocation !== null ? LineupAllocation::query()->with(['face', 'equipment'])->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null,
+            'corrected' => LineupCorrection::withoutGlobalScopes()->where('shift_id', $this->shift->id)->orderBy('id')->get()
+                ->groupBy(fn (LineupCorrection $c) => $c->lineup_allocation_id.':'.$c->edge)
+                ->map(fn ($rows) => $rows->map(fn (LineupCorrection $c) => 'was '.$c->old_at->copy()->setTimezone($room->timezone())->format('H:i').': '.$c->reason)->implode('; '))
+                ->all(),
         ]);
     }
 

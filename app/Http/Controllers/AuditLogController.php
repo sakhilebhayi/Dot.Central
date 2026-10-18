@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditEntry;
 use App\Models\ControlRoom;
 use App\Services\Audits;
+use App\Support\Csv;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -67,7 +68,7 @@ class AuditLogController extends Controller
 
             $query->chunk(500, function ($rows) use ($out): void {
                 foreach ($rows as $row) {
-                    fputcsv($out, [
+                    fputcsv($out, Csv::row([
                         $row->occurred_at->toIso8601String(),
                         $row->user?->name,
                         $row->user_role,
@@ -78,7 +79,7 @@ class AuditLogController extends Controller
                         $row->changes === null ? '' : json_encode($row->changes),
                         $row->reason,
                         $row->automatic ? 'yes' : 'no',
-                    ]);
+                    ]));
                 }
             });
 

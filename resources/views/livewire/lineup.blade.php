@@ -1,5 +1,5 @@
 @php use App\Support\Format; use App\Support\RoleClass; use App\Models\LineupAllocation; @endphp
-<div class="dot-page">
+<div class="dot-page" x-data x-on:lineup-focus.window="setTimeout(() => document.getElementById($event.detail.id)?.focus(), 60)">
     <div class="dot-page-head">
         <div>
             <h1 class="dot-page-head__title">Shift Line-up</h1>
@@ -21,7 +21,7 @@
     </div>
 
     @if($notice)<div class="dot-msg dot-msg--ok" role="status"><div class="dot-msg__title">{{ $notice }}</div></div>@endif
-    @if($refusal)
+    @if($refusal && ! $correcting)
         <div class="dot-msg dot-msg--critical" role="alert">
             <div class="dot-msg__title">Refused</div>
             <div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div>
@@ -44,6 +44,23 @@
         <div class="dot-msg dot-msg--info"><div class="dot-msg__title">Draft line-up — planning</div><div style="font-size:var(--t-sm);">Until the shift starts ({{ Format::stamp($shift->starts_at, $timezone) }}) changes are planning and take effect from shift start. Confirm when the line-up is final.</div></div>
     @elseif(! $shift->isCurrent())
         <div class="dot-msg dot-msg--info"><div class="dot-msg__title">Read only</div><div style="font-size:var(--t-sm);">{{ $shift->label() }} is {{ $shift->status }}; the line-up can only change after a supervisor reopens the shift.</div></div>
+    @endif
+
+    @if($correcting)
+        @php($arrival = $correctionEdge === 'ARRIVAL')
+        @php($cName = $correcting->equipment?->name ?? 'The machine')
+        <form wire:submit="saveCorrection" wire:keydown.escape="cancelCorrection" class="dot-panel" role="dialog" aria-labelledby="corr-title" aria-describedby="corr-help" style="margin-bottom:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;">
+            <h2 id="corr-title" class="dot-panel__title" style="grid-column:1/-1;">{{ $arrival ? 'When did '.$cName.' arrive on '.$correcting->face?->label().'?' : 'When did '.$cName.' leave '.$correcting->face?->label().'?' }}</h2>
+            <p id="corr-help" class="dot-readout__context" style="grid-column:1/-1;margin:0;">Recorded {{ Format::stamp($arrival ? $correcting->from_at : $correcting->to_at, $timezone) }}. A move is one moment: the face it {{ $arrival ? 'came from' : 'went to' }} is corrected with it. Times are the control room's clock ({{ $timezone }}).</p>
+            <div id="corr-alert" role="alert" style="grid-column:1/-1;">
+                @if($refusal)
+                    <div class="dot-msg dot-msg--critical"><div class="dot-msg__title">Refused</div><div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div></div>
+                @endif
+            </div>
+            <div wire:key="corr-time-field"><label class="jet-label" for="corr-time">Time (HH:MM)</label><input id="corr-time" wire:model="correction.time" class="dot-input" inputmode="numeric" placeholder="HH:MM" required x-init="setTimeout(() => $el.focus(), 60)" /></div>
+            <div wire:key="corr-reason-field"><label class="jet-label" for="corr-reason">Reason</label><input id="corr-reason" wire:model="correction.reason" maxlength="255" class="dot-input" placeholder="e.g. the move was clicked late" required /></div>
+            <div style="grid-column:1/-1;display:flex;gap:0.5rem;"><button type="submit" class="dot-btn dot-btn-primary">Correct the time</button><button type="button" class="dot-btn dot-btn-ghost" wire:click="cancelCorrection">Cancel</button></div>
+        </form>
     @endif
 
     <div class="dot-panels dot-panels--6" style="margin-bottom:1.25rem;">
@@ -124,7 +141,16 @@
                                             {{ $p['operator']?->label() ?? '—' }}
                                         @endif
                                     </td>
-                                    <td class="dot-ledger__key">{{ $a->from_at->equalTo($shift->starts_at) ? 'shift start' : Format::stamp($a->from_at, $timezone) }}</td>
+                                    @php($name = $p['equipment']->name ?? '?')
+                                    @php($since = $a->from_at->equalTo($shift->starts_at) ? 'shift start' : Format::stamp($a->from_at, $timezone))
+                                    <td class="dot-ledger__key">
+                                        @if($editable && ! $planning)
+                                            <button type="button" id="corr-{{ $a->id }}-arrival" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="startCorrection({{ $a->id }}, 'ARRIVAL')" aria-label="Correct when {{ $name }} arrived on {{ $face->label() }} (recorded {{ Format::stamp($a->from_at, $timezone) }})" title="Correct when {{ $name }} arrived on this face ({{ Format::stamp($a->from_at, $timezone) }})">{{ $a->from_at->equalTo($shift->starts_at) ? 'shift start' : $a->from_at->copy()->setTimezone($timezone)->format('H:i') }}</button>
+                                        @else
+                                            {{ $since }}
+                                        @endif
+                                        @if(isset($corrected[$a->id.':ARRIVAL']))<div><span class="dot-badge dot-badge--info" title="{{ $corrected[$a->id.':ARRIVAL'] }}">corrected</span></div>@endif
+                                    </td>
                                     <td>@if($editable)<span style="display:flex;gap:0.3rem;">@unless($planning)<input wire:model="releaseReason.{{ $a->id }}" class="dot-input" placeholder="why?" style="width:7rem;" aria-label="Reason to take {{ $p['equipment']->name ?? '' }} off" />@endunless<button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="release({{ $a->id }})" title="Take {{ $p['equipment']->name ?? '' }} off this face">Remove</button></span>@endif</td>
                                 </tr>
                             @empty
@@ -133,7 +159,14 @@
                             </tbody>
                         </table>
                     </div>
-                    @if($ended->isNotEmpty())<div style="padding:0.5rem 1.25rem;font-size:var(--t-xs);color:var(--text-faint);">Moved off this face: {{ $ended->map(fn ($a) => ($poolByUnit[$a->equipment_id]['equipment']->name ?? '?').' '.Format::stamp($a->from_at, $timezone).'–'.Format::stamp($a->to_at, $timezone))->implode(' · ') }}</div>@endif
+                    @if($ended->isNotEmpty())
+                        <div style="padding:0.5rem 1.25rem;font-size:var(--t-xs);color:var(--text-faint);">Moved off this face:
+                            @foreach($ended as $e)
+                                @php($eName = $poolByUnit[$e->equipment_id]['equipment']->name ?? '?')
+                                <span style="margin-right:0.6rem;">{{ $eName }} {{ Format::stamp($e->from_at, $timezone) }}–@if($editable && ! $planning)<button type="button" id="corr-{{ $e->id }}-departure" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="startCorrection({{ $e->id }}, 'DEPARTURE')" aria-label="Correct when {{ $eName }} left {{ $face->label() }} (recorded {{ Format::stamp($e->to_at, $timezone) }})" title="Correct when {{ $eName }} left this face ({{ Format::stamp($e->to_at, $timezone) }})">{{ $e->to_at->copy()->setTimezone($timezone)->format('H:i') }}</button>@else{{ Format::stamp($e->to_at, $timezone) }}@endif @if(isset($corrected[$e->id.':DEPARTURE']))<span class="dot-badge dot-badge--info" title="{{ $corrected[$e->id.':DEPARTURE'] }}">corrected</span>@endif</span>
+                            @endforeach
+                        </div>
+                    @endif
                     @if($face->notes)<div style="padding:0 1.25rem 0.6rem;font-size:var(--t-xs);color:var(--text-quiet);">{{ $face->notes }}</div>@endif
                 </section>
             @empty

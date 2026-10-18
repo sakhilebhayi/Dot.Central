@@ -8,6 +8,7 @@ use App\Models\ControlRoom;
 use App\Models\OperatorSession;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Audits;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
 use Tests\TestCase;
@@ -150,5 +151,17 @@ class AuditLogTest extends TestCase
         $this->assertStringStartsWith('occurred_at,user,role,control_room,entity_type,entity_id,action,changes,reason,automatic', $response->streamedContent());
 
         $this->assertDatabaseHas('audit_log', ['action' => 'generate', 'user_id' => $owner->id, 'entity_type' => 'audit_log']);
+    }
+
+    public function test_csv_export_neutralises_spreadsheet_formulas_in_free_text(): void
+    {
+        $owner = User::factory()->withPersonalTeam()->create();
+        $room = ControlRoom::factory()->for($owner->currentTeam)->create();
+        app(Audits::class)->record('override', null, [], '=cmd|\' /C calc\'!A0', $room, $owner);
+
+        $csv = $this->actingAs($owner)->get(route('audit.index', ['export' => 'csv']))->streamedContent();
+
+        $this->assertStringContainsString("\"'=cmd|", $csv);
+        $this->assertStringNotContainsString(',"=cmd', $csv);
     }
 }

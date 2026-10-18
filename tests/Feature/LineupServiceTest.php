@@ -20,8 +20,11 @@ use App\Models\User;
 use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Support\RoleClass;
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -324,5 +327,165 @@ class LineupServiceTest extends TestCase
         $this->assertSame($this->op1->id, $row['operator']->id);
         $this->assertSame($this->op1->id, $row['mines_operator']->id);
         $this->assertSame('already current in Dot.Mines', $row['assignment']->push_note);
+    }
+
+    public function test_a_placement_that_overlaps_an_earlier_stint_of_the_same_machine_is_refused(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $late = $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:30');
+        $this->service->release($late, 'Clicked late', $this->user);
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:00'));
+        $this->assertStringContainsString('LU-05 Overlaps an earlier entry: HT-01 was on Face 1 — Loading area 1 — Overburden until 12:00', $message);
+        $this->assertSame(1, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck1->id)->count(), 'nothing was written');
+
+        $this->service->place($this->shift, $face, $this->truck1, $this->user, '12:00');
+        $this->assertSame(2, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck1->id)->count(), 'from the end of the last stint is fine');
+    }
+
+    public function test_the_shared_loading_unit_of_a_linked_face_may_overlap_its_stint_on_the_partner_face(): void
+    {
+        $seam = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Seam', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->user, '08:00');
+        $stint = LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->firstOrFail();
+        $this->service->release($stint, 'Moved to the parting', $this->user, '11:00');
+        $parting = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Parting', 'cut' => 'C1', 'blocks' => ['B1']], $this->user, '09:00');
+
+        $shared = $this->service->place($this->shift, $parting, $this->loader, $this->user, '09:00');
+        $this->assertSame('2026-10-15 09:00:00', $shared->from_at->toDateTimeString());
+        $this->assertTrue($seam->sameWorkplaceAs($parting));
+    }
+
+    public function test_a_move_recorded_before_the_machine_arrived_where_it_is_is_refused_instead_of_deleting_that_stint(): void
+    {
+        $face1 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $face2 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->user, '07:00');
+        $stint = $this->service->place($this->shift, $face1, $this->truck1, $this->user, '11:00');
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face2, $this->truck1, $this->user, '10:50', true));
+        $this->assertStringContainsString('LU-05 Time before the machine arrived: HT-01 only arrived on Face 1 — Loading area 1 — Overburden at 11:00', $message);
+        $this->assertNotNull(LineupAllocation::withoutGlobalScopes()->find($stint->id), 'the stint is kept');
+    }
+
+    public function test_a_time_the_clocks_skipped_is_refused(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+
+        Carbon::setTestNow('2026-03-29 04:30:00');
+        $spring = $this->openShift('NIGHT', '2026-03-28', '2026-03-28 18:00:00', '2026-03-29 05:00:00');
+        $message = $this->refusal(fn () => $this->service->changeAt($spring, '01:30'));
+        $this->assertStringContainsString('LU-05 01:30 did not happen on 29 Mar in Europe/London: the clocks went forward.', $message);
+        $this->assertSame('2026-03-29 01:00:00', $this->service->changeAt($spring, '02:00')->toDateTimeString());
+
+        $spring->forceFill(['status' => 'CLOSED'])->save();
+        Carbon::setTestNow('2026-10-25 05:30:00');
+        $autumn = $this->openShift('NIGHT', '2026-10-24', '2026-10-24 17:00:00', '2026-10-25 06:00:00');
+        $this->assertSame('2026-10-25 01:30:00', $this->service->changeAt($autumn, '01:30')->toDateTimeString(), 'the second 01:30 (GMT): the latest one that has already happened');
+    }
+
+    public function test_a_placement_does_not_trust_what_it_read_before_the_lock(): void
+    {
+        $face1 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $face2 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->user, '07:00');
+        $fired = false;
+        Event::listen(TransactionBeginning::class, function () use (&$fired, $face2): void {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            // a second operator put the same truck on Face 2 just before this placement took its lock
+            DB::table('lineup_allocations')->insert(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'lineup_face_id' => $face2->id, 'equipment_id' => $this->truck1->id, 'role' => 'HAUL', 'from_at' => '2026-10-15 10:00:00', 'created_at' => now(), 'updated_at' => now()]);
+        });
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face1, $this->truck1, $this->user, '10:30'));
+
+        $this->assertTrue($fired);
+        $this->assertStringContainsString('LU-01 HT-01 is already on Face 2', $message);
+        $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face1->id)->where('equipment_id', $this->truck1->id)->count(), 'nothing was placed');
+    }
+
+    public function test_a_time_the_clocks_showed_twice_takes_the_latest_instance_that_has_happened_and_says_which(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        // 25 Oct 2026: at 02:00 BST (01:00 UTC) the clocks go back to 01:00 GMT, so 01:00-01:59 shows twice.
+        Carbon::setTestNow('2026-10-25 01:45:00');
+        $night = $this->openShift('NIGHT', '2026-10-24', '2026-10-24 17:00:00', '2026-10-25 06:00:00');
+
+        $this->assertSame('2026-10-25 01:40:00', $this->service->changeAt($night, '01:40')->toDateTimeString(), 'the second 01:40 (GMT) has happened');
+        $this->assertSame('2026-10-25 00:50:00', $this->service->changeAt($night, '01:50')->toDateTimeString(), 'the second 01:50 is still ahead, so the first (BST)');
+        $this->assertSame('2026-10-24 22:30:00', $this->service->changeAt($night, '23:30')->toDateTimeString(), 'not repeated: the one 23:30 (BST)');
+        $this->assertNull($this->service->ambiguityNote($night, Carbon::parse('2026-10-24 22:30:00')));
+        $this->assertSame('01:40 GMT, the second time the clock showed 01:40', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 01:40:00')));
+        $this->assertSame('01:50 BST, the first time the clock showed 01:50', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 00:50:00')));
+        $this->assertSame('01:50 BST, the first time the clock showed 01:50', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 00:50:27')), 'seconds do not change the pass');
+        $this->assertSame('01:40 GMT, the second time the clock showed 01:40', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 01:40:27')));
+
+        $face = $this->service->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '18:00');
+        $placed = $this->service->place($night, $face, $this->truck1, $this->user, '01:40');
+        $this->assertSame('2026-10-25 01:40:00', $placed->from_at->toDateTimeString());
+        $this->service->release($placed, 'Sent to the workshop', $this->user, '01:42');
+        $this->assertSame('2026-10-25 01:42:00', $placed->fresh()->to_at->toDateTimeString());
+    }
+
+    public function test_the_same_holds_where_the_clocks_go_back_in_the_southern_summer(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Australia/Sydney'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        // 5 Apr 2026: at 03:00 AEDT (16:00 UTC on the 4th) the clocks go back to 02:00 AEST, so 02:00-02:59 shows twice.
+        Carbon::setTestNow('2026-04-04 16:45:00');
+        $night = $this->openShift('NIGHT', '2026-04-04', '2026-04-04 07:00:00', '2026-04-04 20:00:00');
+
+        $this->assertSame('2026-04-04 16:30:00', $this->service->changeAt($night, '02:30')->toDateTimeString(), 'the second 02:30 (AEST)');
+        $this->assertSame('2026-04-04 15:50:00', $this->service->changeAt($night, '02:50')->toDateTimeString(), 'the second 02:50 is still ahead: the first (AEDT)');
+        $this->assertSame('02:30 AEST, the second time the clock showed 02:30', $this->service->ambiguityNote($night, Carbon::parse('2026-04-04 16:30:00')));
+        $this->assertSame('2026-04-04 12:00:00', $this->service->changeAt($night, '23:00')->toDateTimeString(), 'a control that is not repeated: 23:00 AEDT');
+    }
+
+    public function test_a_placement_recorded_before_the_machine_went_on_standby_is_refused(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $standby = $this->service->setStandby($this->shift, $this->truck1, $reason, $this->user, '11:00');
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:00'));
+
+        $this->assertStringContainsString('LU-05 Time before the standby began: HT-01 has been on standby since 11:00', $message);
+        $this->assertNull($standby->fresh()->to_at, 'the standby is untouched');
+        $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck1->id)->count());
+
+        $this->service->place($this->shift, $face, $this->truck1, $this->user, '11:30');
+        $this->assertSame('2026-10-15 11:30:00', $standby->fresh()->to_at->toDateTimeString());
+    }
+
+    public function test_closing_a_face_before_a_machine_arrived_on_it_is_refused_instead_of_deleting_its_stint(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $stint = $this->service->place($this->shift, $face, $this->truck1, $this->user, '11:00');
+
+        $message = $this->refusal(fn () => $this->service->closeFace($face->fresh(), 'Done', $this->user, '10:00'));
+
+        $this->assertStringContainsString('LU-05 Time before the machine arrived: HT-01 only arrived on Face 1 — Loading area 1 — Overburden at 11:00', $message);
+        $this->assertNotNull(LineupAllocation::withoutGlobalScopes()->find($stint->id), 'the stint is kept');
+        $this->assertFalse($face->fresh()->isClosed(), 'the face stays open');
+
+        $this->service->closeFace($face->fresh(), 'Done', $this->user, '11:30');
+        $this->assertTrue($face->fresh()->isClosed());
+    }
+
+    public function test_the_first_statement_of_a_placement_is_the_machines_write_lock_and_a_machine_with_no_stint_is_locked_through_its_own_row(): void
+    {
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->user, '07:00');
+        $statements = [];
+        DB::listen(function ($query) use (&$statements): void {
+            $statements[] = strtolower($query->sql);
+        });
+
+        $this->service->place($this->shift, $face, $this->truck2, $this->user, '10:00');
+
+        $inTransaction = array_values(array_filter($statements, fn (string $sql) => str_contains($sql, 'lineup_allocations') || str_contains($sql, 'from "equipment"')));
+        $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $inTransaction[0], 'a write comes first: it takes the SQLite write lock');
+        $this->assertStringContainsString('from "equipment"', $inTransaction[1], 'then the machine row itself, so Postgres serialises a first placement that has no stint to lock');
+        $this->assertStringContainsString('select', $inTransaction[2]);
     }
 }

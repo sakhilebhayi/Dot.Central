@@ -6,6 +6,7 @@ use App\Models\Alert;
 use App\Models\ControlRoom;
 use App\Models\DowntimeClassification;
 use App\Models\Equipment;
+use App\Models\LineupCorrection;
 use App\Models\OperationalException;
 use App\Models\Shift;
 use App\Models\ShiftLineup;
@@ -24,7 +25,7 @@ final class LoopSubject
     public static function for(Model $model): array
     {
         $equipment = match (true) {
-            $model instanceof Alert, $model instanceof OperationalException, $model instanceof DowntimeClassification, $model instanceof ShiftOperatorAssignment => $model->equipment()->withoutGlobalScopes()->first(),
+            $model instanceof Alert, $model instanceof OperationalException, $model instanceof DowntimeClassification, $model instanceof ShiftOperatorAssignment, $model instanceof LineupCorrection => $model->equipment()->withoutGlobalScopes()->first(),
             default => null,
         };
 

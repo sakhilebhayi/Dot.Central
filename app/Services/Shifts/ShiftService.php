@@ -3,6 +3,7 @@
 namespace App\Services\Shifts;
 
 use App\Models\ControlRoom;
+use App\Models\LineupCorrection;
 use App\Models\Shift;
 use App\Models\ShiftHandover;
 use App\Models\ShiftType;
@@ -230,6 +231,9 @@ final class ShiftService
             'operators' => $pool->filter(fn (array $r) => $r['operator'] !== null)->map(fn (array $r) => $r['operator']->label())->mapWithKeys(fn ($label, $id) => [$pool[$id]['equipment']->name => $label])->all(),
             'standby_now' => $pool->where('state', 'STANDBY')->map(fn (array $r) => ['name' => $r['equipment']->name, 'reason' => $r['standby']?->reason?->name, 'since' => $r['standby']?->from_at?->toIso8601String()])->values()->all(),
             'down_now' => $pool->where('state', 'DOWN')->map(fn (array $r) => ['name' => $r['equipment']->name, 'cause' => $r['down']['cause'] ?? null, 'since' => $r['down']['since']?->toIso8601String()])->values()->all(),
+            'corrections' => LineupCorrection::withoutGlobalScopes()->with('correctedBy')->where('shift_id', $shift->id)->orderBy('id')->get()
+                ->map(fn (LineupCorrection $c) => ['text' => $this->lineup->describeCorrection($c), 'reason' => $c->reason, 'by' => $c->correctedBy?->name, 'at' => $c->created_at?->toIso8601String()])->values()->all(),
+
         ];
     }
 }
