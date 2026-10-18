@@ -139,16 +139,17 @@ class ReportController extends Controller
         $corrections = LineupCorrection::withoutGlobalScopes()->where('shift_id', $shift->id)->orderBy('id')->get();
         $noteFor = function (LineupAllocation $a) use ($corrections, $tz): ?string {
             $own = $corrections->where('lineup_allocation_id', $a->id)->map(fn (LineupCorrection $c) => ($c->edge === LineupCorrection::ARRIVAL ? 'arrival' : 'departure').' corrected from '.$c->old_at->copy()->setTimezone($tz)->format('H:i').' ('.$tz.'): '.$c->reason);
-            $moved = $corrections->where('partner_allocation_id', $a->id)->map(fn (LineupCorrection $c) => 'moved with a correction ('.$c->reason.')');
+            $moved = $corrections->filter(fn (LineupCorrection $c) => in_array($a->id, $c->movedWithIds(), true))->map(fn (LineupCorrection $c) => 'moved with a correction ('.$c->reason.')');
             $notes = collect([$a->ended_reason])->merge($own)->merge($moved)->filter();
 
             return $notes->isEmpty() ? null : $notes->implode('; ');
         };
         $rows = [];
         foreach ($this->lineup->faces($shift, true) as $face) {
+            $link = $this->lineup->linkedLabel($face);
             foreach ($face->allocations()->orderBy('from_at')->get() as $a) {
                 $p = $pool[$a->equipment_id] ?? null;
-                $rows[] = ['face' => $face->label().($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->copy()->setTimezone($tz)->format('Y-m-d H:i'), 'until' => $a->to_at?->copy()->setTimezone($tz)->format('Y-m-d H:i') ?? 'still there', 'note' => $noteFor($a)];
+                $rows[] = ['face' => $face->label().($link !== '' ? ' · same loading unit as '.$link : '').($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->copy()->setTimezone($tz)->format('Y-m-d H:i'), 'until' => $a->to_at?->copy()->setTimezone($tz)->format('Y-m-d H:i') ?? 'still there', 'note' => $noteFor($a)];
             }
         }
         foreach ($pool->whereIn('state', ['FREE', 'STANDBY', 'DOWN']) as $p) {

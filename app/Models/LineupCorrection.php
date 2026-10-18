@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property int $shift_id
  * @property int $lineup_allocation_id
  * @property int|null $partner_allocation_id
+ * @property list<int>|null $also_allocation_ids
  * @property int $equipment_id
  * @property string $edge
  * @property Carbon $old_at
@@ -34,7 +35,18 @@ class LineupCorrection extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['old_at' => 'datetime', 'new_at' => 'datetime'];
+    protected $casts = ['old_at' => 'datetime', 'new_at' => 'datetime', 'also_allocation_ids' => 'array'];
+
+    /**
+     * Every other stint that moved with the corrected one: the first partner,
+     * then the rest (a loading unit on linked faces moves as one).
+     *
+     * @return list<int>
+     */
+    public function movedWithIds(): array
+    {
+        return array_values(array_filter([$this->partner_allocation_id, ...($this->also_allocation_ids ?? [])], fn ($id) => $id !== null));
+    }
 
     /** @return BelongsTo<ControlRoom, $this> */
     public function controlRoom(): BelongsTo

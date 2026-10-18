@@ -262,6 +262,25 @@ None.
 - a link-breaking edit is refused, and "Move the loading unit here" works;
 - the page and the fleet board show the link.
 
+### 4.9 As built (slice 2, branch `feat/lineup-linked-faces`)
+
+Built as §4.1 to §4.8 describe, with these differences and additions found while building and testing it:
+
+- **The placement notice** names the other faces *this loading unit* works ("EX-02 → Face 2 — … (also loads Face 1: same cut and block)"), not every face linked to the target.
+- **A move or correction of a loading unit on linked faces is one move.** The stints on the other side of the move are all partners (a move from Face 1 + Face 2 to Face 3 at 10:30 ends both stints and starts Face 3 at 10:30; correcting any of the three edges moves all three). The loading unit's linked stints on *this* side join the moment only when the machine really moved or went on standby then; two separate "Remove" clicks in the same minute stay independent. Refusals for a genuine overlap are unchanged. `lineup_corrections.partner_allocation_id` keeps the first stint that moved with the corrected one and the additive column `also_allocation_ids` (JSON) keeps the rest, so the report, the handover and Memory name them all. The correction panel says which faces change with the time when there is more than one.
+- **A standby and a stint of one machine never overlap, closed or open.** A standby back-dated into a closed stint or a closed standby, a placement inside a closed standby, a correction that would drag the standby next to a move over another entry, and ending a standby at or before its start are all refused (LU-05) with the time to use instead. Ending a standby someone else already ended is LU-15.
+- **Locks.** `setStandby`, `endStandby`, `release`, `closeFace` and `editFace` run in a transaction that takes the machine lock first and reads again, like `place()` and `correctTime()`. `place()`, `closeFace()` and `editFace()` also lock the face (`lockFace`: machines first, then the face, so no two callers wait on each other) so an edit of the cut or blocks and a placement cannot interleave and leave a loading unit on two unrelated faces.
+- **Sentences print the room clock**, not UTC. A release or face-closing reason over 255 characters is refused like a correction reason (the inputs stop at 255).
+- **Verified** with a sequential fuzz (every operation, invariants checked after each) and a 4-process run on a file-based SQLite database (WAL, DEFERRED, 5 s busy timeout): no overlapping stints or standbys, no stint ending before it starts, no lock errors.
+
+Review fixes to slice 2:
+
+- **A work area breaks every link.** A link survives an edit only while the edited face stays a loading face at the same cut and block; turning a linked face into a work area is refused LU-01 ("… is a work area, so the faces cannot share a loading unit") with the same "Move the loading unit here" path. `linkedFaces` only knows loading faces.
+- **A placement before the face started** and **closing a face before it started or before a machine already left it** are refused (LU-05, room clock).
+- **Postgres lock order:** the machine's equipment row is locked before its stints (stints first deadlocked under three or more writers), machines in id order, then the face. SQLite keeps the UPDATE first.
+- **"Move the loading unit here"** has an accessible name that says which unit and face, and takes the keyboard focus when the refusal appears.
+- **Known limits (not changed):** a "Remove" and a later move of the same loading unit in the same minute read as one move when the stints are corrected (the correction moves every edge at that minute); link history is not versioned (derived from current cut and blocks and open stints); "Move here" at exactly the other stint's start deletes that zero-length stint; material, activity and cut lengths are not bounded in the service; the page's `loader_ids` are passed to `place()`, which refuses a machine of another room (LU-03).
+
 ## 5. Feature C: material split (time split)
 
 ### 5.1 What the user sees and does

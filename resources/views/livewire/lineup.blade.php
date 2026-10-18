@@ -27,6 +27,8 @@
             <div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div>
             @if(($fix['move'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="place({{ $fix['move'] }}, true, {{ $fix['face'] }})">Move here</button></div>
+            @elseif(($fix['face_move'] ?? false) === true)
+                <div style="margin-top:0.5rem;"><button type="button" id="face-move" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="saveFace(true)" aria-label="{{ $fix['label'] ?? 'Move the loading unit here' }}">Move the loading unit here</button></div>
             @elseif(($fix['operator'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="assignOperator({{ $fix['unit'] }}, '{{ $fix['operator'] }}', true)">Move operator to this machine</button></div>
             @endif
@@ -51,7 +53,7 @@
         @php($cName = $correcting->equipment?->name ?? 'The machine')
         <form wire:submit="saveCorrection" wire:keydown.escape="cancelCorrection" class="dot-panel" role="dialog" aria-labelledby="corr-title" aria-describedby="corr-help" style="margin-bottom:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;">
             <h2 id="corr-title" class="dot-panel__title" style="grid-column:1/-1;">{{ $arrival ? 'When did '.$cName.' arrive on '.$correcting->face?->label().'?' : 'When did '.$cName.' leave '.$correcting->face?->label().'?' }}</h2>
-            <p id="corr-help" class="dot-readout__context" style="grid-column:1/-1;margin:0;">Recorded {{ Format::stamp($arrival ? $correcting->from_at : $correcting->to_at, $timezone) }}. A move is one moment: the face it {{ $arrival ? 'came from' : 'went to' }} is corrected with it. Times are the control room's clock ({{ $timezone }}).</p>
+            <p id="corr-help" class="dot-readout__context" style="grid-column:1/-1;margin:0;">Recorded {{ Format::stamp($arrival ? $correcting->from_at : $correcting->to_at, $timezone) }}. A move is one moment: {{ count($movesWith['other']) + count($movesWith['same']) > 1 || ($movesWith['other'] === [] && $movesWith['same'] !== []) ? implode(' and ', array_merge($movesWith['other'], $movesWith['same'])).(count($movesWith['other']) + count($movesWith['same']) > 1 ? ' are' : ' is').' corrected with it.' : 'the face it '.($arrival ? 'came from' : 'went to').' is corrected with it.' }} Times are the control room's clock ({{ $timezone }}).</p>
             <div id="corr-alert" role="alert" style="grid-column:1/-1;">
                 @if($refusal)
                     <div class="dot-msg dot-msg--critical"><div class="dot-msg__title">Refused</div><div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div></div>
@@ -108,15 +110,15 @@
                 @php($loaders = $members->where('role', 'LOADER'))
                 @php($trucks = $members->where('role', 'HAUL'))
                 <section class="dot-panel dot-panel--flush" style="{{ $target === $face->id ? 'border-color:var(--signal);box-shadow:inset 3px 0 0 var(--signal);' : '' }}" aria-label="{{ $face->label() }}">
-                    <div class="dot-panel__head" style="cursor:pointer;" wire:click="setTarget({{ $face->id }})" role="button" tabindex="0" title="Click to send machines to this face" aria-pressed="{{ $target === $face->id ? 'true' : 'false' }}">
-                        <div>
+                    <div class="dot-panel__head" style="cursor:pointer;flex-wrap:wrap;" wire:click="setTarget({{ $face->id }})" role="button" tabindex="0" title="Click to send machines to this face" aria-pressed="{{ $target === $face->id ? 'true' : 'false' }}">
+                        <div style="flex:1 1 14rem;min-width:0;">
                             <h2 class="dot-panel__title">{{ $face->label() }}</h2>
-                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
+                            <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif@if(($linked[$face->id] ?? '') !== '') · same loading unit as {{ $linked[$face->id] }}@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
                         </div>
                         @if($editable)
-                            <div style="display:flex;gap:0.4rem;align-items:center;" wire:click.stop>
+                            <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;" x-on:click.stop>
                                 <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="openFaceForm({{ $face->id }})">Edit</button>
-                                <input wire:model="closeReason.{{ $face->id }}" class="dot-input" placeholder="Why close?" style="width:9rem;" aria-label="Reason for closing {{ $face->label() }}" />
+                                <input wire:model="closeReason.{{ $face->id }}" class="dot-input" placeholder="Why close?" style="width:9rem;" maxlength="255" aria-label="Reason for closing {{ $face->label() }}" />
                                 <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="closeFace({{ $face->id }})">Close face</button>
                             </div>
                         @endif
@@ -151,7 +153,7 @@
                                         @endif
                                         @if(isset($corrected[$a->id.':ARRIVAL']))<div><span class="dot-badge dot-badge--info" title="{{ $corrected[$a->id.':ARRIVAL'] }}">corrected</span></div>@endif
                                     </td>
-                                    <td>@if($editable)<span style="display:flex;gap:0.3rem;">@unless($planning)<input wire:model="releaseReason.{{ $a->id }}" class="dot-input" placeholder="why?" style="width:7rem;" aria-label="Reason to take {{ $p['equipment']->name ?? '' }} off" />@endunless<button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="release({{ $a->id }})" title="Take {{ $p['equipment']->name ?? '' }} off this face">Remove</button></span>@endif</td>
+                                    <td>@if($editable)<span style="display:flex;gap:0.3rem;">@unless($planning)<input wire:model="releaseReason.{{ $a->id }}" class="dot-input" placeholder="why?" style="width:7rem;" maxlength="255" aria-label="Reason to take {{ $p['equipment']->name ?? '' }} off" />@endunless<button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="release({{ $a->id }})" title="Take {{ $p['equipment']->name ?? '' }} off this face">Remove</button></span>@endif</td>
                                 </tr>
                             @empty
                                 <tr><td colspan="5" class="dot-ledger__empty">No machines yet — click machines in the fleet panel.</td></tr>
@@ -235,7 +237,7 @@
                         <h3 class="dot-readout__label" style="margin:0.5rem 0 0.3rem;">{{ RoleClass::label($class) }}s ({{ $byClass[$class]->count() }})</h3>
                         <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
                             @foreach($byClass[$class] as $p)
-                                <button type="button" class="dot-btn dot-btn-sm {{ $p['state'] === 'PLACED' ? 'dot-btn-primary' : 'dot-btn-ghost' }}" style="{{ $p['state'] === 'DOWN' ? 'border-color:var(--bad);color:var(--bad);' : ($p['state'] === 'STANDBY' ? 'opacity:.6;' : '') }}" @disabled(! $editable) wire:click="place({{ $p['equipment']->id }})" aria-label="{{ $p['equipment']->name }} ({{ strtolower($p['state']) }}) — put on the target face" title="{{ $p['down']['cause'] ?? ($p['placement']?->face?->label() ?? ($p['standby']?->reason?->name ?? 'free')) }}">
+                                <button type="button" class="dot-btn dot-btn-sm {{ $p['state'] === 'PLACED' ? 'dot-btn-primary' : 'dot-btn-ghost' }}" style="{{ $p['state'] === 'DOWN' ? 'border-color:var(--bad);color:var(--bad);' : ($p['state'] === 'STANDBY' ? 'opacity:.6;' : '') }}" @disabled(! $editable) wire:click="place({{ $p['equipment']->id }})" aria-label="{{ $p['equipment']->name }} ({{ $p['state'] === 'PLACED' ? 'placed on '.$p['placements']->map(fn ($a) => 'Face '.$a->face->seq)->implode(' and ') : strtolower($p['state']) }}) — put on the target face" title="{{ $p['down']['cause'] ?? ($p['placement']?->face?->label() ?? ($p['standby']?->reason?->name ?? 'free')) }}">
                                     {{ $p['equipment']->name }} <small style="font-weight:400;opacity:.8;">{{ $p['state'] === 'PLACED' ? 'face '.$p['placements']->map(fn ($a) => $a->face->seq)->implode('+') : strtolower($p['state']) }}</small>
                                 </button>
                             @endforeach
