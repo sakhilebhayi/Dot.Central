@@ -6,6 +6,7 @@ use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasControlRoomTeamScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -48,5 +49,11 @@ class LineupAllocation extends Model
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(Equipment::class);
+    }
+
+    /** @return HasMany<LineupCorrection, $this> */
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(LineupCorrection::class);
     }
 }

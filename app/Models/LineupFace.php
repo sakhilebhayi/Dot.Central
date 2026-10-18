@@ -29,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property string $status
  * @property Carbon $active_from
  * @property Carbon|null $closed_at
+ * @property int|null $split_from_face_id
  */
 class LineupFace extends Model
 {
@@ -56,6 +57,12 @@ class LineupFace extends Model
     public function mineArea(): BelongsTo
     {
         return $this->belongsTo(MineArea::class);
+    }
+
+    /** @return BelongsTo<LineupFace, $this> */
+    public function splitFrom(): BelongsTo
+    {
+        return $this->belongsTo(LineupFace::class, 'split_from_face_id');
     }
 
     /** @return HasMany<LineupAllocation, $this> */
