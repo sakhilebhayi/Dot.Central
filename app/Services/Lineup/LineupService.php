@@ -44,6 +44,9 @@ final class LineupService
     /** The width of lineup_corrections.reason. */
     public const REASON_LENGTH = 255;
 
+    /** The width of lineup_faces.material. */
+    public const MATERIAL_LENGTH = 64;
+
     public function __construct(private readonly Audits $audits, private readonly LocationCatalogue $locations, private readonly MinesClientFactory $clients) {}
 
     // ---- state -----------------------------------------------------------------------------------------------
@@ -271,18 +274,24 @@ final class LineupService
         $this->validateFace($attrs);
         $location = $this->locations->resolve($shift->controlRoom, $attrs['location'] ?? null);
 
-        $seq = (int) LineupFace::withoutGlobalScopes()->where('shift_id', $shift->id)->max('seq') + 1;
-        $face = LineupFace::create($location + [
-            'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'seq' => $seq,
-            'kind' => $attrs['kind'] ?? 'LOADING',
-            'material' => ($attrs['kind'] ?? 'LOADING') === 'LOADING' ? ($attrs['material'] ?? null) : null,
-            'activity' => ($attrs['kind'] ?? 'LOADING') === 'AREA' ? ($attrs['activity'] ?? null) : null,
-            'cut' => $this->normaliseCut($attrs['cut'] ?? null),
-            'blocks' => $this->normaliseBlocks($attrs['blocks'] ?? null),
-            'notes' => isset($attrs['notes']) && trim($attrs['notes']) !== '' ? trim($attrs['notes']) : null,
-            'status' => 'ACTIVE', 'active_from' => $at,
-        ]);
-        $this->lineup($shift)->save();
+        // The next number is read under the shift's lock, so two faces added (or split) at once never share a number.
+        $face = DB::transaction(function () use ($shift, $location, $attrs, $at): LineupFace {
+            $this->lockShiftFaces($shift);
+            $kind = $attrs['kind'] ?? 'LOADING';
+            $face = LineupFace::create($location + [
+                'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'seq' => $this->nextSeq($shift),
+                'kind' => $kind,
+                'material' => $kind === 'LOADING' ? $this->normaliseMaterial($attrs['material'] ?? null) : null,
+                'activity' => $kind === 'AREA' ? ($attrs['activity'] ?? null) : null,
+                'cut' => $this->normaliseCut($attrs['cut'] ?? null),
+                'blocks' => $this->normaliseBlocks($attrs['blocks'] ?? null),
+                'notes' => isset($attrs['notes']) && trim($attrs['notes']) !== '' ? trim($attrs['notes']) : null,
+                'status' => 'ACTIVE', 'active_from' => $at,
+            ]);
+            $this->lineup($shift)->save();
+
+            return $face;
+        });
 
         foreach ($attrs['loader_ids'] ?? [] as $id) {
             $unit = Equipment::withoutGlobalScopes()->where('control_room_id', $shift->control_room_id)->findOrFail($id);
@@ -298,9 +307,15 @@ final class LineupService
      * loading unit stays on the edited face and is taken off the other one at
      * $hhmm ("Move the loading unit here").
      *
+     * A change of material on a loading face that has been working is a
+     * decision (LU-14): with $materialCorrection the material was wrong from
+     * the start and is corrected in place (one audit row with the reason);
+     * otherwise the operator splits the face at a time (splitFace()). While
+     * planning, or at the moment the face started, there is nothing to decide.
+     *
      * @param  array{location?: string|null, kind?: string, material?: string|null, activity?: string|null, cut?: string|null, blocks?: list<string>|null, notes?: string|null}  $attrs
      */
-    public function editFace(LineupFace $face, array $attrs, User $user, bool $move = false, ?string $hhmm = null): LineupFace
+    public function editFace(LineupFace $face, array $attrs, User $user, bool $move = false, ?string $hhmm = null, bool $materialCorrection = false): LineupFace
     {
         $shift = $face->shift;
         $this->guardWritable($shift);
@@ -319,11 +334,13 @@ final class LineupService
         $location = isset($attrs['location']) ? $this->locations->resolve($shift->controlRoom, $attrs['location']) : [];
         $planning = $this->isPlanning($shift);
         $at = $move && ! $planning ? $this->changeAt($shift, $hhmm) : null;
+        $material = $kind === 'LOADING' ? $this->normaliseMaterial($attrs['material'] ?? null) : null;
+        $this->refuseUndecidedMaterial($shift, $face, $kind, $material, $materialCorrection, $planning, $hhmm);
 
         // Read before the transaction, locked first inside it (see lockMachine), then read again under the locks.
         $lock = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->sort()->values()->all();
 
-        return DB::transaction(function () use ($face, $shift, $user, $move, $at, $planning, $location, $kind, $attrs, $cut, $blocks, $lock): LineupFace {
+        return DB::transaction(function () use ($face, $shift, $user, $move, $at, $planning, $location, $kind, $attrs, $cut, $blocks, $lock, $material, $materialCorrection, $hhmm): LineupFace {
             foreach ($lock as $equipmentId) {
                 $this->lockMachine($shift, $equipmentId);
             }
@@ -335,6 +352,7 @@ final class LineupService
             if (array_diff($mine, $lock) !== []) {
                 $this->refuse('LU-15', 'Someone changed the loading units on '.$face->label().' meanwhile. Check the face and save again.');
             }
+            $this->refuseUndecidedMaterial($shift, $current, $kind, $material, $materialCorrection, $planning, $hhmm);
 
             // A link survives only while this face stays a loading face at the same cut and block as the other one.
             $strays = $this->linkedFaces($current)->reject(fn (LineupFace $other) => $kind === 'LOADING' && (new LineupFace(['cut' => $cut, 'blocks' => $blocks]))->sameWorkplaceAs($other))->values();
@@ -357,17 +375,166 @@ final class LineupService
                 }
             }
 
-            $face->fill($location + [
+            $materialWas = $current->material;
+            $current->fill($location + [
                 'kind' => $kind,
-                'material' => $kind === 'LOADING' ? ($attrs['material'] ?? null) : null,
+                'material' => $material,
                 'activity' => $kind === 'AREA' ? ($attrs['activity'] ?? null) : null,
                 'cut' => $cut,
                 'blocks' => $blocks,
                 'notes' => isset($attrs['notes']) && trim($attrs['notes']) !== '' ? trim($attrs['notes']) : null,
-            ])->save();
+            ]);
+            if ($materialCorrection && $this->changesMaterial($current, $kind, $material, $materialWas)) {
+                $changes = collect($current->getDirty())->except(['updated_at'])->map(fn ($new, $key) => ['old' => $current->getOriginal($key), 'new' => $new])->all();
+                $current->saveQuietly();
+                $this->audits->record('override', $current, $changes, 'Material corrected from '.$materialWas.' to '.($material ?? 'none').' (wrong from the start)', $shift->controlRoom, $user, shiftId: $shift->id);
+            } else {
+                $current->save();
+            }
 
-            return $face;
+            return $current;
         });
+    }
+
+    /**
+     * Whether an edit turns the material of a loading face into another one
+     * (a spelling or case of the same material is no change; a face with no
+     * material yet takes its first one without a question).
+     */
+    private function changesMaterial(LineupFace $face, string $kind, ?string $material, ?string $was = null): bool
+    {
+        $was ??= $face->material;
+        if ($face->kind !== 'LOADING' || $kind !== 'LOADING' || $was === null) {
+            return false;
+        }
+
+        return mb_strtolower((string) $material) !== mb_strtolower(trim($was));
+    }
+
+    /** LU-14: a changed material on a face that has been working needs a decision, unless it is a correction. */
+    private function refuseUndecidedMaterial(Shift $shift, LineupFace $face, string $kind, ?string $material, bool $materialCorrection, bool $planning, ?string $hhmm): void
+    {
+        if ($materialCorrection || $planning || ! $this->changesMaterial($face, $kind, $material)) {
+            return;
+        }
+        if ($this->changeAt($shift, $hhmm)->greaterThan($face->active_from)) {
+            $this->refuse('LU-14', $face->label().' has been loading '.$face->material.' since '.$this->hm($shift, $face->active_from).'. Say whether the material was wrong from the start (correct it on this face) or the face changed material at a time (a new face carries on from then; the line-up keeps '.$face->material.' until that time).');
+        }
+    }
+
+    /**
+     * The face changed material at a time: it closes then and a new face
+     * carries on with the same machines, so the line-up keeps the old
+     * material until that time. Labels and times only: no quantity is split
+     * (D3). Stints that began at or after the time move to the new face;
+     * stints that were under way at it are cut there and the rest carries on
+     * (its end, and why it ended, unchanged). A machine on standby at the time
+     * is on no face and stays on standby. Everything runs under the locks of
+     * every machine that was ever on the face, then the face, then the shift's
+     * numbering, like the other writers.
+     */
+    public function splitFace(LineupFace $face, string $material, User $user, ?string $hhmm = null, ?string $reason = null): LineupFace
+    {
+        $shift = Shift::withoutGlobalScopes()->findOrFail($face->shift_id);
+        $this->guardWritable($shift);
+        $material = trim($material);
+        $planning = $this->isPlanning($shift);
+        $this->refuseSplit($shift, $face, $material, $planning, null);
+        $reason = trim((string) $reason);
+        $this->refuseLongReason($reason);
+        $closeReason = 'Material changed to '.$material.($reason !== '' ? ': '.$reason : '');
+        if (mb_strlen($closeReason) > self::REASON_LENGTH) {
+            $this->refuse('LU-05', 'The reason is '.mb_strlen($reason).' characters; with this material keep it to '.(self::REASON_LENGTH - mb_strlen('Material changed to '.$material.': ')).' or fewer.');
+        }
+        $at = $this->changeAt($shift, $hhmm);
+        $this->refuseSplit($shift, $face, $material, $planning, $at);
+
+        // Read before the transaction, locked first inside it (see lockMachine), then read again under the locks.
+        $lock = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->pluck('equipment_id')->unique()->sort()->values()->all();
+
+        return DB::transaction(function () use ($shift, $face, $material, $user, $at, $closeReason, $planning, $lock): LineupFace {
+            foreach ($lock as $equipmentId) {
+                $this->lockMachine($shift, $equipmentId);
+            }
+            $current = $this->lockFace($face);
+            $this->lockShiftFaces($shift);
+            if ($current->isClosed()) {
+                $this->refuse('LU-15', $face->label().' was changed by someone else meanwhile. Check it and try again.');
+            }
+            $this->refuseSplit($shift, $current, $material, $planning, $at);
+            $stints = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->orderBy('from_at')->orderBy('id')->get();
+            if ($stints->contains(fn (LineupAllocation $a) => ! in_array($a->equipment_id, $lock, true))) {
+                $this->refuse('LU-15', 'Someone put a machine on '.$current->label().' meanwhile. Check the face and split it again.');
+            }
+
+            $closed = LineupFace::withoutGlobalScopes()->whereKey($face->id)->where('status', 'ACTIVE')
+                ->update(['status' => 'CLOSED', 'closed_at' => $at, 'close_reason' => $closeReason, 'closed_by' => $user->id]);
+            if ($closed !== 1) {
+                $this->refuse('LU-15', $face->label().' was changed by someone else meanwhile. Check it and try again.');
+            }
+            $this->audits->record('updated', $current, ['status' => ['old' => 'ACTIVE', 'new' => 'CLOSED'], 'closed_at' => ['old' => null, 'new' => $at->toIso8601String()], 'close_reason' => ['old' => null, 'new' => $closeReason]], $closeReason.' at '.$this->hm($shift, $at), $shift->controlRoom, $user, shiftId: $shift->id);
+
+            $new = LineupFace::create([
+                'control_room_id' => $current->control_room_id, 'shift_id' => $current->shift_id, 'seq' => $this->nextSeq($shift),
+                'kind' => 'LOADING', 'mine_area_id' => $current->mine_area_id,
+                'location_source' => $current->location_source, 'location_ref' => $current->location_ref, 'location_name' => $current->location_name,
+                'material' => $material, 'activity' => null, 'cut' => $current->cut, 'blocks' => $current->blocks, 'notes' => $current->notes,
+                'status' => 'ACTIVE', 'active_from' => $at, 'split_from_face_id' => $current->id,
+            ]);
+
+            foreach ($stints->filter(fn (LineupAllocation $a) => $a->to_at === null || $a->to_at->greaterThan($at)) as $stint) {
+                if ($stint->from_at->greaterThanOrEqualTo($at)) {
+                    $stint->fill(['lineup_face_id' => $new->id])->save();
+
+                    continue;
+                }
+                [$end, $endedReason, $endedBy] = [$stint->to_at, $stint->ended_reason, $stint->ended_by];
+                $stint->fill(['to_at' => $at, 'ended_reason' => 'Face changed material', 'ended_by' => $user->id])->save();
+                LineupAllocation::create([
+                    'control_room_id' => $stint->control_room_id, 'shift_id' => $stint->shift_id, 'lineup_face_id' => $new->id, 'equipment_id' => $stint->equipment_id,
+                    'role' => $stint->role, 'from_at' => $at, 'to_at' => $end, 'ended_reason' => $end !== null ? $endedReason : null, 'ended_by' => $end !== null ? $endedBy : null,
+                    'created_by' => $user->id,
+                ]);
+            }
+            $this->lineup($shift)->save();
+
+            return $new;
+        });
+    }
+
+    /** The rules a split must meet, read from the face as it is now ($at null: only the ones that need no time). */
+    private function refuseSplit(Shift $shift, LineupFace $face, string $material, bool $planning, ?Carbon $at): void
+    {
+        if ($face->isClosed()) {
+            $this->refuse('LU-05', $face->label().' is closed. Add a new face instead.');
+        }
+        if ($face->kind !== 'LOADING') {
+            $this->refuse('LU-05', 'Only a loading face changes material; for a work area, edit its activity.');
+        }
+        if ($material === '' || mb_strtolower($material) === mb_strtolower((string) $face->material)) {
+            $this->refuse('LU-05', 'Pick the new material: the new face needs a different material.');
+        }
+        if (mb_strlen($material) > self::MATERIAL_LENGTH) {
+            $this->refuse('LU-05', 'The material is '.mb_strlen($material).' characters; keep it to '.self::MATERIAL_LENGTH.' or fewer.');
+        }
+        if ($planning) {
+            $this->refuse('LU-05', 'Before the shift starts, edit the face instead: nothing has happened on it yet.');
+        }
+        if ($at !== null && $at->lessThanOrEqualTo($face->active_from)) {
+            $this->refuse('LU-05', $face->label().' only started at '.($this->ambiguityNote($shift, $face->active_from) ?? $this->hm($shift, $face->active_from)).'. Pick a later time.');
+        }
+    }
+
+    /** "Face 1 (Overburden until 10:00)" for a face that carries on after a material change, else null. */
+    public function splitOrigin(LineupFace $face): ?string
+    {
+        $previous = $face->split_from_face_id !== null ? LineupFace::withoutGlobalScopes()->find($face->split_from_face_id) : null;
+        $shift = Shift::withoutGlobalScopes()->find($face->shift_id);
+        if ($previous === null || $shift === null || $previous->closed_at === null) {
+            return null;
+        }
+
+        return 'Face '.$previous->seq.' ('.$previous->material.' until '.$this->hm($shift, $previous->closed_at).')';
     }
 
     public function closeFace(LineupFace $face, string $reason, User $user, ?string $hhmm = null): void
@@ -1229,6 +1396,35 @@ final class LineupService
     }
 
     /**
+     * Serialises the numbering of a shift's faces (addFace, splitFace), taken
+     * last of all the locks. Postgres: the shift row, FOR NO KEY UPDATE, which
+     * does not conflict with the key-share locks that inserting a stint or a
+     * face takes on it. SQLite: a write, so the transaction holds the single
+     * write lock before it reads the highest number.
+     */
+    private function lockShiftFaces(Shift $shift): void
+    {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            LineupFace::withoutGlobalScopes()->where('shift_id', $shift->id)->toBase()->update(['updated_at' => now()]);
+
+            return;
+        }
+        Shift::withoutGlobalScopes()->whereKey($shift->id)->lock('for no key update')->value('id');
+    }
+
+    private function nextSeq(Shift $shift): int
+    {
+        return (int) LineupFace::withoutGlobalScopes()->where('shift_id', $shift->id)->max('seq') + 1;
+    }
+
+    private function normaliseMaterial(?string $material): ?string
+    {
+        $material = trim((string) $material);
+
+        return $material === '' ? null : $material;
+    }
+
+    /**
      * The clocks may show a time twice (they go back). PHP resolves the local
      * wall time to its first instant; when the second instant is inside the
      * shift and has already happened, that later one is the time meant.
@@ -1403,6 +1599,10 @@ final class LineupService
         }
         if ($kind === 'AREA' && trim((string) ($attrs['activity'] ?? '')) === '') {
             $this->refuse('LU-05', 'Say what work the area is for (dozing, drilling, roads …).');
+        }
+        $material = trim((string) ($attrs['material'] ?? ''));
+        if ($kind === 'LOADING' && mb_strlen($material) > self::MATERIAL_LENGTH) {
+            $this->refuse('LU-05', 'The material is '.mb_strlen($material).' characters; keep it to '.self::MATERIAL_LENGTH.' or fewer.');
         }
     }
 
