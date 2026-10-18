@@ -184,7 +184,12 @@ class LineupStandbyRulesTest extends TestCase
 
         $this->assertCount(2, $first, 'one transaction each');
         foreach ($first as $queries) {
-            $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $queries[0], 'the first statement is the lock (SQLite: the write lock; Postgres: row locks)');
+            if (DB::connection()->getDriverName() === 'sqlite') {
+                $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $queries[0], 'the first statement is the lock (SQLite: the write lock)');
+            } else {
+                $this->assertStringContainsString('for update', $queries[0], 'Postgres: the equipment row is locked before its stints (stints first deadlocked, 40P01)');
+                $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $queries[1]);
+            }
         }
     }
 

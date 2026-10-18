@@ -1182,23 +1182,35 @@ final class LineupService
 
     /**
      * Serialises concurrent changes to one machine in a shift, on both
-     * databases, before anything is read:
+     * databases, before anything is read.
      *
-     * 1. an UPDATE of the machine's stints: on SQLite it takes the single
-     *    write lock (lockForUpdate compiles to nothing there); on Postgres it
-     *    row-locks the stints that exist;
-     * 2. a locking read of the machine's own row, for Postgres: a machine
-     *    with no stint yet (a first placement) has nothing to lock in (1). On
-     *    SQLite it is a plain read inside the write lock.
+     * SQLite (WAL, DEFERRED): lockForUpdate compiles to nothing, so the first
+     * statement is an UPDATE of the machine's stints, which takes the single
+     * write lock.
      *
-     * Constraint: the lock relies on its UPDATE being the first statement of
-     * the transaction. A caller that reads first must set the SQLite
-     * transaction_mode to IMMEDIATE or lock explicitly before it reads.
+     * Postgres: the machine's own row is locked FIRST (SELECT ... FOR UPDATE),
+     * and only then are its stints touched. Locking the stints first let
+     * transactions that change to_at and insert rows take stint row locks in
+     * different orders and deadlock (40P01) with three or more writers; with the
+     * equipment row as the one door into a machine, every writer queues there.
+     * It also serialises a machine that has no stint yet (a first placement).
+     *
+     * Callers that lock several machines take them in id order, then the face
+     * (lockFace), so no two ever wait on each other in a circle.
+     *
+     * Constraint: the lock must be the first statement of the transaction. A
+     * caller that reads first must set the SQLite transaction_mode to IMMEDIATE
+     * or lock explicitly before it reads.
      */
     private function lockMachine(Shift $shift, int $equipmentId): void
     {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            Equipment::withoutGlobalScopes()->whereKey($equipmentId)->lockForUpdate()->value('id');
+        }
         LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $equipmentId)->toBase()->update(['updated_at' => now()]);
-        Equipment::withoutGlobalScopes()->whereKey($equipmentId)->lockForUpdate()->value('id');
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            Equipment::withoutGlobalScopes()->whereKey($equipmentId)->value('id');
+        }
     }
 
     /**

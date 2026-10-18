@@ -420,7 +420,8 @@ class LineupLinkedFacesTest extends TestCase
 
         $this->assertCount(3, $transactions, 'one transaction each');
         [$placement, $editOfEmptyFace, $editOfLoadedFace] = $transactions;
-        $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $placement[0], 'the machine first');
+        $postgres = DB::connection()->getDriverName() !== 'sqlite';
+        $this->assertStringStartsWith($postgres ? 'select' : 'update "lineup_allocations" set "updated_at"', $placement[0], 'the machine first (Postgres: its equipment row, then its stints)');
         $this->assertStringStartsWith('update "lineup_faces" set "updated_at"', $placement[2], 'then the face (the equipment row is read between)');
         $this->assertStringStartsWith('update "lineup_faces" set "updated_at"', $editOfEmptyFace[0], 'nothing to lock but the face: its write is the first statement');
         $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $editOfLoadedFace[0], 'the loading unit first');
