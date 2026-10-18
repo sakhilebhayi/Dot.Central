@@ -110,13 +110,13 @@
                 @php($loaders = $members->where('role', 'LOADER'))
                 @php($trucks = $members->where('role', 'HAUL'))
                 <section class="dot-panel dot-panel--flush" style="{{ $target === $face->id ? 'border-color:var(--signal);box-shadow:inset 3px 0 0 var(--signal);' : '' }}" aria-label="{{ $face->label() }}">
-                    <div class="dot-panel__head" style="cursor:pointer;" wire:click="setTarget({{ $face->id }})" role="button" tabindex="0" title="Click to send machines to this face" aria-pressed="{{ $target === $face->id ? 'true' : 'false' }}">
-                        <div>
+                    <div class="dot-panel__head" style="cursor:pointer;flex-wrap:wrap;" wire:click="setTarget({{ $face->id }})" role="button" tabindex="0" title="Click to send machines to this face" aria-pressed="{{ $target === $face->id ? 'true' : 'false' }}">
+                        <div style="flex:1 1 14rem;min-width:0;">
                             <h2 class="dot-panel__title">{{ $face->label() }}</h2>
                             <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif@if(($linked[$face->id] ?? '') !== '') · same loading unit as {{ $linked[$face->id] }}@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
                         </div>
                         @if($editable)
-                            <div style="display:flex;gap:0.4rem;align-items:center;" wire:click.stop>
+                            <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;" wire:click.stop>
                                 <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="openFaceForm({{ $face->id }})">Edit</button>
                                 <input wire:model="closeReason.{{ $face->id }}" class="dot-input" placeholder="Why close?" style="width:9rem;" maxlength="255" aria-label="Reason for closing {{ $face->label() }}" />
                                 <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="closeFace({{ $face->id }})">Close face</button>
