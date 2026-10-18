@@ -7,6 +7,9 @@ use App\Models\ControlRoom;
 use App\Models\DowntimeClassification;
 use App\Models\DowntimeReason;
 use App\Models\Equipment;
+use App\Models\LineupAllocation;
+use App\Models\LineupFace;
+use App\Models\LineupStandby;
 use App\Models\MemoryConnection;
 use App\Models\MemoryOutboxRow;
 use App\Models\MinesConnection;
@@ -181,6 +184,23 @@ class AuditLoopMapperTest extends TestCase
         MemoryOutboxRow::query()->delete();
         ShiftOperatorAssignment::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'equipment_id' => $this->truck->id, 'operator_id' => $op->id, 'from_at' => now()->addMinute(), 'assigned_by' => $this->operator->id, 'pushed_to_source' => false, 'push_note' => 'not in Dot.Mines: added locally']);
         $this->assertSame(['dot-central', 'pending'], [$this->payload('action')['executor_platform'], $this->payload('action')['execution_status']]);
+    }
+
+    public function test_lineup_confirmation_reports_faces_machines_placed_and_on_standby(): void
+    {
+        $lineup = ShiftLineup::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'status' => 'CONFIRMED', 'version' => 1, 'confirmed_by' => $this->supervisor->id, 'confirmed_at' => now()]);
+        $face = LineupFace::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'seq' => 1, 'kind' => 'LOADING', 'material' => 'Overburden', 'status' => 'ACTIVE', 'active_from' => $this->shift->starts_at]);
+        LineupAllocation::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'lineup_face_id' => $face->id, 'equipment_id' => $this->truck->id, 'role' => 'HAUL', 'from_at' => $this->shift->starts_at]);
+        $dozer = Equipment::factory()->for($this->room)->create(['name' => 'DZ-01', 'mines_machine_id' => 702]);
+        $standby = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        LineupStandby::create(['control_room_id' => $this->room->id, 'shift_id' => $this->shift->id, 'equipment_id' => $dozer->id, 'downtime_reason_id' => $standby->id, 'from_at' => $this->shift->starts_at]);
+        MemoryOutboxRow::query()->delete();
+
+        app(Audits::class)->record('approve', $lineup, ['version' => ['old' => 0, 'new' => 1]], 'Line-up confirmed (version 1)', $this->room, $this->supervisor);
+
+        $detail = $this->payload('decision')['detail'];
+        $this->assertSame([1, 1, 1, 1], [$detail['version'], $detail['faces'], $detail['placed'], $detail['standby']]);
+        $this->assertSame('Line-up confirmed (version 1)', $detail['reason'], 'the audit context is kept alongside');
     }
 
     public function test_shift_start_close_approve_and_reopen(): void

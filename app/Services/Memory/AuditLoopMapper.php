@@ -7,6 +7,7 @@ use App\Models\AuditEntry;
 use App\Models\DowntimeClassification;
 use App\Models\DowntimeReason;
 use App\Models\LineupAllocation;
+use App\Models\LineupFace;
 use App\Models\LineupStandby;
 use App\Models\OperationalException;
 use App\Models\Shift;
@@ -186,16 +187,34 @@ final class AuditLoopMapper
         }
 
         $version = (int) ($this->newValue($entry, 'version') ?? $l->version);
-        $faces = $l->shift()->withoutGlobalScopes()->first()?->faces()->withoutGlobalScopes()->whereNull('closed_at')->count() ?? 0;
-        $placed = LineupAllocation::withoutGlobalScopes()->where('shift_lineup_id', $l->id)->whereNull('to_at')->count();
-        $standby = LineupStandby::withoutGlobalScopes()->where('shift_lineup_id', $l->id)->whereNull('to_at')->count();
-        $detail = ['version' => $version, 'faces' => $faces, 'placed' => $placed, 'standby' => $standby];
+        $detail = [
+            'version' => $version,
+            'faces' => LineupFace::withoutGlobalScopes()->where('shift_id', $l->shift_id)->where('status', 'ACTIVE')->count(),
+            'placed' => LineupAllocation::withoutGlobalScopes()->where('shift_id', $l->shift_id)->whereNull('to_at')->distinct()->count('equipment_id'),
+            'standby' => LineupStandby::withoutGlobalScopes()->where('shift_id', $l->shift_id)->whereNull('to_at')->count(),
+        ];
         $signature = 'dot-central:lineup:confirmed';
+        $base = fn (string $key): array => $this->withDetail($this->base($entry, $l, 'lineup:'.$l->id, $signature, $key), $detail);
 
         return [
-            ['stage' => 'decision', 'payload' => $this->base($entry, $l, 'lineup:'.$l->id, $signature, 'decision:v'.$version) + ['recommendation' => 'line-up v'.$version, 'confidence' => 1.0, 'risk' => 0.3, 'autonomy_level' => 'execute', 'requires_approval' => false, 'detail' => $detail]],
-            ['stage' => 'action', 'payload' => $this->base($entry, $l, 'lineup:'.$l->id, $signature, 'action:v'.$version) + ['action_kind' => 'lineup.confirm', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded', 'detail' => $detail]],
+            ['stage' => 'decision', 'payload' => $base('decision:v'.$version) + ['recommendation' => 'line-up v'.$version, 'confidence' => 1.0, 'risk' => 0.3, 'autonomy_level' => 'execute', 'requires_approval' => false]],
+            ['stage' => 'action', 'payload' => $base('action:v'.$version) + ['action_kind' => 'lineup.confirm', 'executor_platform' => 'dot-central', 'approval_status' => 'not_required', 'execution_status' => 'succeeded']],
         ];
+    }
+
+    /**
+     * base() already carries a detail key and PHP's array union keeps the
+     * left one, so specific detail is merged into it here.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $detail
+     * @return array<string, mixed>
+     */
+    private function withDetail(array $payload, array $detail): array
+    {
+        $payload['detail'] = (array) ($payload['detail'] ?? []) + $detail;
+
+        return $payload;
     }
 
     /** @return list<array{stage:string,payload:array<string,mixed>}> */
