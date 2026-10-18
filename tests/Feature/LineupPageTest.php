@@ -258,4 +258,18 @@ class LineupPageTest extends TestCase
         $this->assertSame('2026-10-15 10:30:00', $sameTeam->fresh()->from_at->toDateTimeString(), 'only the stint chosen with the button is ever corrected');
         $this->assertSame('2026-10-15 10:00:00', $mine->fresh()->from_at->toDateTimeString());
     }
+
+    public function test_placing_at_a_time_the_clocks_showed_twice_says_which_one_was_used(): void
+    {
+        $this->actingAs($this->operator);
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        Carbon::setTestNow('2026-10-25 01:45:00');
+        $type = ShiftType::where('control_room_id', $this->room->id)->where('code', 'NIGHT')->firstOrFail();
+        $night = Shift::factory()->for($this->room)->for($type, 'shiftType')->create(['shift_date' => '2026-10-24', 'starts_at' => '2026-10-24 17:00:00', 'ends_at' => '2026-10-25 06:00:00', 'status' => 'OPEN']);
+        $face = app(LineupService::class)->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '18:00');
+
+        Livewire::test(Lineup::class, ['shift' => $night])->set('changeAt', '01:40')->call('place', $this->truck->id, false, $face->id)
+            ->assertSee('HT-01 → Face 1')->assertSee('The time used was 01:40 GMT, the second time the clock showed 01:40.');
+    }
 }

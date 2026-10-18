@@ -248,4 +248,22 @@ class LineupCorrectionTest extends TestCase
         $correction = $this->service->correctTime($moved->fresh(), LineupCorrection::ARRIVAL, '10:00', '  '.$full.'  ', $this->user);
         $this->assertSame($full, $correction->fresh()->reason);
     }
+
+    public function test_the_notice_says_which_of_two_identical_clock_times_was_used(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        Carbon::setTestNow('2026-10-25 01:45:00');
+        $night = $this->openShift('NIGHT', '2026-10-24', '2026-10-24 17:00:00', '2026-10-25 06:00:00');
+        $face = $this->service->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->user, '18:00');
+        $placed = $this->service->place($night, $face, $this->truck, $this->user, '23:30');
+
+        $correction = $this->service->correctTime($placed, LineupCorrection::ARRIVAL, '01:40', 'Clicked after the clocks went back', $this->user);
+
+        $this->assertSame('2026-10-25 01:40:00', $placed->fresh()->from_at->toDateTimeString());
+        $this->assertStringEndsWith('The time used was 01:40 GMT, the second time the clock showed 01:40.', $this->service->describeCorrection($correction));
+
+        $other = $this->service->correctTime($placed->fresh(), LineupCorrection::ARRIVAL, '23:45', 'Not a repeated time', $this->user);
+        $this->assertStringNotContainsString('The time used', $this->service->describeCorrection($other));
+    }
 }

@@ -174,7 +174,7 @@ class Lineup extends Component
                 throw $e;
             }
             $this->target = $face->id;
-            $this->notice = $unit->name.' → '.$face->label().($allocation->from_at->equalTo($this->shift->starts_at) ? '' : ' at '.$allocation->from_at->setTimezone($this->shift->controlRoom->timezone())->format('H:i')).'.';
+            $this->notice = $unit->name.' → '.$face->label().($allocation->from_at->equalTo($this->shift->starts_at) ? '' : ' at '.$allocation->from_at->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i')).'.'.(! $allocation->from_at->equalTo($this->shift->starts_at) && ($twice = $service->ambiguityNote($this->shift, $allocation->from_at)) !== null ? ' The time used was '.$twice.'.' : '');
         });
     }
 

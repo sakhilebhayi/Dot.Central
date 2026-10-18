@@ -102,7 +102,7 @@ final class LineupService
         if ($at->format('H:i') !== $typed) {
             $this->refuse('LU-05', $typed.' did not happen on '.$at->format('j M').' in '.$timezone.': the clocks went forward. Enter the time on the clock after the change.');
         }
-        $at = $at->utc();
+        $at = $this->latestHappened($shift, $at);
 
         if ($at->lessThan($shift->starts_at) || $at->greaterThan($shift->ends_at)) {
             $this->refuse('LU-05', $hhmm.' is outside '.$shift->label().' ('.$startLocal->format('H:i').'–'.$shift->ends_at->copy()->setTimezone($timezone)->format('H:i').'). Record the change at a time inside this shift.');
@@ -586,7 +586,10 @@ final class LineupService
         $arrival = $correction->edge === LineupCorrection::ARRIVAL;
         $text = $name.' '.($arrival ? 'on ' : 'off ').($allocation?->face?->label() ?? 'its face').' at '.$this->hm($shift, $correction->new_at).' (was '.$this->hm($shift, $correction->old_at).')';
 
-        return $text.($partner?->face !== null ? '; '.($arrival ? 'off ' : 'on ').$partner->face->label().' at the same time.' : '.');
+        $text .= $partner?->face !== null ? '; '.($arrival ? 'off ' : 'on ').$partner->face->label().' at the same time.' : '.';
+        $twice = $this->ambiguityNote($shift, $correction->new_at);
+
+        return $twice !== null ? $text.' The time used was '.$twice.'.' : $text;
     }
 
     /**
@@ -916,6 +919,54 @@ final class LineupService
     private function lockMachine(Shift $shift, int $equipmentId): void
     {
         LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $equipmentId)->toBase()->update(['updated_at' => now()]);
+    }
+
+    /**
+     * The clocks may show a time twice (they go back). PHP resolves the local
+     * wall time to its first instant; when the second instant is inside the
+     * shift and has already happened, that later one is the time meant.
+     */
+    private function latestHappened(Shift $shift, Carbon $wall): Carbon
+    {
+        [$first, $second] = $this->instants($wall);
+
+        return $second !== null && $second->lessThanOrEqualTo(now()->addMinute()) && $second->greaterThanOrEqualTo($shift->starts_at) && $second->lessThanOrEqualTo($shift->ends_at) ? $second : $first;
+    }
+
+    /**
+     * The instants (UTC) at which a local wall time occurs: the first, and
+     * the second when the clocks repeat it.
+     *
+     * @return array{0: Carbon, 1: Carbon|null}
+     */
+    private function instants(Carbon $wall): array
+    {
+        $base = $wall->copy()->utc();
+        $shows = fn (Carbon $instant): bool => $instant->copy()->setTimezone($wall->getTimezone())->format('Y-m-d H:i') === $wall->format('Y-m-d H:i');
+        $found = collect([$base]);
+        foreach ([1800, 3600, 7200] as $seconds) {
+            foreach ([$base->copy()->addSeconds($seconds), $base->copy()->subSeconds($seconds)] as $other) {
+                if ($shows($other)) {
+                    $found->push($other);
+                }
+            }
+        }
+        $found = $found->sortBy(fn (Carbon $instant) => $instant->timestamp)->values();
+
+        return [$found->first(), $found->count() > 1 ? $found->last() : null];
+    }
+
+    /** "01:40 GMT, the second time the clock showed 01:40" when the clocks showed that time twice; null otherwise. */
+    public function ambiguityNote(Shift $shift, Carbon $at): ?string
+    {
+        $local = $at->copy()->setTimezone($shift->controlRoom->timezone());
+        $wall = Carbon::create($local->year, $local->month, $local->day, $local->hour, $local->minute, 0, $local->getTimezone());
+        [$first, $second] = $this->instants($wall);
+        if ($second === null) {
+            return null;
+        }
+
+        return $local->format('H:i T').', the '.($at->equalTo($first) ? 'first' : 'second').' time the clock showed '.$local->format('H:i');
     }
 
     /** HH:MM on the control room's clock ("now" for an open end). */

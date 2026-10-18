@@ -366,7 +366,7 @@ class LineupServiceTest extends TestCase
         $this->assertNotNull(LineupAllocation::withoutGlobalScopes()->find($stint->id), 'the stint is kept');
     }
 
-    public function test_a_time_the_clocks_skipped_is_refused_and_the_repeated_hour_takes_its_first_occurrence(): void
+    public function test_a_time_the_clocks_skipped_is_refused(): void
     {
         $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
         $this->shift->forceFill(['status' => 'CLOSED'])->save();
@@ -380,7 +380,7 @@ class LineupServiceTest extends TestCase
         $spring->forceFill(['status' => 'CLOSED'])->save();
         Carbon::setTestNow('2026-10-25 05:30:00');
         $autumn = $this->openShift('NIGHT', '2026-10-24', '2026-10-24 17:00:00', '2026-10-25 06:00:00');
-        $this->assertSame('2026-10-25 00:30:00', $this->service->changeAt($autumn, '01:30')->toDateTimeString(), 'the first 01:30 (BST)');
+        $this->assertSame('2026-10-25 01:30:00', $this->service->changeAt($autumn, '01:30')->toDateTimeString(), 'the second 01:30 (GMT): the latest one that has already happened');
     }
 
     public function test_a_placement_does_not_trust_what_it_read_before_the_lock(): void
@@ -402,5 +402,41 @@ class LineupServiceTest extends TestCase
         $this->assertTrue($fired);
         $this->assertStringContainsString('LU-01 HT-01 is already on Face 2', $message);
         $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face1->id)->where('equipment_id', $this->truck1->id)->count(), 'nothing was placed');
+    }
+
+    public function test_a_time_the_clocks_showed_twice_takes_the_latest_instance_that_has_happened_and_says_which(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        // 25 Oct 2026: at 02:00 BST (01:00 UTC) the clocks go back to 01:00 GMT, so 01:00-01:59 shows twice.
+        Carbon::setTestNow('2026-10-25 01:45:00');
+        $night = $this->openShift('NIGHT', '2026-10-24', '2026-10-24 17:00:00', '2026-10-25 06:00:00');
+
+        $this->assertSame('2026-10-25 01:40:00', $this->service->changeAt($night, '01:40')->toDateTimeString(), 'the second 01:40 (GMT) has happened');
+        $this->assertSame('2026-10-25 00:50:00', $this->service->changeAt($night, '01:50')->toDateTimeString(), 'the second 01:50 is still ahead, so the first (BST)');
+        $this->assertSame('2026-10-24 22:30:00', $this->service->changeAt($night, '23:30')->toDateTimeString(), 'not repeated: the one 23:30 (BST)');
+        $this->assertNull($this->service->ambiguityNote($night, Carbon::parse('2026-10-24 22:30:00')));
+        $this->assertSame('01:40 GMT, the second time the clock showed 01:40', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 01:40:00')));
+        $this->assertSame('01:50 BST, the first time the clock showed 01:50', $this->service->ambiguityNote($night, Carbon::parse('2026-10-25 00:50:00')));
+
+        $face = $this->service->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '18:00');
+        $placed = $this->service->place($night, $face, $this->truck1, $this->user, '01:40');
+        $this->assertSame('2026-10-25 01:40:00', $placed->from_at->toDateTimeString());
+        $this->service->release($placed, 'Sent to the workshop', $this->user, '01:42');
+        $this->assertSame('2026-10-25 01:42:00', $placed->fresh()->to_at->toDateTimeString());
+    }
+
+    public function test_the_same_holds_where_the_clocks_go_back_in_the_southern_summer(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Australia/Sydney'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        // 5 Apr 2026: at 03:00 AEDT (16:00 UTC on the 4th) the clocks go back to 02:00 AEST, so 02:00-02:59 shows twice.
+        Carbon::setTestNow('2026-04-04 16:45:00');
+        $night = $this->openShift('NIGHT', '2026-04-04', '2026-04-04 07:00:00', '2026-04-04 20:00:00');
+
+        $this->assertSame('2026-04-04 16:30:00', $this->service->changeAt($night, '02:30')->toDateTimeString(), 'the second 02:30 (AEST)');
+        $this->assertSame('2026-04-04 15:50:00', $this->service->changeAt($night, '02:50')->toDateTimeString(), 'the second 02:50 is still ahead: the first (AEDT)');
+        $this->assertSame('02:30 AEST, the second time the clock showed 02:30', $this->service->ambiguityNote($night, Carbon::parse('2026-04-04 16:30:00')));
+        $this->assertSame('2026-04-04 12:00:00', $this->service->changeAt($night, '23:00')->toDateTimeString(), 'a control that is not repeated: 23:00 AEDT');
     }
 }
