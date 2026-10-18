@@ -156,6 +156,15 @@ class LineupMaterialSplitTest extends TestCase
         $this->assertSame('Softs', $planned->fresh()->material, 'while planning there is nothing to decide');
     }
 
+    public function test_turning_a_loading_face_into_a_work_area_is_not_a_change_of_material(): void
+    {
+        $area = $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '07:00');
+
+        $this->service->editFace($area, ['kind' => 'AREA', 'activity' => 'Dozing'], $this->user);
+
+        $this->assertSame(['AREA', null, 'Dozing'], [$area->fresh()->kind, $area->fresh()->material, $area->fresh()->activity], 'no question: the material is not changed, the face stops loading');
+    }
+
     public function test_only_a_real_change_of_material_on_a_loading_face_is_a_decision(): void
     {
         $same = ['material' => 'Overburden', 'cut' => 'C2', 'blocks' => ['B1'], 'notes' => 'wet'];
@@ -248,10 +257,14 @@ class LineupMaterialSplitTest extends TestCase
         $this->service->place($this->shift, $this->face, $late, $this->user, '11:00');
         $second = Equipment::factory()->for($this->room)->create(['name' => 'HT-05', 'role_class' => RoleClass::HAUL, 'mines_status' => 'active']);
         $this->service->place($this->shift, $this->face, $second, $this->user, '10:00');
+        $exact = $this->addTo($this->face, 'HT-06', RoleClass::HAUL, '08:30');
+        $this->service->release(LineupAllocation::withoutGlobalScopes()->where('equipment_id', $exact->id)->firstOrFail(), 'Sent for service', $this->user, '10:00');
 
         $new = $this->service->splitFace($this->face, 'Interburden', $this->user, '10:00');
 
         $this->assertSame(['1@08:30-09:00'], $this->history($left), 'a stint that ended before the split stays on the old face, untouched');
+        $this->assertSame(['1@08:30-10:00'], $this->history($exact), 'a stint that ended exactly at the split moment is not cut: no empty entry is left on the new face');
+        $this->assertSame(['Sent for service'], LineupAllocation::withoutGlobalScopes()->where('equipment_id', $exact->id)->pluck('ended_reason')->all());
         $this->assertSame(['2@11:00-open'], $this->history($late), 'a stint that began after the split is re-pointed with its times');
         $this->assertSame(['2@10:00-open'], $this->history($second), 'a stint that began at the split moment belongs to the new face');
         $this->assertSame(['1@07:30-10:00', '2@10:00-open'], $this->history($this->truck1));
@@ -488,10 +501,13 @@ class LineupMaterialSplitTest extends TestCase
         $queries = $transactions[0];
         $postgres = DB::connection()->getDriverName() !== 'sqlite';
         $this->assertStringStartsWith($postgres ? 'select' : 'update "lineup_allocations" set "updated_at"', $queries[0], 'the first machine first (Postgres: its equipment row, then its stints)');
-        $faceLock = collect($queries)->search(fn (string $sql) => str_starts_with($sql, 'update "lineup_faces" set "updated_at"'));
+        $faceLock = collect($queries)->search(fn (string $sql) => str_starts_with($sql, 'update "lineup_faces" set "updated_at"') && str_contains($sql, '"id" = ?'));
         $lastMachineLock = collect($queries)->keys()->filter(fn (int $i) => str_starts_with($queries[$i], 'update "lineup_allocations" set "updated_at"'))->max();
         $firstWrite = collect($queries)->search(fn (string $sql) => str_starts_with($sql, 'insert') || (str_starts_with($sql, 'update') && ! str_contains($sql, 'set "updated_at"')));
-        $this->assertNotFalse($faceLock);
+        $this->assertNotFalse($faceLock, 'the face row itself is locked');
+        $numbering = collect($queries)->search(fn (string $sql) => str_contains($sql, '"shift_id" = ?') && str_starts_with($sql, 'update "lineup_faces" set "updated_at"') || str_contains($sql, 'for no key update'));
+        $this->assertNotFalse($numbering);
+        $this->assertGreaterThan($faceLock, $numbering, 'the numbering lock comes last of the locks');
         $this->assertGreaterThan($lastMachineLock, $faceLock, 'machines first, then the face');
         $this->assertGreaterThan($faceLock, $firstWrite, 'nothing is changed before every lock is held');
     }
@@ -547,6 +563,41 @@ class LineupMaterialSplitTest extends TestCase
 
         $this->assertSame(['Interburden'], collect($proposal['faces'])->map(fn (array $f) => $f['face']->material)->all());
         $this->assertSame([['EX-01'], ['HT-01', 'HT-02']], [collect($proposal['faces'][0]['loaders'])->pluck('name')->all(), collect($proposal['faces'][0]['trucks'])->pluck('name')->sort()->values()->all()]);
+    }
+
+    public function test_an_edit_reads_the_material_again_under_the_lock_and_returns_the_face_as_saved(): void
+    {
+        $stale = LineupFace::withoutGlobalScopes()->findOrFail($this->face->id);
+        $this->service->editFace($this->face, ['material' => 'Interburden', 'cut' => 'C1', 'blocks' => ['B1']], $this->user, materialCorrection: true);
+
+        // the screen still shows Overburden, so putting Overburden back looks like no change; under the lock it reverts a colleague's correction
+        $message = $this->refusal(fn () => $this->service->editFace($stale, ['material' => 'Overburden', 'cut' => 'C1', 'blocks' => ['B1']], $this->user));
+        $this->assertStringContainsString('LU-14 Face 1 — Loading area 1 — Interburden · C1 / B1 has been loading Interburden since 07:00.', $message);
+
+        $saved = $this->service->editFace($this->face->fresh(), ['material' => 'Interburden', 'cut' => 'C4', 'blocks' => ['B1'], 'notes' => 'wet'], $this->user);
+        $this->assertSame(['Interburden', 'C4', 'wet'], [$saved->material, $saved->cut, $saved->notes], 'the face that comes back is the one that was saved');
+    }
+
+    public function test_adding_a_face_takes_the_write_lock_before_it_reads_the_highest_number(): void
+    {
+        $transactions = [];
+        Event::listen(TransactionBeginning::class, function () use (&$transactions): void {
+            $transactions[] = [];
+        });
+        DB::listen(function ($query) use (&$transactions): void {
+            if ($transactions !== []) {
+                $transactions[array_key_last($transactions)][] = strtolower($query->sql);
+            }
+        });
+
+        $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '09:00');
+
+        $queries = $transactions[0];
+        $postgres = DB::connection()->getDriverName() !== 'sqlite';
+        $this->assertStringContainsString($postgres ? 'for no key update' : 'update "lineup_faces" set "updated_at"', $queries[0], 'the first statement of the transaction is the lock');
+        $max = collect($queries)->search(fn (string $sql) => str_contains($sql, 'max("seq")'));
+        $this->assertNotFalse($max);
+        $this->assertGreaterThan(0, $max, 'the highest number is read after the lock');
     }
 
     private function loader2(): Equipment

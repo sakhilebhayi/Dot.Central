@@ -27,6 +27,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /** The Shift Line-up page: Start Shift leads here; operators place machines by clicking; managers read. */
@@ -392,6 +393,70 @@ class LineupPageTest extends TestCase
         $page->assertSee('The material is 65 characters; keep it to 64 or fewer.');
         $this->assertSame(['ACTIVE', 'Overburden'], [$face->fresh()->status, $face->fresh()->material]);
         $this->assertSame(1, LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->count());
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function changesThatAreNotJustTheMaterial(): array
+    {
+        return [
+            'kind' => ['faceForm.kind', 'AREA'],
+            'location' => ['faceForm.location', 'default:Loading area 2'],
+            'cut' => ['faceForm.cut', 'C9'],
+            'blocks' => ['faceForm.blocks', 'B1 B7'],
+            'notes' => ['faceForm.notes', 'wet'],
+        ];
+    }
+
+    #[DataProvider('changesThatAreNotJustTheMaterial')]
+    public function test_a_split_takes_over_everything_but_the_material_so_any_other_change_is_refused(string $field, string $value): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->set($field, $value)->call('splitFromForm')
+            ->assertSee('Change only the material for a split');
+
+        $this->assertSame('ACTIVE', $face->fresh()->status);
+        $this->assertSame(1, LineupFace::withoutGlobalScopes()->where('shift_id', $this->shift->id)->count());
+    }
+
+    public function test_a_spelling_of_the_block_list_or_the_cut_is_not_another_place(): void
+    {
+        $this->actingAs($this->operator);
+        $face = $this->workingFace();
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $face->id)->set('faceForm.material', 'Interburden')->set('faceForm.cut', ' c1 ')->set('faceForm.blocks', 'b1, B1')->call('splitFromForm')
+            ->assertSee('carries on with the same 2 machines from 12:00');
+    }
+
+    public function test_a_split_of_a_face_with_one_machine_or_none_reads_plainly(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $one = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'cut' => 'C1', 'blocks' => ['B1'], 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm', $one->id)->set('faceForm.material', 'Interburden')->call('splitFromForm');
+        $page->assertSee('carries on with the same machine from 12:00.')->assertDontSee('1 machines');
+
+        $none = $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Coal'], $this->operator, '07:00');
+        Livewire::test(Lineup::class, ['shift' => $this->shift])->call('openFaceForm', $none->id)->set('faceForm.material', 'Parting')->call('splitFromForm')
+            ->assertSee('carries on from 12:00 (no machine was on it).');
+    }
+
+    public function test_a_split_at_a_time_the_clocks_showed_twice_says_which_one_was_used(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $this->shift->forceFill(['status' => 'CLOSED'])->save();
+        Carbon::setTestNow('2026-10-25 01:45:00');
+        $type = ShiftType::where('control_room_id', $this->room->id)->where('code', 'NIGHT')->firstOrFail();
+        $night = Shift::factory()->for($this->room)->for($type, 'shiftType')->create(['shift_date' => '2026-10-24', 'starts_at' => '2026-10-24 17:00:00', 'ends_at' => '2026-10-25 06:00:00', 'status' => 'OPEN']);
+        $this->actingAs($this->operator);
+        $face = app(LineupService::class)->addFace($night, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->operator, '18:00');
+
+        Livewire::test(Lineup::class, ['shift' => $night])->set('changeAt', '01:40')->call('openFaceForm', $face->id)->set('faceForm.material', 'Parting')->call('saveFace')
+            ->assertSee('It changed at 01:40 — new face from then')->call('splitFromForm')
+            ->assertSee('closed at 01:40; Face 2')->assertSee('The time used was 01:40 GMT, the second time the clock showed 01:40.');
     }
 
     public function test_managers_cannot_split_a_face_even_by_calling_the_action_and_still_read_where_it_came_from(): void

@@ -274,6 +274,19 @@ class AuditLoopMapperTest extends TestCase
         $this->assertSame(1, MemoryOutboxRow::count(), 'closing the old face and moving its stints add nothing else');
     }
 
+    public function test_correcting_the_material_of_a_split_face_in_place_is_not_a_second_split(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $next = $service->splitFace($face, 'Interburden', $this->operator, '10:00');
+        MemoryOutboxRow::query()->delete();
+
+        $service->editFace($next, ['material' => 'Softs'], $this->operator, materialCorrection: true);
+        $service->closeFace($next->fresh(), 'Finished', $this->operator, '11:00');
+
+        $this->assertSame(0, MemoryOutboxRow::count(), 'only the creation of the face that carries on is a split');
+    }
+
     public function test_an_ordinary_face_and_a_material_correction_in_place_map_to_nothing(): void
     {
         $service = app(LineupService::class);
