@@ -155,7 +155,7 @@ class LineupRulesAndHandoverTest extends TestCase
         $this->actingAs($this->operator);
 
         Livewire::test(FleetBoard::class, ['controlRoom' => $this->room])->assertSee('Face 1 — Loading area 1 — Coal · since 10:00');
-        $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->assertSee('arrival corrected from 10:30: The move was clicked late');
+        $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->assertSee('arrival corrected from 10:30 (UTC): The move was clicked late');
 
         Carbon::setTestNow('2026-10-15 18:30:00');
         Equipment::withoutGlobalScopes()->where('control_room_id', $this->room->id)->update(['last_heard_at' => '2026-10-15 18:25:00']);
@@ -166,5 +166,24 @@ class LineupRulesAndHandoverTest extends TestCase
 
         $this->get(route('control-rooms.shifts.start', $this->room))->assertOk()
             ->assertSee('Line-up times corrected (1)')->assertSee('HT-01 on Face 1 — Loading area 1 — Coal at 10:00 (was 10:30).');
+    }
+
+    public function test_the_line_up_report_shows_times_on_the_room_clock_and_names_it(): void
+    {
+        $this->room->minesConnection->forceFill(['timezone' => 'Europe/London'])->save();
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+        $service->correctTime($stint, LineupCorrection::ARRIVAL, '10:00', 'The move was clicked late', $this->operator);
+        $this->actingAs($this->operator);
+
+        $page = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk();
+        $page->assertSee('From (Europe/London)', false)->assertSee('Until (Europe/London)', false)
+            ->assertSee('2026-10-15 10:00')->assertDontSee('2026-10-15 09:00:00')
+            ->assertSee('arrival corrected from 10:30 (Europe/London): The move was clicked late');
+
+        $this->actingAs($this->member($this->room->team, 'supervisor'));
+        $csv = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id, 'export' => 'csv']));
+        $this->assertStringContainsString('From (Europe/London)', $csv->streamedContent());
     }
 }

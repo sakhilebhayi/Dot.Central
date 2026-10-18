@@ -137,7 +137,7 @@ class ReportController extends Controller
         $tz = $shift->controlRoom->timezone();
         $corrections = LineupCorrection::withoutGlobalScopes()->where('shift_id', $shift->id)->orderBy('id')->get();
         $noteFor = function (LineupAllocation $a) use ($corrections, $tz): ?string {
-            $own = $corrections->where('lineup_allocation_id', $a->id)->map(fn (LineupCorrection $c) => ($c->edge === LineupCorrection::ARRIVAL ? 'arrival' : 'departure').' corrected from '.$c->old_at->copy()->setTimezone($tz)->format('H:i').': '.$c->reason);
+            $own = $corrections->where('lineup_allocation_id', $a->id)->map(fn (LineupCorrection $c) => ($c->edge === LineupCorrection::ARRIVAL ? 'arrival' : 'departure').' corrected from '.$c->old_at->copy()->setTimezone($tz)->format('H:i').' ('.$tz.'): '.$c->reason);
             $moved = $corrections->where('partner_allocation_id', $a->id)->map(fn (LineupCorrection $c) => 'moved with a correction ('.$c->reason.')');
             $notes = collect([$a->ended_reason])->merge($own)->merge($moved)->filter();
 
@@ -147,7 +147,7 @@ class ReportController extends Controller
         foreach ($this->lineup->faces($shift, true) as $face) {
             foreach ($face->allocations()->orderBy('from_at')->get() as $a) {
                 $p = $pool[$a->equipment_id] ?? null;
-                $rows[] = ['face' => $face->label().($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->toDateTimeString(), 'until' => $a->to_at?->toDateTimeString() ?? 'still there', 'note' => $noteFor($a)];
+                $rows[] = ['face' => $face->label().($face->isClosed() ? ' (closed)' : ''), 'role' => LineupAllocation::ROLE_LABELS[$a->role] ?? $a->role, 'unit' => $p['equipment']->name ?? '#'.$a->equipment_id, 'operator' => $p['operator']?->label(), 'from' => $a->from_at->copy()->setTimezone($tz)->format('Y-m-d H:i'), 'until' => $a->to_at?->copy()->setTimezone($tz)->format('Y-m-d H:i') ?? 'still there', 'note' => $noteFor($a)];
             }
         }
         foreach ($pool->whereIn('state', ['FREE', 'STANDBY', 'DOWN']) as $p) {
@@ -156,7 +156,7 @@ class ReportController extends Controller
             }];
         }
 
-        return [['face' => 'Face', 'role' => 'Role', 'unit' => 'Machine', 'operator' => 'Operator', 'from' => 'From (UTC)', 'until' => 'Until (UTC)', 'note' => 'Note'], $rows, 'Shift line-up · '.$shift->label().' · '.$this->lineup->lineup($shift)->status];
+        return [['face' => 'Face', 'role' => 'Role', 'unit' => 'Machine', 'operator' => 'Operator', 'from' => 'From ('.$tz.')', 'until' => 'Until ('.$tz.')', 'note' => 'Note'], $rows, 'Shift line-up · '.$shift->label().' · '.$this->lineup->lineup($shift)->status];
     }
 
     /** @return array{0: array<string, string>, 1: list<array<string, mixed>>, 2: string} */
