@@ -272,4 +272,23 @@ class LineupPageTest extends TestCase
         Livewire::test(Lineup::class, ['shift' => $night])->set('changeAt', '01:40')->call('place', $this->truck->id, false, $face->id)
             ->assertSee('HT-01 → Face 1')->assertSee('The time used was 01:40 GMT, the second time the clock showed 01:40.');
     }
+
+    public function test_submitting_the_correction_twice_says_there_is_nothing_to_correct(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face1 = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $face2 = $service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Overburden'], $this->operator, '07:00');
+        $service->place($this->shift, $face1, $this->truck, $this->operator, '08:00');
+        $moved = $service->place($this->shift, $face2, $this->truck, $this->operator, '10:30', true);
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('startCorrection', $moved->id, LineupCorrection::ARRIVAL)
+            ->set('correction.time', '10:00')->set('correction.reason', 'late')
+            ->call('saveCorrection')->assertSee('at 10:00 (was 10:30)')
+            ->call('saveCorrection')
+            ->assertSee('LU-05 Nothing to correct: the correction was already saved or cancelled.')
+            ->assertDontSee('no longer exists');
+        $this->assertSame(1, LineupCorrection::withoutGlobalScopes()->count());
+    }
 }

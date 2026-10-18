@@ -454,11 +454,11 @@ final class LineupService
      * Correct when a machine arrived on (ARRIVAL) or left (DEPARTURE) a face:
      * a move clicked late, or a release recorded at the wrong time. A move is
      * one moment, so the stint it came from (or went to) moves with it. Only
-     * Central's own line-up rows change; Dot.Mines is never called. Returns
-     * null when the time is unchanged. $expected is the ISO time the screen
+     * Central's own line-up rows change; Dot.Mines is never called. A time
+     * equal to the recorded one (to the minute) is refused. $expected is the ISO time the screen
      * showed (LU-15 when someone changed it meanwhile).
      */
-    public function correctTime(LineupAllocation $allocation, string $edge, string $hhmm, string $reason, User $user, ?string $expected = null): ?LineupCorrection
+    public function correctTime(LineupAllocation $allocation, string $edge, string $hhmm, string $reason, User $user, ?string $expected = null): LineupCorrection
     {
         $shift = Shift::withoutGlobalScopes()->findOrFail($allocation->shift_id);
         $this->guardWritable($shift);
@@ -479,7 +479,7 @@ final class LineupService
         }
         $at = $this->changeAt($shift, $hhmm);
 
-        return DB::transaction(function () use ($shift, $allocation, $edge, $reason, $user, $expected, $at): ?LineupCorrection {
+        return DB::transaction(function () use ($shift, $allocation, $edge, $reason, $user, $expected, $at): LineupCorrection {
             // Everything below is read again under the machine's lock: another supervisor may have changed this stint, the one
             // it moves with or a neighbour since the screen showed them (SQLite: the write takes its single lock, so every later
             // read sees the latest commit; Postgres: the same write row-locks the machine's stints until this commits).
@@ -502,8 +502,8 @@ final class LineupService
             if ($old === null) {
                 $this->refuse('LU-05', $who.' is still on '.$face->label().'. Take it off with "Remove" at the time it left.');
             }
-            if ($at->equalTo($old)) {
-                return null;
+            if ($at->copy()->startOfMinute()->equalTo($old->copy()->startOfMinute())) {
+                $this->refuse('LU-05', 'Nothing to change: '.$who.' is already recorded '.($arrival ? 'on ' : 'off ').$face->label().' at '.$this->hm($shift, $old).'. Enter a different time.');
             }
 
             $from = $arrival ? $at : $allocation->from_at;

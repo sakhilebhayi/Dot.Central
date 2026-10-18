@@ -239,7 +239,12 @@ class Lineup extends Component
     public function saveCorrection(): void
     {
         $this->run(function (LineupService $service): void {
-            $allocation = $this->correctionAllocation !== null ? LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null;
+            if ($this->correctionAllocation === null) {
+                $this->refusal = 'LU-05 Nothing to correct: the correction was already saved or cancelled.';
+
+                return;
+            }
+            $allocation = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation);
             if ($allocation === null) {
                 $this->closeCorrection();
                 $this->refusal = 'LU-15 That line-up entry no longer exists: someone removed it meanwhile.';
@@ -248,7 +253,7 @@ class Lineup extends Component
             }
             $result = $service->correctTime($allocation, $this->correctionEdge, (string) ($this->correction['time'] ?? ''), (string) ($this->correction['reason'] ?? ''), auth()->user(), $this->correctionExpected !== '' ? $this->correctionExpected : null);
             $this->closeCorrection();
-            $this->notice = $result === null ? 'Nothing changed: that is already the recorded time.' : $service->describeCorrection($result);
+            $this->notice = $service->describeCorrection($result);
         });
     }
 

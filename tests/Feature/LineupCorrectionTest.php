@@ -127,7 +127,7 @@ class LineupCorrectionTest extends TestCase
         $this->assertSame('2026-10-15 10:45:00', $first->fresh()->to_at->toDateTimeString());
         $this->assertSame('2026-10-15 10:45:00', $moved->fresh()->from_at->toDateTimeString());
         $this->assertSame('HT-01 off Face 1 — Loading area 1 — Overburden at 10:45 (was 10:30); on Face 2 — Loading area 2 — Overburden at the same time.', $this->service->describeCorrection($correction));
-        $this->assertNull($this->service->correctTime($first->fresh(), LineupCorrection::DEPARTURE, '10:45', 'Again', $this->user), 'the same time changes nothing');
+        $this->assertStringContainsString('LU-05 Nothing to change: HT-01 is already recorded off Face 1 — Loading area 1 — Overburden at 10:45', $this->refusal(fn () => $this->service->correctTime($first->fresh(), LineupCorrection::DEPARTURE, '10:45', 'Again', $this->user)));
         $this->assertSame(1, LineupCorrection::withoutGlobalScopes()->count());
     }
 
@@ -265,5 +265,20 @@ class LineupCorrectionTest extends TestCase
 
         $other = $this->service->correctTime($placed->fresh(), LineupCorrection::ARRIVAL, '23:45', 'Not a repeated time', $this->user);
         $this->assertStringNotContainsString('The time used', $this->service->describeCorrection($other));
+    }
+
+    public function test_the_prefilled_minute_of_a_stint_with_seconds_is_not_a_correction(): void
+    {
+        $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        Carbon::setTestNow('2026-10-15 10:30:27');
+        $moved = $this->service->place($this->shift, $this->face2, $this->truck, $this->user, null, true);
+        Carbon::setTestNow('2026-10-15 12:00:00');
+        $this->assertSame('10:30:27', $moved->from_at->format('H:i:s'));
+
+        $message = $this->refusal(fn () => $this->service->correctTime($moved->fresh(), LineupCorrection::ARRIVAL, '10:30', 'Just looking', $this->user, $moved->from_at->toIso8601String()));
+
+        $this->assertStringContainsString('LU-05 Nothing to change: HT-01 is already recorded on Face 2 — Loading area 2 — Overburden at 10:30', $message);
+        $this->assertSame(0, LineupCorrection::withoutGlobalScopes()->count());
+        $this->assertSame('10:30:27', $moved->fresh()->from_at->format('H:i:s'));
     }
 }
