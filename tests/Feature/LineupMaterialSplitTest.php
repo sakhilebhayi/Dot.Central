@@ -156,6 +156,21 @@ class LineupMaterialSplitTest extends TestCase
         $this->assertSame('Softs', $planned->fresh()->material, 'while planning there is nothing to decide');
     }
 
+    public function test_within_the_minute_a_face_started_nothing_has_happened_on_it_to_split(): void
+    {
+        Carbon::setTestNow('2026-10-15 12:00:20');
+        $fresh = $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+
+        Carbon::setTestNow('2026-10-15 12:00:50');
+        $this->service->editFace($fresh, ['material' => 'Parting'], $this->user);
+        $this->assertSame('Parting', $fresh->fresh()->material, 'a slip noticed within the same minute is simply edited: a split at that minute could not be recorded');
+
+        Carbon::setTestNow('2026-10-15 12:01:05');
+        $this->assertStringContainsString('LU-14', $this->refusal(fn () => $this->service->editFace($fresh->fresh(), ['material' => 'Waste'], $this->user)));
+        $new = $this->service->splitFace($fresh->fresh(), 'Waste', $this->user, '12:01');
+        $this->assertSame('2026-10-15 12:01:00', $new->active_from->toDateTimeString());
+    }
+
     public function test_turning_a_loading_face_into_a_work_area_is_not_a_change_of_material(): void
     {
         $area = $this->service->addFace($this->shift, ['location' => 'default:Loading area 2', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '07:00');

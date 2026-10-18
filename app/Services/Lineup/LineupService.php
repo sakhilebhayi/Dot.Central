@@ -417,7 +417,8 @@ final class LineupService
         if ($materialCorrection || $planning || ! $this->changesMaterial($face, $kind, $material)) {
             return;
         }
-        if ($this->changeAt($shift, $hhmm)->greaterThan($face->active_from)) {
+        // To the minute, like the time a split is recorded at: within the minute the face started nothing has happened on it.
+        if ($this->changeAt($shift, $hhmm)->startOfMinute()->greaterThan($face->active_from->copy()->startOfMinute())) {
             $this->refuse('LU-14', $face->label().' has been loading '.$face->material.' since '.$this->hm($shift, $face->active_from).'. Say whether the material was wrong from the start (correct it on this face) or the face changed material at a time (a new face carries on from then; the line-up keeps '.$face->material.' until that time).');
         }
     }
