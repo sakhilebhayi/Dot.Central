@@ -10,6 +10,7 @@ use App\Services\Audits;
 use App\Services\Lineup\LineupService;
 use App\Services\Mines\FreshnessEvaluator;
 use App\Services\Shifts\ShiftDerivation;
+use App\Support\Csv;
 use App\Support\EquipmentState;
 use App\Support\RoleClass;
 use Illuminate\Http\Request;
@@ -45,9 +46,9 @@ class ReportController extends Controller
 
             return response()->streamDownload(function () use ($columns, $rows): void {
                 $out = fopen('php://output', 'w');
-                fputcsv($out, array_values($columns));
+                fputcsv($out, Csv::row(array_values($columns)));
                 foreach ($rows as $row) {
-                    fputcsv($out, array_map(fn ($k) => $row[$k] ?? '', array_keys($columns)));
+                    fputcsv($out, Csv::row(array_map(fn ($k) => $row[$k] ?? '', array_keys($columns))));
                 }
                 fclose($out);
             }, $report.'.csv', ['Content-Type' => 'text/csv']);

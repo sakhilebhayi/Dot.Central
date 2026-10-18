@@ -186,4 +186,24 @@ class LineupRulesAndHandoverTest extends TestCase
         $csv = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id, 'export' => 'csv']));
         $this->assertStringContainsString('From (Europe/London)', $csv->streamedContent());
     }
+
+    public function test_free_text_in_the_line_up_csv_cannot_run_as_a_spreadsheet_formula(): void
+    {
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $stint = $service->place($this->shift, $face, $this->truck, $this->operator, '08:00');
+        $service->release($stint, '=HYPERLINK("http://example.invalid","click")', $this->operator, '09:00');
+        $this->actingAs($this->member($this->room->team, 'supervisor'));
+
+        $csv = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id, 'export' => 'csv']))->streamedContent();
+
+        $this->assertStringContainsString("\"'=HYPERLINK(", $csv);
+        $this->assertStringNotContainsString(',"=HYPERLINK', $csv);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", $csv)));
+        foreach ($rows as $row) {
+            foreach ($row as $cell) {
+                $this->assertDoesNotMatchRegularExpression('/^[=+@\t\r]|^-(?![0-9.])/', $cell, 'a cell starts like a formula: '.$cell);
+            }
+        }
+    }
 }
