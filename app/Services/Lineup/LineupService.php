@@ -366,6 +366,7 @@ final class LineupService
         if (trim($reason) === '') {
             $this->refuse('LU-05', 'Say why the face is closing (material finished, loading unit moved, breakdown …).');
         }
+        $this->refuseLongReason($reason);
         $at = $this->changeAt($shift, $hhmm);
         $open = $face->allocations()->whereNull('to_at')->get();
         if (! $this->isPlanning($shift)) {
@@ -411,13 +412,13 @@ final class LineupService
             $this->refuse('LU-03', 'Unknown face or machine.');
         }
         if ($face->isClosed()) {
-            $this->refuse('LU-05', $face->label().' was closed'.($face->closed_at ? ' at '.$face->closed_at->format('H:i') : '').'. Allocate to an active face.');
+            $this->refuse('LU-05', $face->label().' was closed'.($face->closed_at ? ' at '.$this->hm($shift, $face->closed_at) : '').'. Allocate to an active face.');
         }
         $at = $this->changeAt($shift, $hhmm);
         $role = $this->roleFor($unit, $face);
 
         if (($down = $this->downAt($unit, $at)) !== null) {
-            $this->refuse('LU-02', $unit->name.' is down: '.$down['cause'].($down['since'] ? ' since '.$down['since']->format('H:i') : '').'. It cannot be put on a face until Dot.Mines reports it running again or the stoppage is reclassified as not counting against availability.');
+            $this->refuse('LU-02', $unit->name.' is down: '.$down['cause'].($down['since'] ? ' since '.$this->hm($shift, $down['since']) : '').'. It cannot be put on a face until Dot.Mines reports it running again or the stoppage is reclassified as not counting against availability.');
         }
 
         return DB::transaction(function () use ($shift, $face, $unit, $user, $move, $at, $role): LineupAllocation {
@@ -434,7 +435,7 @@ final class LineupService
             $shared = $role === 'LOADER' && $elsewhere->isNotEmpty() && $elsewhere->every(fn (LineupAllocation $a) => $a->role === 'LOADER' && $a->face->sameWorkplaceAs($face));
 
             if ($elsewhere->isNotEmpty() && ! $move && ! $shared) {
-                $this->refuse('LU-01', $unit->name.' is already on '.$elsewhere->map(fn (LineupAllocation $a) => $a->face->label())->implode(' and ').'. Choose "Move here" to move it at '.($this->isPlanning($shift) ? 'shift start' : $at->format('H:i')).'.');
+                $this->refuse('LU-01', $unit->name.' is already on '.$elsewhere->map(fn (LineupAllocation $a) => $a->face->label())->implode(' and ').'. Choose "Move here" to move it at '.($this->isPlanning($shift) ? 'shift start' : $this->hm($shift, $at)).'.');
             }
 
             $planning = $this->isPlanning($shift);
@@ -478,9 +479,12 @@ final class LineupService
         if (! $planning && trim((string) $reason) === '') {
             $this->refuse('LU-05', 'Say why '.$allocation->equipment?->name.' is taken off the face.');
         }
+        if (! $planning) {
+            $this->refuseLongReason((string) $reason);
+        }
         $at = $this->changeAt($shift, $hhmm);
         if (! $planning && $at->lessThan($allocation->from_at)) {
-            $this->refuse('LU-05', 'Time before the machine arrived ('.$allocation->from_at->format('H:i').').');
+            $this->refuse('LU-05', 'Time before the machine arrived ('.$this->hm($shift, $allocation->from_at).').');
         }
 
         $this->endAllocation($allocation, $at, $planning ? 'Removed while planning' : trim((string) $reason), $user, $planning);
@@ -494,7 +498,7 @@ final class LineupService
             return;
         }
 
-        $allocation->fill(['to_at' => $at, 'ended_reason' => $reason, 'ended_by' => $user->id])->save();
+        $allocation->fill(['to_at' => $at, 'ended_reason' => mb_substr($reason, 0, self::REASON_LENGTH), 'ended_by' => $user->id])->save();
     }
 
     // ---- standby ---------------------------------------------------------------------------------------------
@@ -505,27 +509,39 @@ final class LineupService
         if ($reason->control_room_id !== $shift->control_room_id || ! in_array($reason->category, LineupStandby::CATEGORIES, true)) {
             $this->refuse('LU-05', 'Pick a standby, no-operator or off-site reason. Breakdowns and services are derived from Dot.Mines and classified on the Downtime page.');
         }
+        $note = $note !== null && trim($note) !== '' ? trim($note) : null;
+        if ($note !== null && mb_strlen($note) > self::REASON_LENGTH) {
+            $this->refuse('LU-05', 'The note is '.mb_strlen($note).' characters; keep it to '.self::REASON_LENGTH.' or fewer.');
+        }
         $at = $this->changeAt($shift, $hhmm);
-
-        $existing = LineupStandby::withoutGlobalScopes()->with('reason')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->first();
-        if ($existing !== null) {
-            $this->refuse('LU-05', $unit->name.' already has "'.$existing->reason?->name.'" from '.$existing->from_at->format('H:i').'. End it first, or place the machine.');
-        }
-
         $planning = $this->isPlanning($shift);
-        $open = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->get();
-        if (! $planning && $open->contains(fn (LineupAllocation $a) => $at->lessThan($a->from_at))) {
-            $this->refuse('LU-05', 'Time before the machine arrived on its face ('.$open->min('from_at')->format('H:i').').');
-        }
-        foreach ($open as $allocation) {
-            $this->endAllocation($allocation, $at, 'Set to '.$reason->name, $user, $planning);
-        }
-        $this->lineup($shift)->save();
 
-        return LineupStandby::create([
-            'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'equipment_id' => $unit->id, 'downtime_reason_id' => $reason->id,
-            'from_at' => $at, 'note' => $note !== null && trim($note) !== '' ? trim($note) : null, 'created_by' => $user->id,
-        ]);
+        return DB::transaction(function () use ($shift, $unit, $reason, $user, $at, $planning, $note): LineupStandby {
+            // Read under the machine's lock: another operator may have placed it, moved it or set its standby since the screen showed it.
+            $this->lockMachine($shift, $unit->id);
+
+            $existing = LineupStandby::withoutGlobalScopes()->with('reason')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->first();
+            if ($existing !== null) {
+                $this->refuse('LU-05', $unit->name.' already has "'.$existing->reason?->name.'" from '.$this->hm($shift, $existing->from_at).'. End it first, or place the machine.');
+            }
+
+            $open = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->get();
+            if (! $planning && $open->contains(fn (LineupAllocation $a) => $at->lessThan($a->from_at))) {
+                $this->refuse('LU-05', 'Time before the machine arrived on its face ('.$this->hm($shift, $open->min('from_at')).').');
+            }
+            if (! $planning) {
+                $this->refuseStandbyOverlap($shift, $unit, $at);
+            }
+            foreach ($open as $allocation) {
+                $this->endAllocation($allocation, $at, 'Set to '.$reason->name, $user, $planning);
+            }
+            $this->lineup($shift)->save();
+
+            return LineupStandby::create([
+                'control_room_id' => $shift->control_room_id, 'shift_id' => $shift->id, 'equipment_id' => $unit->id, 'downtime_reason_id' => $reason->id,
+                'from_at' => $at, 'note' => $note, 'created_by' => $user->id,
+            ]);
+        });
     }
 
     public function endStandby(LineupStandby $standby, User $user, ?string $hhmm = null): void
@@ -533,7 +549,20 @@ final class LineupService
         $shift = Shift::withoutGlobalScopes()->findOrFail($standby->shift_id);
         $this->guardWritable($shift);
         $at = $this->changeAt($shift, $hhmm);
-        $this->isPlanning($shift) || $at->lessThanOrEqualTo($standby->from_at) ? $standby->delete() : $standby->fill(['to_at' => $at, 'ended_by' => $user->id])->save();
+        $planning = $this->isPlanning($shift);
+
+        DB::transaction(function () use ($shift, $standby, $user, $at, $planning): void {
+            $this->lockMachine($shift, $standby->equipment_id);
+            $standby = LineupStandby::withoutGlobalScopes()->find($standby->id);
+            if ($standby === null || $standby->to_at !== null) {
+                $this->refuse('LU-15', 'Someone ended this standby meanwhile. Check the line-up before changing it again.');
+            }
+            if (! $planning && $at->lessThanOrEqualTo($standby->from_at)) {
+                $name = Equipment::withoutGlobalScopes()->whereKey($standby->equipment_id)->value('name') ?? 'The machine';
+                $this->refuse('LU-05', 'Time before the standby began: '.$name.' has been on standby since '.$this->hm($shift, $standby->from_at).'. Pick a time after that, so the standby keeps its record.');
+            }
+            $planning ? $standby->delete() : $standby->fill(['to_at' => $at, 'ended_by' => $user->id])->save();
+        });
     }
 
     // ---- corrections (I-29) ----------------------------------------------------------------------------------
@@ -559,9 +588,7 @@ final class LineupService
         if (trim($reason) === '') {
             $this->refuse('LU-05', 'Say why the time is corrected, for example "the move was clicked late".');
         }
-        if (mb_strlen(trim($reason)) > self::REASON_LENGTH) {
-            $this->refuse('LU-05', 'The reason is '.mb_strlen(trim($reason)).' characters; keep it to '.self::REASON_LENGTH.' or fewer.');
-        }
+        $this->refuseLongReason($reason);
         if (trim($hhmm) === '') {
             $this->refuse('LU-05', 'Enter the time it really happened (HH:MM).');
         }
@@ -738,6 +765,14 @@ final class LineupService
             ->first(fn (DowntimeClassification $c) => $c->reason?->counts_against_availability === true);
 
         return $classification !== null ? ['cause' => (string) $classification->reason?->name, 'since' => $classification->started_at] : null;
+    }
+
+    /** A reason lands in a varchar(255) column: refuse a longer one (characters, not bytes) instead of cutting it. */
+    private function refuseLongReason(string $reason): void
+    {
+        if (mb_strlen(trim($reason)) > self::REASON_LENGTH) {
+            $this->refuse('LU-05', 'The reason is '.mb_strlen(trim($reason)).' characters; keep it to '.self::REASON_LENGTH.' or fewer.');
+        }
     }
 
     private function refuseOutsideLife(Shift $shift, LineupFace $face, Carbon $from, ?Carbon $to): void
@@ -1117,8 +1152,9 @@ final class LineupService
 
     /**
      * A machine cannot start somewhere at $at while an earlier, ended stint
-     * has it elsewhere after $at; a loading unit may overlap only on a face
-     * at the same cut and block (a linked face).
+     * has it elsewhere after $at, or while an ended standby covers $at; a
+     * loading unit may overlap a stint only on a face at the same cut and
+     * block (a linked face).
      */
     private function refuseOverlap(Shift $shift, Equipment $unit, LineupFace $face, string $role, Carbon $at): void
     {
@@ -1129,6 +1165,35 @@ final class LineupService
         if ($clash !== null) {
             $until = $this->hm($shift, $clash->to_at);
             $this->refuse('LU-05', 'Overlaps an earlier entry: '.$unit->name.' was on '.$clash->face?->label().' until '.$until.'. Record the change at '.$until.' or later, or first correct when it left that face (select its time under "Moved off this face").');
+        }
+
+        $standby = LineupStandby::withoutGlobalScopes()->with('reason')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)
+            ->whereNotNull('to_at')->where('to_at', '>', $at)->orderByDesc('to_at')->first();
+        if ($standby !== null) {
+            $until = $this->hm($shift, $standby->to_at);
+            $this->refuse('LU-05', 'Overlaps an earlier entry: '.$unit->name.' was on standby ("'.$standby->reason?->name.'") until '.$until.'. Record the change at '.$until.' or later.');
+        }
+    }
+
+    /**
+     * A standby that begins at $at must not cover any ended stint or ended
+     * standby of the machine (the open ones are ended by the standby itself):
+     * a machine is on a face or on standby, never both.
+     */
+    private function refuseStandbyOverlap(Shift $shift, Equipment $unit, Carbon $at): void
+    {
+        $stint = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)
+            ->whereNotNull('to_at')->where('to_at', '>', $at)->orderByDesc('to_at')->first();
+        $standby = LineupStandby::withoutGlobalScopes()->with('reason')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)
+            ->whereNotNull('to_at')->where('to_at', '>', $at)->orderByDesc('to_at')->first();
+
+        if ($stint !== null && ($standby === null || $stint->to_at->greaterThanOrEqualTo($standby->to_at))) {
+            $until = $this->hm($shift, $stint->to_at);
+            $this->refuse('LU-05', 'Overlaps an earlier entry: '.$unit->name.' was on '.$stint->face?->label().' until '.$until.'. Record the standby at '.$until.' or later, or first correct when it left that face (select its time under "Moved off this face").');
+        }
+        if ($standby !== null) {
+            $until = $this->hm($shift, $standby->to_at);
+            $this->refuse('LU-05', 'Overlaps an earlier entry: '.$unit->name.' was on standby ("'.$standby->reason?->name.'") until '.$until.'. Record the standby at '.$until.' or later.');
         }
     }
 
