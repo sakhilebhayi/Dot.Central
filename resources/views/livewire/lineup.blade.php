@@ -47,7 +47,7 @@
     @endif
 
     @if($correcting)
-        @php($arrival = ($correction['edge'] ?? '') === 'ARRIVAL')
+        @php($arrival = $correctionEdge === 'ARRIVAL')
         @php($cName = $correcting->equipment?->name ?? 'The machine')
         <form wire:submit="saveCorrection" wire:keydown.escape="cancelCorrection" class="dot-panel" role="dialog" aria-labelledby="corr-title" aria-describedby="corr-help" style="margin-bottom:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;">
             <h2 id="corr-title" class="dot-panel__title" style="grid-column:1/-1;">{{ $arrival ? 'When did '.$cName.' arrive on '.$correcting->face?->label().'?' : 'When did '.$cName.' leave '.$correcting->face?->label().'?' }}</h2>

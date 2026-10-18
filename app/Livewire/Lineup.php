@@ -16,6 +16,7 @@ use App\Services\Rules\RuleEngine;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -26,6 +27,7 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class Lineup extends Component
 {
+    #[Locked]
     public Shift $shift;
 
     public ?int $target = null;
@@ -57,7 +59,17 @@ class Lineup extends Component
     /** @var array<int, string> */
     public array $closeReason = [];
 
-    /** @var array{allocation?: int, edge?: string, expected?: string, time?: string, reason?: string} */
+    /** The stint, edge and time the open correction panel is about: set by startCorrection() only, never by the browser. */
+    #[Locked]
+    public ?int $correctionAllocation = null;
+
+    #[Locked]
+    public string $correctionEdge = '';
+
+    #[Locked]
+    public string $correctionExpected = '';
+
+    /** @var array{time?: string, reason?: string} what the operator types in the panel */
     public array $correction = [];
 
     public function mount(Shift $shift): void
@@ -212,32 +224,40 @@ class Lineup extends Component
 
             return;
         }
-        $this->correction = [
-            'allocation' => $allocation->id, 'edge' => $edge, 'expected' => $old->toIso8601String(),
-            'time' => $time ?? $old->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i'), 'reason' => '',
-        ];
+        $this->correctionAllocation = $allocation->id;
+        $this->correctionEdge = $edge;
+        $this->correctionExpected = $old->toIso8601String();
+        $this->correction = ['time' => $time ?? $old->copy()->setTimezone($this->shift->controlRoom->timezone())->format('H:i'), 'reason' => ''];
     }
 
     public function cancelCorrection(): void
     {
-        $this->correction = [];
+        $this->closeCorrection();
         $this->clearMessages();
     }
 
     public function saveCorrection(): void
     {
         $this->run(function (LineupService $service): void {
-            $allocation = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find((int) ($this->correction['allocation'] ?? 0));
+            $allocation = $this->correctionAllocation !== null ? LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null;
             if ($allocation === null) {
-                $this->correction = [];
+                $this->closeCorrection();
                 $this->refusal = 'LU-15 That line-up entry no longer exists: someone removed it meanwhile.';
 
                 return;
             }
-            $result = $service->correctTime($allocation, (string) ($this->correction['edge'] ?? ''), (string) ($this->correction['time'] ?? ''), (string) ($this->correction['reason'] ?? ''), auth()->user(), ((string) ($this->correction['expected'] ?? '')) ?: null);
-            $this->correction = [];
+            $result = $service->correctTime($allocation, $this->correctionEdge, (string) ($this->correction['time'] ?? ''), (string) ($this->correction['reason'] ?? ''), auth()->user(), $this->correctionExpected !== '' ? $this->correctionExpected : null);
+            $this->closeCorrection();
             $this->notice = $result === null ? 'Nothing changed: that is already the recorded time.' : $service->describeCorrection($result);
         });
+    }
+
+    private function closeCorrection(): void
+    {
+        $this->correctionAllocation = null;
+        $this->correctionEdge = '';
+        $this->correctionExpected = '';
+        $this->correction = [];
     }
 
     /** Clicking a machine that is already on the face: offer the correction when "Changes recorded at" is earlier than its arrival. */
@@ -350,7 +370,7 @@ class Lineup extends Component
             'standbyReasons' => DowntimeReason::where('control_room_id', $room->id)->where('is_active', true)->whereIn('category', LineupStandby::CATEGORIES)->orderBy('name')->get(),
             'locations' => $locations->options($room),
             'timezone' => $room->timezone(),
-            'correcting' => ($this->correction['allocation'] ?? null) !== null ? LineupAllocation::withoutGlobalScopes()->with(['face', 'equipment'])->find($this->correction['allocation']) : null,
+            'correcting' => $this->correctionAllocation !== null ? LineupAllocation::query()->with(['face', 'equipment'])->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null,
             'corrected' => LineupCorrection::withoutGlobalScopes()->where('shift_id', $this->shift->id)->orderBy('id')->get()
                 ->groupBy(fn (LineupCorrection $c) => $c->lineup_allocation_id.':'.$c->edge)
                 ->map(fn ($rows) => $rows->map(fn (LineupCorrection $c) => 'was '.$c->old_at->copy()->setTimezone($room->timezone())->format('H:i').': '.$c->reason)->implode('; '))

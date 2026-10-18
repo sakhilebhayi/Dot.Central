@@ -11,6 +11,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentStatusEvent;
 use App\Models\LineupAllocation;
 use App\Models\LineupCorrection;
+use App\Models\LineupFace;
 use App\Models\MinesConnection;
 use App\Models\OperationalException;
 use App\Models\Operator;
@@ -21,8 +22,10 @@ use App\Models\User;
 use App\Services\Lineup\LineupService;
 use App\Services\RoomProvisioner;
 use App\Support\RoleClass;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -197,5 +200,61 @@ class LineupPageTest extends TestCase
             ->assertSee('2026-10-15 10:30')->assertDontSeeHtml('wire:click="startCorrection')
             ->call('startCorrection', $stint->id, LineupCorrection::ARRIVAL)
             ->assertSee('SH-04')->assertSet('correction', []);
+    }
+
+    public function test_a_correction_cannot_be_pointed_at_another_room_or_team_by_tampering(): void
+    {
+        $this->actingAs($this->operator);
+        $service = app(LineupService::class);
+        $face = $service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'loader_ids' => [$this->loader->id]], $this->operator, '07:00');
+        $mine = $service->place($this->shift, $face, $this->truck, $this->operator, '10:30');
+
+        $theirs = function (Team $team, string $name): LineupAllocation {
+            $room = ControlRoom::factory()->for($team)->create();
+            MinesConnection::factory()->for($room)->verified()->create(['timezone' => 'UTC']);
+            app(RoomProvisioner::class)->provision($room);
+            $type = ShiftType::where('control_room_id', $room->id)->where('code', 'DAY')->firstOrFail();
+            $shift = Shift::factory()->for($room)->for($type, 'shiftType')->create(['shift_date' => '2026-10-15', 'starts_at' => '2026-10-15 06:00:00', 'ends_at' => '2026-10-15 18:00:00', 'status' => 'OPEN']);
+            $unit = Equipment::factory()->for($room)->create(['name' => $name, 'role_class' => RoleClass::HAUL, 'mines_status' => 'active']);
+            $theirFace = LineupFace::create(['control_room_id' => $room->id, 'shift_id' => $shift->id, 'seq' => 1, 'kind' => 'LOADING', 'material' => 'Secret material', 'status' => 'ACTIVE', 'active_from' => '2026-10-15 06:00:00']);
+
+            return LineupAllocation::create(['control_room_id' => $room->id, 'shift_id' => $shift->id, 'lineup_face_id' => $theirFace->id, 'equipment_id' => $unit->id, 'role' => 'HAUL', 'from_at' => '2026-10-15 10:30:00']);
+        };
+        $sameTeam = $theirs($this->operator->currentTeam, 'HT-SAME-TEAM');
+        $otherTeam = $theirs(User::factory()->withPersonalTeam()->create()->currentTeam, 'HT-OTHER-TEAM');
+
+        foreach ([$sameTeam, $otherTeam] as $foreign) {
+            $page = Livewire::test(Lineup::class, ['shift' => $this->shift]);
+            try {
+                $page->call('startCorrection', $foreign->id, LineupCorrection::ARRIVAL);
+                $this->fail('A stint of another shift must not open.');
+            } catch (ModelNotFoundException) {
+                $this->assertTrue(true);
+            }
+            $page->assertDontSee('Secret material')->assertDontSee('HT-SAME-TEAM')->assertDontSee('HT-OTHER-TEAM');
+            $this->assertSame('2026-10-15 10:30:00', $foreign->fresh()->from_at->toDateTimeString());
+
+            try {
+                $page->set('correctionAllocation', $foreign->id);
+                $this->fail('The stint being corrected must not be client-settable.');
+            } catch (CannotUpdateLockedPropertyException) {
+                $this->assertTrue(true);
+            }
+            $page->assertDontSee('Secret material');
+        }
+
+        $page = Livewire::test(Lineup::class, ['shift' => $this->shift])->call('startCorrection', $mine->id, LineupCorrection::ARRIVAL);
+        foreach (['correctionAllocation' => $sameTeam->id, 'correctionEdge' => 'DEPARTURE', 'correctionExpected' => '2026-10-15T10:30:00+00:00', 'shift' => $sameTeam->shift_id] as $property => $value) {
+            try {
+                $page->set($property, $value);
+                $this->fail($property.' must be locked.');
+            } catch (CannotUpdateLockedPropertyException) {
+                $this->assertTrue(true);
+            }
+        }
+        $page->assertSee('When did HT-01 arrive')->assertDontSee('Secret material');
+        $page->set('correction', ['allocation' => $sameTeam->id, 'edge' => 'DEPARTURE', 'time' => '10:00', 'reason' => 'forged', 'expected' => ''])->call('saveCorrection')->assertDontSee('Secret material');
+        $this->assertSame('2026-10-15 10:30:00', $sameTeam->fresh()->from_at->toDateTimeString(), 'only the stint chosen with the button is ever corrected');
+        $this->assertSame('2026-10-15 10:00:00', $mine->fresh()->from_at->toDateTimeString());
     }
 }
