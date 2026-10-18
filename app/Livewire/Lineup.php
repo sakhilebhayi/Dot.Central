@@ -397,6 +397,7 @@ class Lineup extends Component
             'timezone' => $room->timezone(),
             'linked' => $faces->mapWithKeys(fn (LineupFace $f) => [$f->id => $service->linkedLabel($f)])->filter()->all(),
             'correcting' => $this->correctionAllocation !== null ? LineupAllocation::query()->with(['face', 'equipment'])->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null,
+            'movesWith' => $this->correctionAllocation !== null && ($row = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation)) !== null ? $service->movesWith($row, $this->correctionEdge) : [],
             'corrected' => LineupCorrection::withoutGlobalScopes()->where('shift_id', $this->shift->id)->orderBy('id')->get()
                 ->groupBy(fn (LineupCorrection $c) => $c->lineup_allocation_id.':'.$c->edge)
                 ->map(fn ($rows) => $rows->map(fn (LineupCorrection $c) => 'was '.$c->old_at->copy()->setTimezone($room->timezone())->format('H:i').': '.$c->reason)->implode('; '))

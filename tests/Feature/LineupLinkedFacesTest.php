@@ -351,6 +351,7 @@ class LineupLinkedFacesTest extends TestCase
 
         Livewire::test(Lineup::class, ['shift' => $this->shift])
             ->call('startCorrection', $this->stint($third)->id, 'ARRIVAL')
+            ->assertSee('A move is one moment: Face 1 — Loading area 1 — Seam · C1 / B1 B2 and Face 2 — Loading area 1 — Parting · C1 / B2 are corrected with it.')
             ->set('correction.time', '10:00')->set('correction.reason', 'The move was clicked late')
             ->call('saveCorrection')
             ->assertSee('EX-01 on Face 3 — Loading area 3 — Coal · C2 / B5 at 10:00 (was 10:30); off Face 1 — Loading area 1 — Seam · C1 / B1 B2 and Face 2 — Loading area 1 — Parting · C1 / B2 at the same time.');
@@ -358,5 +359,41 @@ class LineupLinkedFacesTest extends TestCase
         $report = $this->get(route('reports.index', ['r' => 'lineup', 'shift' => $this->shift->id]))->assertOk()->getContent();
         $this->assertSame(2, substr_count($report, 'moved with a correction (The move was clicked late)'), 'both departures say they moved with the arrival');
         $this->assertSame(1, substr_count($report, 'arrival corrected from 10:30'));
+    }
+
+    public function test_a_correction_never_drags_a_standby_over_the_loaders_other_linked_stint(): void
+    {
+        $other = Equipment::factory()->for($this->room)->create(['name' => 'EX-02', 'role_class' => RoleClass::LOADER, 'mines_status' => 'active', 'last_heard_at' => now()]);
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $this->service->place($this->shift, $this->seam, $other, $this->user, '08:00');
+        $this->service->place($this->shift, $this->parting, $other, $this->user, '08:30');
+        $this->service->release($this->stint($this->seam, $other), 'Finished', $this->user, '09:00');
+        $this->service->setStandby($this->shift, $other, $reason, $this->user, '09:30');
+        $this->assertSame(['1@08:00-09:00', '2@08:30-09:30'], $this->history($other));
+
+        $message = $this->refusal(fn () => $this->service->correctTime($this->stint($this->parting, $other), LineupCorrection::DEPARTURE, '08:45', 'Left earlier', $this->user));
+
+        $this->assertStringContainsString('LU-05 Overlaps another entry: EX-02 was on Face 1 — Loading area 1 — Seam · C1 / B1 B2 08:00–09:00, and the standby next to this move would cover it.', $message);
+        $this->assertSame(['1@08:00-09:00', '2@08:30-09:30'], $this->history($other), 'nothing moved');
+        $this->assertSame('09:30', LineupStandby::withoutGlobalScopes()->where('equipment_id', $other->id)->firstOrFail()->from_at->format('H:i'));
+
+        $this->service->correctTime($this->stint($this->parting, $other), LineupCorrection::DEPARTURE, '09:00', 'Left with the seam', $this->user);
+        $this->assertSame(['1@08:00-09:00', '2@08:30-09:00'], $this->history($other));
+        $this->assertSame('09:00', LineupStandby::withoutGlobalScopes()->where('equipment_id', $other->id)->firstOrFail()->from_at->format('H:i'));
+    }
+
+    public function test_a_later_arrival_cannot_stretch_the_standby_before_it_over_a_linked_stint(): void
+    {
+        $other = Equipment::factory()->for($this->room)->create(['name' => 'EX-02', 'role_class' => RoleClass::LOADER, 'mines_status' => 'active', 'last_heard_at' => now()]);
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $this->service->setStandby($this->shift, $other, $reason, $this->user, '07:00');
+        $this->service->place($this->shift, $this->seam, $other, $this->user, '08:00');
+        $this->service->place($this->shift, $this->parting, $other, $this->user, '08:30');
+
+        $message = $this->refusal(fn () => $this->service->correctTime($this->stint($this->seam, $other), LineupCorrection::ARRIVAL, '09:00', 'Arrived later', $this->user));
+
+        $this->assertStringContainsString('LU-05 Overlaps another entry: EX-02 was on Face 2 — Loading area 1 — Parting · C1 / B2 08:30–now, and the standby next to this move would cover it.', $message);
+        $this->assertSame('08:00', LineupStandby::withoutGlobalScopes()->where('equipment_id', $other->id)->firstOrFail()->to_at->format('H:i'));
+        $this->assertSame(['1@08:00-open', '2@08:30-open'], $this->history($other));
     }
 }

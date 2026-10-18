@@ -53,7 +53,7 @@
         @php($cName = $correcting->equipment?->name ?? 'The machine')
         <form wire:submit="saveCorrection" wire:keydown.escape="cancelCorrection" class="dot-panel" role="dialog" aria-labelledby="corr-title" aria-describedby="corr-help" style="margin-bottom:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;">
             <h2 id="corr-title" class="dot-panel__title" style="grid-column:1/-1;">{{ $arrival ? 'When did '.$cName.' arrive on '.$correcting->face?->label().'?' : 'When did '.$cName.' leave '.$correcting->face?->label().'?' }}</h2>
-            <p id="corr-help" class="dot-readout__context" style="grid-column:1/-1;margin:0;">Recorded {{ Format::stamp($arrival ? $correcting->from_at : $correcting->to_at, $timezone) }}. A move is one moment: the face it {{ $arrival ? 'came from' : 'went to' }} is corrected with it. Times are the control room's clock ({{ $timezone }}).</p>
+            <p id="corr-help" class="dot-readout__context" style="grid-column:1/-1;margin:0;">Recorded {{ Format::stamp($arrival ? $correcting->from_at : $correcting->to_at, $timezone) }}. A move is one moment: {{ count($movesWith) > 1 ? implode(' and ', $movesWith).' are corrected with it.' : 'the face it '.($arrival ? 'came from' : 'went to').' is corrected with it.' }} Times are the control room's clock ({{ $timezone }}).</p>
             <div id="corr-alert" role="alert" style="grid-column:1/-1;">
                 @if($refusal)
                     <div class="dot-msg dot-msg--critical"><div class="dot-msg__title">Refused</div><div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div></div>

@@ -317,19 +317,23 @@ final class LineupService
         $planning = $this->isPlanning($shift);
         $at = $move && ! $planning ? $this->changeAt($shift, $hhmm) : null;
 
-        // Locked before anything is read inside the transaction (see lockMachine); read again under the locks.
+        // Read before the transaction, locked first inside it (see lockMachine), then read again under the locks.
         $lock = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->sort()->values()->all();
 
         return DB::transaction(function () use ($face, $shift, $user, $move, $at, $planning, $location, $kind, $attrs, $cut, $blocks, $lock): LineupFace {
             foreach ($lock as $equipmentId) {
                 $this->lockMachine($shift, $equipmentId);
             }
+            $current = $this->lockFace($face);
+            if ($current->isClosed()) {
+                $this->refuse('LU-05', $current->label().' is closed. Add a new face instead.');
+            }
             $mine = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->all();
             if (array_diff($mine, $lock) !== []) {
                 $this->refuse('LU-15', 'Someone changed the loading units on '.$face->label().' meanwhile. Check the face and save again.');
             }
 
-            $strays = $kind === 'LOADING' ? $this->linkedFaces($face)->reject(fn (LineupFace $other) => (new LineupFace(['cut' => $cut, 'blocks' => $blocks]))->sameWorkplaceAs($other))->values() : collect();
+            $strays = $kind === 'LOADING' ? $this->linkedFaces($current)->reject(fn (LineupFace $other) => (new LineupFace(['cut' => $cut, 'blocks' => $blocks]))->sameWorkplaceAs($other))->values() : collect();
             $shared = $strays->isEmpty() ? collect() : LineupAllocation::withoutGlobalScopes()->with('equipment')->whereIn('lineup_face_id', $strays->pluck('id')->all())
                 ->where('role', 'LOADER')->whereNull('to_at')->whereIn('equipment_id', $mine)->get();
 
@@ -424,6 +428,10 @@ final class LineupService
         return DB::transaction(function () use ($shift, $face, $unit, $user, $move, $at, $role): LineupAllocation {
             // Read again under the machine's lock: another operator may have placed or moved it since the screen showed it.
             $this->lockMachine($shift, $unit->id);
+            $face = $this->lockFace($face);
+            if ($face->isClosed()) {
+                $this->refuse('LU-05', $face->label().' was closed'.($face->closed_at ? ' at '.$this->hm($shift, $face->closed_at) : '').'. Allocate to an active face.');
+            }
 
             $open = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $unit->id)->whereNull('to_at')->get();
             $here = $open->first(fn (LineupAllocation $a) => $a->lineup_face_id === $face->id);
@@ -624,24 +632,16 @@ final class LineupService
             // The moment being corrected: this stint's edge, the stints on the other side of the move (all of them: a loading
             // unit on linked faces leaves, or reaches, several faces at once), and, when the machine really moved or went on
             // standby at that moment, its linked stints on this side. They move together.
-            $stints = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)
-                ->where('id', '!=', $allocation->id)->orderBy('from_at')->orderBy('id')->get();
-            $edgeIsOld = fn (LineupAllocation $x, string $edgeField): bool => $x->{$edgeField} !== null && $x->{$edgeField}->equalTo($old);
-            $partners = $stints->filter(fn (LineupAllocation $x) => $edgeIsOld($x, $partnerField))->values();
+            ['stints' => $stints, 'partners' => $partners, 'siblings' => $siblings, 'standby' => $standbyCandidate] = $this->momentOf($shift, $allocation, $face, $field, $partnerField, $old);
+            $linkedOk = fn (LineupAllocation $x, LineupFace $f, string $role): bool => $x->role === 'LOADER' && $role === 'LOADER' && $x->face !== null && $x->face->sameWorkplaceAs($f);
 
             $standbyPartner = null;
-            $standbyCandidate = $partners->isEmpty() ? LineupStandby::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)->where($partnerField, $old)->first() : null;
             if ($standbyCandidate !== null && (! $arrival || $at->greaterThan($old))) {
                 $standbyPartner = $standbyCandidate;
                 if (! $arrival && $standbyCandidate->to_at !== null && $standbyCandidate->to_at->lessThanOrEqualTo($at)) {
                     $this->refuse('LU-05', 'Times out of order: '.$who.' was on standby until '.$this->hm($shift, $standbyCandidate->to_at).'. Correct that first, or pick a time before it.');
                 }
             }
-
-            $linkedOk = fn (LineupAllocation $x, LineupFace $f, string $role): bool => $x->role === 'LOADER' && $role === 'LOADER' && $x->face !== null && $x->face->sameWorkplaceAs($f);
-            $siblings = $partners->isNotEmpty() || $standbyCandidate !== null
-                ? $stints->filter(fn (LineupAllocation $x) => $edgeIsOld($x, $field) && $linkedOk($x, $face, $allocation->role))->values()
-                : collect();
 
             /** @var list<array{row: LineupAllocation, face: LineupFace, edge: string, from: Carbon, to: Carbon|null, same: bool}> $members */
             $members = [];
@@ -673,6 +673,21 @@ final class LineupService
                 && collect($members)->contains(fn (array $m): bool => $overlaps($x->from_at, $x->to_at, $m['from'], $m['to']) && ! $linkedOk($x, $m['face'], $m['row']->role)));
             if ($clash !== null) {
                 $this->refuse('LU-05', 'Overlaps another entry: '.$who.' was on '.$clash->face?->label().' '.$this->hm($shift, $clash->from_at).'–'.$this->hm($shift, $clash->to_at).'. Correct that entry first, or pick a time that does not overlap it.');
+            }
+
+            if ($standbyPartner !== null) {
+                // The standby that follows (or precedes) the moment moves with it, and it never overlaps another entry of the machine.
+                $sFrom = $arrival ? $standbyPartner->from_at : $at;
+                $sTo = $arrival ? $at : $standbyPartner->to_at;
+                $inStandby = $stints->first(fn (LineupAllocation $x): bool => ! in_array($x->id, $memberIds, true) && $overlaps($x->from_at, $x->to_at, $sFrom, $sTo));
+                if ($inStandby !== null) {
+                    $this->refuse('LU-05', 'Overlaps another entry: '.$who.' was on '.$inStandby->face?->label().' '.$this->hm($shift, $inStandby->from_at).'–'.$this->hm($shift, $inStandby->to_at).', and the standby next to this move would cover it. Correct that entry first, or pick a time that does not overlap it.');
+                }
+                $inOther = LineupStandby::withoutGlobalScopes()->with('reason')->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)->where('id', '!=', $standbyPartner->id)->orderBy('from_at')->get()
+                    ->first(fn (LineupStandby $x): bool => $overlaps($x->from_at, $x->to_at, $sFrom, $sTo));
+                if ($inOther !== null) {
+                    $this->refuse('LU-05', 'Overlaps another entry: '.$who.' was on standby ("'.$inOther->reason?->name.'") '.$this->hm($shift, $inOther->from_at).'–'.$this->hm($shift, $inOther->to_at).'. Correct that entry first, or pick a time that does not overlap it.');
+                }
             }
 
             /** @var array{0: Carbon, 1: Carbon}|null $gained the span the machine now spends on a face that it did not before */
@@ -716,6 +731,50 @@ final class LineupService
 
             return $correction;
         });
+    }
+
+    /**
+     * The other labels a correction of this edge would move with it: the faces
+     * on the other side of the move, and a loading unit's linked faces on this
+     * side. Empty when the edge stands alone. Read-only, for the correction panel.
+     *
+     * @return list<string>
+     */
+    public function movesWith(LineupAllocation $allocation, string $edge): array
+    {
+        $arrival = $edge === LineupCorrection::ARRIVAL;
+        $old = $arrival ? $allocation->from_at : $allocation->to_at;
+        if ($old === null) {
+            return [];
+        }
+        $shift = Shift::withoutGlobalScopes()->findOrFail($allocation->shift_id);
+        $face = LineupFace::withoutGlobalScopes()->findOrFail($allocation->lineup_face_id);
+        $moment = $this->momentOf($shift, $allocation, $face, $arrival ? 'from_at' : 'to_at', $arrival ? 'to_at' : 'from_at', $old);
+
+        return $moment['partners']->merge($moment['siblings'])->map(fn (LineupAllocation $x) => $x->face?->label())->filter()->values()->all();
+    }
+
+    /**
+     * The stints of the machine that share the edge being corrected: those on
+     * the other side of the move ($partnerField equals $old), and, only when
+     * the machine really moved or went on standby then, the linked stints
+     * ($field equals $old, both loading units, faces at the same cut and
+     * block) on this side.
+     *
+     * @return array{stints: Collection<int, LineupAllocation>, partners: Collection<int, LineupAllocation>, siblings: Collection<int, LineupAllocation>, standby: LineupStandby|null}
+     */
+    private function momentOf(Shift $shift, LineupAllocation $allocation, LineupFace $face, string $field, string $partnerField, Carbon $old): array
+    {
+        $stints = LineupAllocation::withoutGlobalScopes()->with('face')->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)
+            ->where('id', '!=', $allocation->id)->orderBy('from_at')->orderBy('id')->get();
+        $edgeIsOld = fn (LineupAllocation $x, string $edgeField): bool => $x->{$edgeField} !== null && $x->{$edgeField}->equalTo($old);
+        $partners = $stints->filter(fn (LineupAllocation $x) => $edgeIsOld($x, $partnerField))->values();
+        $standby = $partners->isEmpty() ? LineupStandby::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $allocation->equipment_id)->where($partnerField, $old)->first() : null;
+        $siblings = $partners->isNotEmpty() || $standby !== null
+            ? $stints->filter(fn (LineupAllocation $x) => $edgeIsOld($x, $field) && $allocation->role === 'LOADER' && $x->role === 'LOADER' && $x->face !== null && $x->face->sameWorkplaceAs($face))->values()
+            : collect();
+
+        return ['stints' => $stints, 'partners' => $partners, 'siblings' => $siblings, 'standby' => $standby];
     }
 
     /** "HT-01 on Face 2 — … at 10:00 (was 10:30); off Face 1 — … and Face 3 — … at the same time." */
@@ -1094,6 +1153,21 @@ final class LineupService
     {
         LineupAllocation::withoutGlobalScopes()->where('shift_id', $shift->id)->where('equipment_id', $equipmentId)->toBase()->update(['updated_at' => now()]);
         Equipment::withoutGlobalScopes()->whereKey($equipmentId)->lockForUpdate()->value('id');
+    }
+
+    /**
+     * Locks the face for the rest of the transaction and returns its current
+     * values: an edit of its cut or blocks and a placement on it must not
+     * interleave, or a loading unit could end up on two unrelated faces. Always
+     * taken after the machine locks, so two callers never wait on each other.
+     * The write is what takes SQLite's single write lock when no machine was
+     * locked first (lockForUpdate compiles to nothing there).
+     */
+    private function lockFace(LineupFace $face): LineupFace
+    {
+        LineupFace::withoutGlobalScopes()->whereKey($face->id)->toBase()->update(['updated_at' => now()]);
+
+        return LineupFace::withoutGlobalScopes()->lockForUpdate()->findOrFail($face->id);
     }
 
     /**
