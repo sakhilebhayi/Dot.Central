@@ -120,7 +120,8 @@ class Lineup extends Component
                     $service->editFace($face, $attrs, auth()->user(), move: $move, hhmm: $this->changeAt ?: null);
                 } catch (ValidationException $e) {
                     if (str_starts_with($e->errors()['lineup'][0] ?? '', 'LU-01')) {
-                        $this->fix = ['face_move' => true];
+                        $names = $face->allocations()->with('equipment')->whereNull('to_at')->where('role', 'LOADER')->get()->map(fn (LineupAllocation $a) => $a->equipment?->name)->filter()->implode(' and ');
+                        $this->fix = ['face_move' => true, 'label' => 'Move the loading unit here: keep '.($names !== '' ? $names : 'it').' on '.$face->label().' and take it off the other face'];
                     }
                     throw $e;
                 }
@@ -135,6 +136,15 @@ class Lineup extends Component
             $this->target = $face->id;
             $this->cancelFaceForm();
         });
+        $this->focusFix();
+    }
+
+    /** After a refusal that offers a button, the keyboard goes to it (like the correction panel's alert). */
+    private function focusFix(): void
+    {
+        if (($this->fix['face_move'] ?? false) === true) {
+            $this->dispatch('lineup-focus', id: 'face-move');
+        }
     }
 
     public function closeFace(int $faceId): void
@@ -397,7 +407,7 @@ class Lineup extends Component
             'timezone' => $room->timezone(),
             'linked' => $faces->mapWithKeys(fn (LineupFace $f) => [$f->id => $service->linkedLabel($f)])->filter()->all(),
             'correcting' => $this->correctionAllocation !== null ? LineupAllocation::query()->with(['face', 'equipment'])->where('shift_id', $this->shift->id)->find($this->correctionAllocation) : null,
-            'movesWith' => $this->correctionAllocation !== null && ($row = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation)) !== null ? $service->movesWith($row, $this->correctionEdge) : [],
+            'movesWith' => $this->correctionAllocation !== null && ($row = LineupAllocation::withoutGlobalScopes()->where('shift_id', $this->shift->id)->find($this->correctionAllocation)) !== null ? $service->movesWith($row, $this->correctionEdge) : ['other' => [], 'same' => []],
             'corrected' => LineupCorrection::withoutGlobalScopes()->where('shift_id', $this->shift->id)->orderBy('id')->get()
                 ->groupBy(fn (LineupCorrection $c) => $c->lineup_allocation_id.':'.$c->edge)
                 ->map(fn ($rows) => $rows->map(fn (LineupCorrection $c) => 'was '.$c->old_at->copy()->setTimezone($room->timezone())->format('H:i').': '.$c->reason)->implode('; '))

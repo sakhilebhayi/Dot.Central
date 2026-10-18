@@ -131,6 +131,9 @@ final class LineupService
      */
     public function linkedFaces(LineupFace $face): Collection
     {
+        if ($face->kind !== 'LOADING') {
+            return collect();
+        }
         $loaders = LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $face->id)->where('role', 'LOADER')->whereNull('to_at')->pluck('equipment_id')->all();
         if ($loaders === []) {
             return collect();
@@ -138,7 +141,7 @@ final class LineupService
         $faceIds = LineupAllocation::withoutGlobalScopes()->where('shift_id', $face->shift_id)->where('role', 'LOADER')->whereNull('to_at')
             ->whereIn('equipment_id', $loaders)->where('lineup_face_id', '!=', $face->id)->pluck('lineup_face_id')->unique()->all();
 
-        return LineupFace::withoutGlobalScopes()->whereIn('id', $faceIds)->where('status', 'ACTIVE')->orderBy('seq')->get()
+        return LineupFace::withoutGlobalScopes()->whereIn('id', $faceIds)->where('status', 'ACTIVE')->where('kind', 'LOADING')->orderBy('seq')->get()
             ->filter(fn (LineupFace $other) => $other->sameWorkplaceAs($face))->values();
     }
 
@@ -333,14 +336,18 @@ final class LineupService
                 $this->refuse('LU-15', 'Someone changed the loading units on '.$face->label().' meanwhile. Check the face and save again.');
             }
 
-            $strays = $kind === 'LOADING' ? $this->linkedFaces($current)->reject(fn (LineupFace $other) => (new LineupFace(['cut' => $cut, 'blocks' => $blocks]))->sameWorkplaceAs($other))->values() : collect();
+            // A link survives only while this face stays a loading face at the same cut and block as the other one.
+            $strays = $this->linkedFaces($current)->reject(fn (LineupFace $other) => $kind === 'LOADING' && (new LineupFace(['cut' => $cut, 'blocks' => $blocks]))->sameWorkplaceAs($other))->values();
             $shared = $strays->isEmpty() ? collect() : LineupAllocation::withoutGlobalScopes()->with('equipment')->whereIn('lineup_face_id', $strays->pluck('id')->all())
                 ->where('role', 'LOADER')->whereNull('to_at')->whereIn('equipment_id', $mine)->get();
 
             if ($shared->isNotEmpty()) {
                 $labels = $strays->map(fn (LineupFace $f) => $f->label())->implode(' and ');
                 if (! $move) {
-                    $this->refuse('LU-01', $shared->map(fn (LineupAllocation $a) => $a->equipment?->name)->unique()->implode(' and ').' also loads '.$labels.'. After this change the faces are no longer at the same cut and block, so it cannot work both. Choose "Move the loading unit here" to take it off '.$labels.', or keep the cut and blocks.');
+                    $why = $kind === 'LOADING'
+                        ? 'After this change the faces are no longer at the same cut and block, so it cannot work both.'
+                        : 'After this change '.$current->label().' is a work area, so the faces cannot share a loading unit.';
+                    $this->refuse('LU-01', $shared->map(fn (LineupAllocation $a) => $a->equipment?->name)->unique()->implode(' and ').' also loads '.$labels.'. '.$why.' Choose "Move the loading unit here" to take it off '.$labels.', or '.($kind === 'LOADING' ? 'keep the cut and blocks.' : 'keep it a loading face.'));
                 }
                 foreach ($shared as $allocation) {
                     if ($at !== null && $at->lessThan($allocation->from_at)) {
@@ -389,7 +396,15 @@ final class LineupService
             if ($open->contains(fn (LineupAllocation $a) => ! in_array($a->equipment_id, $lock, true))) {
                 $this->refuse('LU-15', 'Someone put a machine on '.$current->label().' meanwhile. Check the face and close it again.');
             }
+            if (! $planning && $at->lessThan($current->active_from)) {
+                $this->refuse('LU-05', $current->label().' only started at '.$this->hm($shift, $current->active_from).'. Pick a later time.');
+            }
             if (! $planning) {
+                $left = $current->allocations()->with('equipment')->whereNotNull('to_at')->where('to_at', '>', $at)->orderByDesc('to_at')->first();
+                if ($left !== null) {
+                    $until = $this->hm($shift, $left->to_at);
+                    $this->refuse('LU-05', 'Time before a machine left the face: '.$left->equipment?->name.' was on '.$current->label().' until '.$until.'. Close the face at '.$until.' or later, or first correct when it left (select its time under "Moved off this face").');
+                }
                 $early = $open->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
                 if ($early !== null) {
                     $this->refuse('LU-05', 'Time before the machine arrived: '.$early->equipment?->name.' only arrived on '.$current->label().' at '.$this->hm($shift, $early->from_at).'. Close the face at that time or later, or first correct when it arrived (select its time on the face).');
@@ -464,6 +479,9 @@ final class LineupService
             }
 
             $planning = $this->isPlanning($shift);
+            if (! $planning && $at->lessThan($face->active_from)) {
+                $this->refuse('LU-05', 'Time before the face started: '.$face->label().' only started at '.$this->hm($shift, $face->active_from).'. Record the placement at '.$this->hm($shift, $face->active_from).' or later.');
+            }
             if (! $planning) {
                 $this->refuseOverlap($shift, $unit, $face, $role, $at);
                 $early = $shared ? null : $elsewhere->first(fn (LineupAllocation $a) => $at->lessThan($a->from_at));
@@ -760,24 +778,26 @@ final class LineupService
     }
 
     /**
-     * The other labels a correction of this edge would move with it: the faces
-     * on the other side of the move, and a loading unit's linked faces on this
-     * side. Empty when the edge stands alone. Read-only, for the correction panel.
+     * The faces a correction of this edge would move with it: those on the
+     * other side of the move, and a loading unit's linked faces on this
+     * side. Both empty when the edge stands alone. Read-only, for the
+     * correction panel.
      *
-     * @return list<string>
+     * @return array{other: list<string>, same: list<string>}
      */
     public function movesWith(LineupAllocation $allocation, string $edge): array
     {
         $arrival = $edge === LineupCorrection::ARRIVAL;
         $old = $arrival ? $allocation->from_at : $allocation->to_at;
         if ($old === null) {
-            return [];
+            return ['other' => [], 'same' => []];
         }
         $shift = Shift::withoutGlobalScopes()->findOrFail($allocation->shift_id);
         $face = LineupFace::withoutGlobalScopes()->findOrFail($allocation->lineup_face_id);
         $moment = $this->momentOf($shift, $allocation, $face, $arrival ? 'from_at' : 'to_at', $arrival ? 'to_at' : 'from_at', $old);
+        $labels = fn (Collection $rows): array => $rows->map(fn (LineupAllocation $x) => $x->face?->label())->filter()->values()->all();
 
-        return $moment['partners']->merge($moment['siblings'])->map(fn (LineupAllocation $x) => $x->face?->label())->filter()->values()->all();
+        return ['other' => $labels($moment['partners']), 'same' => $labels($moment['siblings'])];
     }
 
     /**

@@ -426,4 +426,77 @@ class LineupLinkedFacesTest extends TestCase
         $this->assertStringStartsWith('update "lineup_allocations" set "updated_at"', $editOfLoadedFace[0], 'the loading unit first');
         $this->assertStringStartsWith('update "lineup_faces" set "updated_at"', $editOfLoadedFace[2]);
     }
+    // ---- review fixes: a work area breaks every link; the panel and the button speak plainly ------------------
+
+    public function test_turning_a_linked_face_into_a_work_area_while_changing_its_cut_is_refused(): void
+    {
+        $message = $this->refusal(fn () => $this->service->editFace($this->parting, ['kind' => 'AREA', 'activity' => 'Dozing', 'cut' => 'C9', 'blocks' => ['B7']], $this->user));
+
+        $this->assertStringContainsString('LU-01 EX-01 also loads Face 1 — Loading area 1 — Seam · C1 / B1 B2. After this change Face 2 — Loading area 1 — Parting · C1 / B2 is a work area, so the faces cannot share a loading unit. Choose "Move the loading unit here" to take it off Face 1', $message);
+        $this->assertSame('LOADING', $this->parting->fresh()->kind, 'nothing changed');
+        $this->assertSame([$this->seam->id, $this->parting->id], LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->whereNull('to_at')->orderBy('lineup_face_id')->pluck('lineup_face_id')->all());
+    }
+
+    public function test_turning_a_linked_face_into_a_work_area_without_a_cut_change_is_refused_too_and_the_loader_can_be_moved(): void
+    {
+        $attrs = ['kind' => 'AREA', 'activity' => 'Dozing', 'cut' => 'C1', 'blocks' => ['B2']];
+        $this->assertStringContainsString('LU-01 EX-01 also loads Face 1', $this->refusal(fn () => $this->service->editFace($this->parting, $attrs, $this->user)));
+
+        $this->service->editFace($this->parting->fresh(), $attrs, $this->user, move: true, hhmm: '11:00');
+
+        $this->assertSame('AREA', $this->parting->fresh()->kind);
+        $this->assertSame('11:00', $this->stint($this->seam)->to_at->format('H:i'), 'taken off the loading face');
+        $this->assertSame('', $this->service->linkedLabel($this->seam->fresh()), 'a work area is never linked');
+        $this->assertSame('', $this->service->linkedLabel($this->parting->fresh()));
+    }
+
+    public function test_a_work_area_is_not_offered_as_linked_even_if_old_data_has_a_loader_on_it(): void
+    {
+        LineupFace::withoutGlobalScopes()->whereKey($this->parting->id)->update(['kind' => 'AREA', 'material' => null, 'activity' => 'Dozing']);
+
+        $this->assertSame('', $this->service->linkedLabel($this->seam->fresh()));
+        $this->assertSame('', $this->service->linkedLabel($this->parting->fresh()));
+        $this->assertNotContains('LU-07', $this->service->checks($this->shift)->pluck('code')->all());
+    }
+
+    public function test_the_page_refuses_the_same_input_and_offers_the_named_button(): void
+    {
+        $this->actingAs($this->user);
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('openFaceForm', $this->parting->id)
+            ->set('faceForm.kind', 'AREA')->set('faceForm.activity', 'Dozing')->set('faceForm.cut', 'C9')->set('faceForm.blocks', 'B7')
+            ->call('saveFace')
+            ->assertSee('LU-01 EX-01 also loads Face 1')
+            ->assertSeeHtml('id="face-move"')
+            ->assertSeeHtml('aria-label="Move the loading unit here: keep EX-01 on Face 2 — Loading area 1 — Parting · C1 / B2 and take it off the other face"')
+            ->assertDispatched('lineup-focus', id: 'face-move');
+
+        $this->assertSame('LOADING', $this->parting->fresh()->kind);
+        $this->assertCount(2, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->whereNull('to_at')->get());
+    }
+
+    public function test_the_panel_sentence_names_the_linked_face_when_only_a_same_side_stint_moves_with_it(): void
+    {
+        $reason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'STANDBY')->firstOrFail();
+        $this->service->setStandby($this->shift, $this->loader, $reason, $this->user, '10:30');
+        $this->actingAs($this->user);
+
+        Livewire::test(Lineup::class, ['shift' => $this->shift])
+            ->call('startCorrection', $this->stint($this->seam)->id, 'DEPARTURE')
+            ->assertSee('A move is one moment: Face 2 — Loading area 1 — Parting · C1 / B2 is corrected with it.')
+            ->assertDontSee('the face it went to');
+    }
+
+    public function test_no_blade_uses_an_empty_wire_modifier(): void
+    {
+        $offenders = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(resource_path('views'))) as $file) {
+            if ($file->isFile() && str_ends_with($file->getFilename(), '.blade.php') && preg_match_all('/\swire:(?:click|change|submit|keydown|keyup|input|blur)(?:\.[A-Za-z]+)*(?=[\s>\/])/', (string) file_get_contents($file->getPathname()), $m)) {
+                $offenders[] = $file->getFilename().': '.implode(', ', $m[0]);
+            }
+        }
+
+        $this->assertSame([], $offenders, 'an empty wire:click evaluates "$wire." and logs an Alpine error on every click; use x-on:click.stop');
+    }
 }

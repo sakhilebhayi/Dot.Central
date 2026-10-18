@@ -303,4 +303,38 @@ class LineupStandbyRulesTest extends TestCase
         $this->service->closeFace($this->face1->fresh(), 'Finished', $this->user, '10:00');
         $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('lineup_face_id', $this->face1->id)->whereNull('to_at')->count());
     }
+
+    public function test_a_face_cannot_be_closed_before_a_machine_left_it(): void
+    {
+        $stint = $this->service->place($this->shift, $this->face1, $this->truck, $this->user, '08:00');
+        $this->service->release($stint, 'Workshop', $this->user, '11:00');
+
+        $message = $this->refusal(fn () => $this->service->closeFace($this->face1, 'Finished', $this->user, '10:00'));
+
+        $this->assertSame('LU-05 Time before a machine left the face: HT-01 was on Face 1 — Loading area 1 — Overburden until 11:00. Close the face at 11:00 or later, or first correct when it left (select its time under "Moved off this face").', $message);
+        $this->assertFalse($this->face1->fresh()->isClosed());
+
+        $this->service->closeFace($this->face1->fresh(), 'Finished', $this->user, '11:00');
+        $this->assertTrue($this->face1->fresh()->isClosed());
+    }
+
+    public function test_a_face_cannot_be_closed_before_it_started(): void
+    {
+        $late = $this->service->addFace($this->shift, ['location' => 'default:Loading area 3', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '10:00');
+
+        $this->assertSame('LU-05 Face 3 — Loading area 3 — Coal only started at 10:00. Pick a later time.', $this->refusal(fn () => $this->service->closeFace($late, 'Finished', $this->user, '09:00')));
+        $this->assertFalse($late->fresh()->isClosed());
+    }
+
+    public function test_a_machine_cannot_be_placed_before_the_face_started(): void
+    {
+        $late = $this->service->addFace($this->shift, ['location' => 'default:Loading area 3', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '10:00');
+
+        $message = $this->refusal(fn () => $this->service->place($this->shift, $late, $this->truck, $this->user, '08:00'));
+
+        $this->assertSame('LU-05 Time before the face started: Face 3 — Loading area 3 — Coal only started at 10:00. Record the placement at 10:00 or later.', $message);
+        $this->assertSame(0, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck->id)->count());
+        $this->service->place($this->shift, $late, $this->truck, $this->user, '10:00');
+        $this->assertSame(1, LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->truck->id)->count());
+    }
 }

@@ -105,7 +105,7 @@ class LineupServiceTest extends TestCase
 
     public function test_placing_moving_and_releasing_machines_on_a_timed_shift(): void
     {
-        $face1 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'cut' => 'c1', 'blocks' => ['b2', 'b1'], 'loader_ids' => [$this->loader->id]], $this->user);
+        $face1 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Overburden', 'cut' => 'c1', 'blocks' => ['b2', 'b1'], 'loader_ids' => [$this->loader->id]], $this->user, '06:00');
         $this->assertSame('Face 1 — Loading area 1 — Overburden · C1 / B2 B1', $face1->label());
         $this->assertSame('LOADER', LineupAllocation::withoutGlobalScopes()->where('equipment_id', $this->loader->id)->firstOrFail()->role);
 
@@ -113,13 +113,13 @@ class LineupServiceTest extends TestCase
         $this->assertSame('HAUL', $a->role);
         $this->assertSame('2026-10-15 10:20:00', $a->from_at->toDateTimeString());
 
-        $face2 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'AREA', 'activity' => 'Dozing'], $this->user);
+        $face2 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'AREA', 'activity' => 'Dozing'], $this->user, '06:00');
         $this->assertStringContainsString('LU-03', $this->refusal(fn () => $this->service->place($this->shift, $face2, $this->truck2, $this->user, null, true)), 'a truck never goes to a work area');
 
         $support = $this->service->place($this->shift, $face2, $this->dozer, $this->user);
         $this->assertSame('SUPPORT', $support->role);
 
-        $face3 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face3 = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '06:00');
         $message = $this->refusal(fn () => $this->service->place($this->shift, $face3, $this->truck1, $this->user));
         $this->assertStringContainsString('LU-01', $message);
         $this->assertStringContainsString('Face 1', $message);
@@ -163,7 +163,7 @@ class LineupServiceTest extends TestCase
     public function test_a_machine_dot_mines_reports_stopped_is_down_and_cannot_be_placed(): void
     {
         EquipmentStatusEvent::create(['equipment_id' => $this->truck2->id, 'field' => 'mines_status', 'from_value' => 'active', 'to_value' => 'maintenance', 'observed_at' => '2026-10-15 09:00:00', 'source' => 'sync']);
-        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '06:00');
 
         $message = $this->refusal(fn () => $this->service->place($this->shift, $face, $this->truck2, $this->user));
         $this->assertStringContainsString('LU-02', $message);
@@ -178,7 +178,7 @@ class LineupServiceTest extends TestCase
     {
         $standbyReason = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'NO_OPERATOR')->firstOrFail();
         $breakdown = DowntimeReason::where('control_room_id', $this->room->id)->where('category', 'BREAKDOWN')->firstOrFail();
-        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user);
+        $face = $this->service->addFace($this->shift, ['location' => 'default:Loading area 1', 'kind' => 'LOADING', 'material' => 'Coal'], $this->user, '06:00');
         $this->service->place($this->shift, $face, $this->truck1, $this->user, '10:00');
 
         $this->assertStringContainsString('LU-05', $this->refusal(fn () => $this->service->setStandby($this->shift, $this->truck1, $breakdown, $this->user)), 'breakdowns are derived, not typed');

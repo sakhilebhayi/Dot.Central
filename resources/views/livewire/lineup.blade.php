@@ -28,7 +28,7 @@
             @if(($fix['move'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="place({{ $fix['move'] }}, true, {{ $fix['face'] }})">Move here</button></div>
             @elseif(($fix['face_move'] ?? false) === true)
-                <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="saveFace(true)">Move the loading unit here</button></div>
+                <div style="margin-top:0.5rem;"><button type="button" id="face-move" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="saveFace(true)" aria-label="{{ $fix['label'] ?? 'Move the loading unit here' }}">Move the loading unit here</button></div>
             @elseif(($fix['operator'] ?? null) !== null)
                 <div style="margin-top:0.5rem;"><button type="button" class="dot-btn dot-btn-primary dot-btn-sm" wire:click="assignOperator({{ $fix['unit'] }}, '{{ $fix['operator'] }}', true)">Move operator to this machine</button></div>
             @endif
@@ -53,7 +53,7 @@
         @php($cName = $correcting->equipment?->name ?? 'The machine')
         <form wire:submit="saveCorrection" wire:keydown.escape="cancelCorrection" class="dot-panel" role="dialog" aria-labelledby="corr-title" aria-describedby="corr-help" style="margin-bottom:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0.75rem;">
             <h2 id="corr-title" class="dot-panel__title" style="grid-column:1/-1;">{{ $arrival ? 'When did '.$cName.' arrive on '.$correcting->face?->label().'?' : 'When did '.$cName.' leave '.$correcting->face?->label().'?' }}</h2>
-            <p id="corr-help" class="dot-readout__context" style="grid-column:1/-1;margin:0;">Recorded {{ Format::stamp($arrival ? $correcting->from_at : $correcting->to_at, $timezone) }}. A move is one moment: {{ count($movesWith) > 1 ? implode(' and ', $movesWith).' are corrected with it.' : 'the face it '.($arrival ? 'came from' : 'went to').' is corrected with it.' }} Times are the control room's clock ({{ $timezone }}).</p>
+            <p id="corr-help" class="dot-readout__context" style="grid-column:1/-1;margin:0;">Recorded {{ Format::stamp($arrival ? $correcting->from_at : $correcting->to_at, $timezone) }}. A move is one moment: {{ count($movesWith['other']) + count($movesWith['same']) > 1 || ($movesWith['other'] === [] && $movesWith['same'] !== []) ? implode(' and ', array_merge($movesWith['other'], $movesWith['same'])).(count($movesWith['other']) + count($movesWith['same']) > 1 ? ' are' : ' is').' corrected with it.' : 'the face it '.($arrival ? 'came from' : 'went to').' is corrected with it.' }} Times are the control room's clock ({{ $timezone }}).</p>
             <div id="corr-alert" role="alert" style="grid-column:1/-1;">
                 @if($refusal)
                     <div class="dot-msg dot-msg--critical"><div class="dot-msg__title">Refused</div><div style="font-size:var(--t-sm);margin-top:0.3rem;">{{ $refusal }}</div></div>
@@ -116,7 +116,7 @@
                             <div style="font-size:var(--t-xs);color:var(--text-quiet);margin-top:0.2rem;">{{ $face->kind === 'AREA' ? 'Work area' : 'Loading face' }} · {{ $loaders->isNotEmpty() ? $loaders->map(fn ($a) => $poolByUnit[$a->equipment_id]['equipment']->name ?? '?')->implode(' + ') : ($face->kind === 'AREA' ? 'no loading unit needed' : 'no loading unit') }}@if($face->kind === 'LOADING') · {{ $trucks->count() }} truck(s)@endif@if(($linked[$face->id] ?? '') !== '') · same loading unit as {{ $linked[$face->id] }}@endif{{ $target === $face->id ? ' · machines you click go here' : '' }}</div>
                         </div>
                         @if($editable)
-                            <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;" wire:click.stop>
+                            <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;" x-on:click.stop>
                                 <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="openFaceForm({{ $face->id }})">Edit</button>
                                 <input wire:model="closeReason.{{ $face->id }}" class="dot-input" placeholder="Why close?" style="width:9rem;" maxlength="255" aria-label="Reason for closing {{ $face->label() }}" />
                                 <button type="button" class="dot-btn dot-btn-ghost dot-btn-sm" wire:click="closeFace({{ $face->id }})">Close face</button>
