@@ -28,7 +28,7 @@ class EcosystemAuthTest extends TestCase
         $this->assertSame(0, $user->tokens()->count(), 'the handoff token is consumed');
 
         auth()->logout();
-        $this->get('/auth/ecosystem?token='.$plain)->assertForbidden();
+        $this->get('/auth/ecosystem?token='.$plain)->assertStatus(303)->assertRedirect('/login');
         $this->assertGuest();
     }
 
@@ -38,10 +38,10 @@ class EcosystemAuthTest extends TestCase
         $expired = $user->createToken('hub-handoff', ['ecosystem:read'], now()->subMinute())->plainTextToken;
         $wrongAbility = $user->createToken('api', ['read'], now()->addMinutes(5))->plainTextToken;
 
-        $this->get('/auth/ecosystem?token='.$expired)->assertForbidden();
-        $this->get('/auth/ecosystem?token='.$wrongAbility)->assertForbidden();
-        $this->get('/auth/ecosystem')->assertForbidden();
-        $this->get('/auth/ecosystem?token=not-a-token')->assertForbidden();
+        $this->get('/auth/ecosystem?token='.$expired)->assertStatus(303)->assertRedirect('/login');
+        $this->get('/auth/ecosystem?token='.$wrongAbility)->assertStatus(303)->assertRedirect('/login');
+        $this->get('/auth/ecosystem')->assertStatus(303)->assertRedirect('/login');
+        $this->get('/auth/ecosystem?token=not-a-token')->assertStatus(303)->assertRedirect('/login');
         $this->assertGuest();
         $this->assertSame(2, $user->tokens()->count(), 'refused tokens are left alone');
     }
