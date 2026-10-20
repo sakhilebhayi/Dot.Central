@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Ecosystem\ProvisionUserFromInfoDot;
+use App\Actions\Ecosystem\SyncTeamsFromInfoDot;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\InfoDot\IdentityClient;
+use App\Services\InfoDot\InfoDotUnavailable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,12 +15,13 @@ use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 /**
- * Ecosystem SSO handoff: the InfoDot hub issues a short-lived Sanctum
- * token with the `ecosystem:read` ability and sends the browser here.
- * The token is consumed exactly once and must not be expired. The hub
- * puts it in the query string, so the response is marked no-store and
- * the session is regenerated before the redirect strips it from the
- * address bar.
+ * Ecosystem SSO handoff: InfoDot (the identity hub) sends the browser here with a
+ * short-lived handoff token. This app has its own database, so the token is sent to
+ * InfoDot's redeem endpoint, which answers with the person's identity and companies
+ * (see App\Services\InfoDot\IdentityClient). Only when that client is not configured
+ * does the old shared-database lookup (a Sanctum token with the `ecosystem:read`
+ * ability) apply. Either way the token is consumed exactly once, and the response is
+ * marked no-store with the session regenerated.
  */
 class EcosystemAuthController extends Controller
 {
@@ -78,28 +83,91 @@ class EcosystemAuthController extends Controller
             : 'We could not sign you in through InfoDot. Please open this app again from InfoDot.');
     }
 
-    public function redeem(Request $request): RedirectResponse
+    public function redeem(Request $request, IdentityClient $infoDot, ProvisionUserFromInfoDot $provision, SyncTeamsFromInfoDot $syncTeams): RedirectResponse
     {
-        $plain = $request->input('token');
-        $accessToken = is_string($plain) && $plain !== '' ? PersonalAccessToken::findToken($plain) : null;
+        $token = $request->input('token');
 
-        abort_if(
+        abort_unless(is_string($token) && $token !== '', 403);
+
+        $user = $this->userFromLocalToken($token);
+
+        // Production gives each Dot app its own database, so InfoDot's token is not
+        // in ours: ask InfoDot to prove it.
+        if (! $user && $infoDot->enabled()) {
+            try {
+                $identity = $infoDot->redeem($token);
+            } catch (InfoDotUnavailable) {
+                abort(503, 'Sign-in through InfoDot is unavailable right now. Please try again in a moment.');
+            }
+
+            if ($identity) {
+                $user = $provision($identity);
+
+                if ($user) {
+                    $syncTeams($user, $identity);
+                }
+            }
+        }
+
+        abort_if(! $user, 403);
+
+        // Auth::login() also regenerates the session id (no fixation).
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        // The hub may still put the token in the query string (old links), so the response is never cached
+        // and never leaks the address as a Referer.
+        return ($this->safeRedirect($request->input('redirect')) ?? redirect()->route('dashboard'))
+            ->header('Cache-Control', 'no-store, private')
+            ->header('Referrer-Policy', 'no-referrer');
+    }
+
+    /**
+     * A deep link may name an in-app path to open. Only a plain absolute path on this
+     * site is honoured, so this can never be turned into an open redirect: it must start
+     * with a single "/", and may not contain "//", a backslash, "..", a control character
+     * or a scheme, either as written or once percent-decoded.
+     */
+    private function safeRedirect(mixed $redirect): ?RedirectResponse
+    {
+        if (! is_string($redirect) || $redirect === '' || strlen($redirect) > 2048) {
+            return null;
+        }
+
+        foreach ([$redirect, rawurldecode($redirect)] as $candidate) {
+            if (
+                ! str_starts_with($candidate, '/')
+                || str_starts_with($candidate, '//')
+                || str_contains($candidate, '\\')
+                || str_contains($candidate, '..')
+                || str_contains($candidate, '//')
+                || preg_match('/[\x00-\x20\x7f]/', $candidate)
+            ) {
+                return null;
+            }
+        }
+
+        return redirect($redirect);
+    }
+
+    /** A token minted in a database we share (the original design): found, checked, spent. */
+    private function userFromLocalToken(string $token): ?User
+    {
+        $accessToken = PersonalAccessToken::findToken($token);
+
+        if (
             ! $accessToken
             || ! $accessToken->can('ecosystem:read')
             || ($accessToken->expires_at && $accessToken->expires_at->isPast())
-            || ! $accessToken->tokenable instanceof User,
-            403
-        );
+            || ! $accessToken->tokenable instanceof User
+        ) {
+            return null;
+        }
 
         /** @var User $user */
         $user = $accessToken->tokenable;
         $accessToken->delete();
 
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard')
-            ->header('Cache-Control', 'no-store, private')
-            ->header('Referrer-Policy', 'no-referrer');
+        return $user;
     }
 }
