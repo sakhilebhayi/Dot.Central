@@ -38,7 +38,7 @@ use Illuminate\Support\Str;
 use Laravel\Jetstream\Jetstream;
 
 Route::match(['get', 'post'], '/auth/ecosystem', [EcosystemAuthController::class, 'handle'])
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class, \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])->name('ecosystem.auth');
+    ->withoutMiddleware(['Illuminate\Foundation\Http\Middleware\VerifyCsrfToken', 'Illuminate\Foundation\Http\Middleware\ValidateCsrfToken'])->name('ecosystem.auth');
 
 // Signed deliveries from Dot.Mines (no session; verified by HMAC, see MinesWebhookController).
 Route::post('/webhooks/mines/{connection}', MinesWebhookController::class)->whereNumber('connection')->name('webhooks.mines');
