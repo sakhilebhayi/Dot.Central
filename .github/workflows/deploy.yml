@@ -71,6 +71,23 @@ jobs:
           $PHP artisan down --retry=30 || true
 
           git reset --hard origin/main
+
+          # Document root already moved to <app>/public (the standard layout, InfoDot S-2e)? Then the tracked root
+          # .htaccess (Require all denied, written for the layout where the app folder sits INSIDE the web root) would sit
+          # in the PARENT of the document root and refuse every request: LiteSpeed reads .htaccess files of parent
+          # folders. `git reset --hard` restores it on every deploy, so it is moved aside here, while the site is in
+          # maintenance mode. In the old layout nothing changes.
+          APP_REAL="$(pwd -P)"
+          CURRENT_DOCROOT="$(uapi --output=json DomainInfo single_domain_data domain=central.infodot.co.za 2>/dev/null | sed -n 's/.*"documentroot" *: *"\([^"]*\)".*/\1/p' | head -1 || true)"
+          if [ "$CURRENT_DOCROOT" = "$APP_REAL/public" ] || [ -f .docroot-is-public ]; then
+            echo "== document root is $APP_REAL/public (standard layout)"
+            if [ -f .htaccess ]; then
+              mv -f .htaccess .htaccess.docroot-is-public-disabled && echo "== app-folder .htaccess: moved aside (the document root is public/)" || echo "::warning::could not move .htaccess aside"
+            fi
+          else
+            echo "== document root is the app folder's parent (old layout): app-folder .htaccess stays"
+          fi
+
           composer install --no-interaction --optimize-autoloader --no-dev
 
           $PHP artisan migrate --force
