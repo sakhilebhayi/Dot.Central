@@ -98,7 +98,7 @@ entry — `->hourly()->withoutOverlapping()`.
 | `resolved_by` | nullable FK → `users`, `nullOnDelete` | |
 | timestamps | | |
 
-Uses `HasControlRoomTeamScope` — **unlike** Dot.Billing's cross-tenant
+Uses `HasControlRoomTeamScope` — **unlike** another Dot platform's cross-tenant
 `DunningCase` (where the reviewer wasn't a team member and the trait would
 have wrongly blocked them), the reviewer here *is* a normal team member
 reviewing their own team's control room, so the existing team-scoping
@@ -115,7 +115,7 @@ own established convention — every other domain model here
 (`ControlRoomFactory`, `AlertFactory`, `DispatchDecisionFactory`,
 `OperatorSessionFactory`) has one, and this repo's tests build fixtures via
 `Model::factory()->for(...)->create()`, not `Model::create()` — a different
-convention from Auction/Billing, followed here rather than assumed.
+convention from Auction, followed here rather than assumed.
 
 ### 3. `app/Http/Controllers/StaleSessionProposalController.php`
 

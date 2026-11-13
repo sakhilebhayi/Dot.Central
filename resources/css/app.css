@@ -511,6 +511,45 @@
 .dot-page-head__lede { font-size: var(--t-sm); color: var(--text-quiet); margin: 0; max-width: 70ch; line-height: 1.6; }
 .dot-stack { display: flex; flex-direction: column; gap: 1.25rem; }
 
+/* Arrival band on the Operational Overview: two bays sharing one edge. The left bay says who,
+   where and how the room stands, in words; the right bay holds the ONE next step. No motion:
+   the page is read at the start of a shift and must be complete on first paint. */
+.dot-arrival { grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem); margin-bottom: 1.25rem; }
+.dot-arrival__main { display: flex; align-items: center; gap: 1.25rem; padding: 1.25rem 1.5rem; }
+.dot-arrival__logo { width: 8.5rem; height: auto; flex-shrink: 0; }
+.dot-arrival__logo--night { display: none; }
+:root.dark .dot-arrival__logo--night { display: block; }
+:root.dark .dot-arrival__logo--day { display: none; }
+.dot-arrival__text { min-width: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.dot-arrival__text .dot-page-head__title { margin: 0; overflow-wrap: break-word; }
+.dot-arrival__welcome { margin: 0; font-size: var(--t-title); color: var(--text); line-height: 1.4; }
+.dot-arrival__state { margin: 0; display: flex; align-items: baseline; gap: 0.55rem; font-size: var(--t-body); color: var(--text-muted); line-height: 1.5; max-width: 70ch; }
+.dot-arrival__lamp { width: 9px; height: 9px; border-radius: 50%; background: var(--lamp, var(--text-faint)); flex-shrink: 0; transform: translateY(-1px); }
+.dot-arrival__state--ok { --lamp: var(--ok); }
+.dot-arrival__state--warn { --lamp: var(--warn); }
+.dot-arrival__state--bad { --lamp: var(--bad); }
+.dot-arrival__state--idle { --lamp: var(--text-faint); }
+.dot-arrival__next { display: flex; flex-direction: column; justify-content: center; gap: 0.6rem; padding: 1.25rem 1.5rem; background: var(--panel-raised); }
+.dot-arrival__go { justify-content: center; min-height: 3rem; padding: 0.7rem 1.1rem; font-family: var(--font-display); font-size: var(--t-title); letter-spacing: 0.01em; white-space: normal; text-align: center; }
+.dot-arrival__why { margin: 0; font-size: var(--t-sm); color: var(--text-quiet); line-height: 1.5; }
+.dot-arrival__more { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.dot-arrival__more .nav-count { margin-left: 0.4rem; }
+.dot-arrival__room { width: auto; max-width: 100%; }
+.dot-arrival__back { display: flex; gap: 1rem; padding-top: 0.6rem; border-top: 1px solid var(--rule); font-size: var(--t-sm); }
+.dot-arrival__back a { color: var(--text-quiet); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule-strong); }
+.dot-arrival__back a:hover { color: var(--text); text-decoration-color: var(--signal); }
+@media (max-width: 1100px) {
+    .dot-arrival { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+    .dot-arrival__main { flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 1rem; }
+    .dot-arrival__logo { width: 6.5rem; margin: -0.6rem 0 -0.4rem -0.7rem; }
+    .dot-arrival__next { padding: 1rem; }
+    .dot-arrival__more .dot-btn, .dot-arrival__room { min-height: 44px; }
+    .dot-arrival__back a { display: inline-flex; align-items: center; min-height: 44px; }
+    .dot-arrival__back { padding-top: 0; }
+}
+
 /* Validation / attention message: title · code · outcome, message, fix. */
 .dot-msg { padding: 0.75rem 0.9rem; border: 1px solid var(--rule); border-radius: var(--r); background: var(--panel-raised); margin: 0.5rem 0; }
 .dot-msg__title { font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }

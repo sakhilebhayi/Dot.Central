@@ -1,27 +1,45 @@
 @php use App\Support\Format; use App\Support\EquipmentState; @endphp
 <div class="dot-page" wire:poll.30s>
-    @if($room === null)
-        <div class="dot-page-head"><div><h1 class="dot-page-head__title">Operational Overview</h1><p class="dot-page-head__lede">You are not assigned to a control room yet.</p></div></div>
-    @else
-    <div class="dot-page-head">
-        <div>
-            <h1 class="dot-page-head__title">Operational Overview</h1>
-            <p class="dot-page-head__lede">{{ $room->name }} · {{ $shift ? $shift->label().' · '.$shift->status.($isCurrent ? '' : ' (last completed shift)') : 'no shift yet' }} · Dot.Mines {{ $connection ? 'synced '.Format::age($connection->last_success_at) : 'not connected' }}@if($lineup) · line-up <span class="dot-badge dot-badge--{{ $lineup->isConfirmed() ? 'ok' : 'warn' }}">{{ $lineup->exists ? $lineup->status : 'NOT STARTED' }}</span> {{ $lineupSummary['placed'] }} placed · {{ $lineupSummary['free'] }} free · {{ $lineupSummary['down'] }} down @endif</p>
+    {{-- Arrival: the real logo, who and where, the state of the room in words, and ONE next step
+         (App\Support\OverviewArrival decides it from the shift). Everything else here is secondary. --}}
+    <section class="dot-panels dot-arrival" aria-labelledby="overview-title">
+        <div class="dot-panel dot-arrival__main">
+            <img src="{{ asset('images/logo-light.png') }}" alt="Dot.Central" width="1181" height="886" class="dot-arrival__logo dot-arrival__logo--night" />
+            <img src="{{ asset('images/logo.png') }}" alt="Dot.Central" width="1181" height="886" class="dot-arrival__logo dot-arrival__logo--day" />
+            <div class="dot-arrival__text">
+                <h1 class="dot-page-head__title" id="overview-title">Operational Overview</h1>
+                <p class="dot-arrival__welcome" data-arrival-welcome>{{ $arrival['welcome'] }} {{ $arrival['place'] }}</p>
+                <p class="dot-arrival__state dot-arrival__state--{{ $arrival['level'] }}" data-arrival-state><span class="dot-arrival__lamp" aria-hidden="true"></span><span>{{ $arrival['state'] }}</span></p>
+                @if($room !== null)
+                <p class="dot-page-head__lede">Dot.Mines {{ $connection ? 'synced '.Format::age($connection->last_success_at) : 'not connected' }}@if($lineup) · line-up <span class="dot-badge dot-badge--{{ $lineup->isConfirmed() ? 'ok' : 'warn' }}">{{ $lineup->exists ? $lineup->status : 'NOT STARTED' }}</span> {{ $lineupSummary['placed'] }} placed · {{ $lineupSummary['free'] }} free · {{ $lineupSummary['down'] }} down @endif</p>
+                @else
+                <p class="dot-page-head__lede">Dot.Central is the control room for mining shifts: which machines are working, what has stopped, and what needs a decision.</p>
+                @endif
+            </div>
         </div>
-        <div style="display:flex;gap:0.5rem;align-items:center;">
-            @if($rooms->count() > 1)
-            <select wire:model.live="roomId" class="dot-input" style="width:auto;" aria-label="Control room">@foreach($rooms as $r)<option value="{{ $r->id }}">{{ $r->name }}</option>@endforeach</select>
+        <div class="dot-panel dot-arrival__next">
+            <a href="{{ $arrival['action']['url'] }}" class="dot-btn dot-btn-primary dot-arrival__go" data-primary-action="{{ $arrival['action']['key'] }}">{{ $arrival['action']['label'] }}</a>
+            <p class="dot-arrival__why">{{ $arrival['action']['why'] }}</p>
+            @if($room !== null)
+            <div class="dot-arrival__more">
+                @if($rooms->count() > 1)
+                <select wire:model.live="roomId" class="dot-input dot-arrival__room" aria-label="Control room">@foreach($rooms as $r)<option value="{{ $r->id }}">{{ $r->name }}</option>@endforeach</select>
+                @endif
+                @if($shift && $isCurrent)
+                    @if($arrival['action']['key'] !== 'lineup')<a href="{{ route('shifts.lineup', $shift) }}" class="dot-btn dot-btn-ghost">Line-up</a>@endif
+                    @if($arrival['action']['key'] !== 'shift')<a href="{{ route('shifts.show', $shift) }}" class="dot-btn dot-btn-ghost">Shift operations</a>@endif
+                @endif
+                <a href="{{ route('exceptions.index', ['room' => $room->id]) }}" class="dot-btn dot-btn-ghost">Exceptions @if($exceptions->count())<span class="nav-count nav-count--bad">{{ $exceptions->count() }}</span>@endif</a>
+            </div>
             @endif
-            @if($shift && $isCurrent)
-                <a href="{{ route('shifts.lineup', $shift) }}" class="dot-btn dot-btn-ghost">Line-up</a>
-                <a href="{{ route('shifts.show', $shift) }}" class="dot-btn dot-btn-ghost">Shift operations</a>
-            @else
-                @can('open', [\App\Models\Shift::class, $room])<a href="{{ route('control-rooms.shifts.start', $room) }}" class="dot-btn dot-btn-primary">Start shift</a>@endcan
-            @endif
-            <a href="{{ route('exceptions.index', ['room' => $room->id]) }}" class="dot-btn dot-btn-primary">Exceptions @if($exceptions->count())<span class="nav-count nav-count--bad" style="margin-left:0.4rem;">{{ $exceptions->count() }}</span>@endif</a>
+            <nav class="dot-arrival__back" aria-label="Dot ecosystem">
+                <a href="{{ $infodotUrl }}/home">InfoDot</a>
+                <a href="{{ $infodotUrl }}/platforms">Platforms</a>
+            </nav>
         </div>
-    </div>
+    </section>
 
+    @if($room !== null)
     @if($shift)
         @php($controlRoom = $room)
         @include('shifts._strip')
