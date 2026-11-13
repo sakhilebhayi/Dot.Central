@@ -562,6 +562,10 @@ select.dot-select option, select.dot-input option { background: var(--panel); co
 .jet-input:focus { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-quiet); outline: none; }
 .jet-input::placeholder { color: var(--text-faint); }
 .jet-input:disabled { opacity: .5; }
+/* A value this app shows but does not own (the email comes from InfoDot): readable, selectable, plainly not editable. */
+.jet-input[readonly] { background: transparent; border-style: dashed; cursor: default; }
+.jet-input[readonly]:hover { border-color: var(--rule); }
+.jet-input[readonly]:focus { border-color: var(--rule-strong); box-shadow: none; }
 .jet-label { display: block; font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-quiet); margin-bottom: 0.3rem; }
 .jet-errors { border: 1px solid rgba(239, 100, 97, 0.35); background: var(--bad-quiet); border-radius: var(--r); padding: 0.85rem 1rem; }
 .jet-errors__title { font-weight: 600; color: var(--bad); }
