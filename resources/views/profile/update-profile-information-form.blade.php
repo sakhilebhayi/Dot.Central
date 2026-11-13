@@ -4,7 +4,7 @@
     </x-slot>
 
     <x-slot name="description">
-        {{ __('Update your account\'s profile information and email address.') }}
+        {{ __('Update your name and photo.') }}
     </x-slot>
 
     <x-slot name="form">
@@ -62,7 +62,11 @@
         <!-- Email -->
         <div class="col-span-6 sm:col-span-4">
             <x-label for="email" value="{{ __('Email') }}" />
-            <x-input id="email" type="email" class="mt-1 block w-full" wire:model="state.email" required autocomplete="username" />
+            <x-input id="email" type="email" class="mt-1 block w-full" wire:model="state.email" readonly aria-describedby="email-source" autocomplete="username" />
+            <p id="email-source" class="text-sm mt-2 text-[color:var(--text-muted)]">
+                Your email comes from your InfoDot account. To change it, change it at
+                <a class="underline" href="{{ rtrim((string) config('ecosystem.platforms.infodot.url', 'https://infodot.co.za'), '/') }}/user/profile/edit">InfoDot</a>, then sign in again.
+            </p>
             <x-input-error for="email" class="mt-2" />
 
             @if (Laravel\Fortify\Features::enabled(Laravel\Fortify\Features::emailVerification()) && ! $this->user->hasVerifiedEmail())
