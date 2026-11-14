@@ -25,6 +25,7 @@ use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
 use App\Http\Middleware\AuthenticateGuardian;
+use App\Http\Middleware\EnsureCompanyEntitled;
 use App\Livewire\FleetBoard;
 use App\Livewire\Lineup;
 use App\Livewire\Overview;
@@ -76,6 +77,9 @@ Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
     'verified',
+    // R-50: the company being worked in must still hold Dot.Central. Mines webhook, Guardian report, health and
+    // scheduler probes, sign-in and the public pages are all outside this group on purpose.
+    EnsureCompanyEntitled::class,
 ])->group(function () {
     Route::get('/dashboard', Overview::class)->name('dashboard');
 
