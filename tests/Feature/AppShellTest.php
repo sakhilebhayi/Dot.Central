@@ -56,7 +56,7 @@ class AppShellTest extends TestCase
 
         $this->assertStringContainsString('statebar--bad', $html);
         $this->assertStringContainsString('NEEDS ATTENTION', $html);
-        $this->assertStringContainsString('1 critical alert open, 1 warning.', $html);
+        $this->assertStringContainsString('1 critical, 2 open, 1 control room.', $html);
     }
 
     public function test_state_bar_is_quiet_when_nothing_is_open(): void

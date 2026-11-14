@@ -141,11 +141,13 @@
         @endauth
     </aside>
 
-    <x-shell-state-bar />
+    <x-shell-state-bar :title="request()->routeIs('dashboard') ? 'Overview' : null" />
 
     <div class="content-wrap">
         <main id="main">{{ $slot }}</main>
     </div>
+
+    <x-shell-foot :bar="$navCounts" />
 
     @stack('modals')
     <script src="{{ asset('dot-ui/js/dot-switcher.js') }}" defer></script>

@@ -14,6 +14,7 @@
  */
 @import 'tailwindcss' source(none);
 @import './tailwind-v3-palette.css';
+@import './overview.css';
 
 @source '../views/**/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -479,9 +480,6 @@
 }
 /* On a phone the shift and Dot.Mines pills (3rd and 4th bay) have no room: they were already cut off past the edge, so
    they are dropped here to keep the state sentence, the switcher and the tools on screen. Both are on the overview. */
-@media (max-width: 520px) {
-    .statebar > .statebar__bay:nth-child(3), .statebar > .statebar__bay:nth-child(4) { display: none; }
-}
 .statebar__clock { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .topbar-btn { width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--rule); background: transparent; display: inline-flex; align-items: center; justify-content: center; color: var(--text-quiet); cursor: pointer; transition: background .13s, color .13s; text-decoration: none; flex-shrink: 0; }
 .topbar-btn:hover { background: var(--panel-raised); color: var(--text); }

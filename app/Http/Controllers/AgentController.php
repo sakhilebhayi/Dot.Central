@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Agent;
 use App\Models\AgentSkill;
+use App\Models\AgentUsageLog;
+use App\Models\Conversation;
+use App\Models\Message;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -16,6 +19,25 @@ use Illuminate\View\View;
  */
 class AgentController extends Controller
 {
+    /**
+     * The Agents landing. Agent is team-scoped (HasTeamScope), AgentSkill is shared (no owner column), and
+     * Conversation, Message and AgentUsageLog carry the per-user scopes, so those three figures are the signed-in
+     * person's own and the page says so.
+     */
+    public function hub(): View
+    {
+        return view('dashboard', [
+            'totalAgents' => Agent::count(),
+            'activeAgents' => Agent::where('is_active', true)->count(),
+            'totalConversations' => Conversation::count(),
+            'totalMessages' => Message::count(),
+            'totalTokens' => AgentUsageLog::selectRaw('COALESCE(SUM(tokens_input + tokens_output), 0) as total')->value('total') ?? 0,
+            'totalSkills' => AgentSkill::count(),
+            'agents' => Agent::withCount('conversations')->latest()->get(),
+            'skills' => AgentSkill::withCount('agents')->get(),
+        ]);
+    }
+
     public function index(Request $request): View
     {
         $agents = $request->user()->currentTeam
