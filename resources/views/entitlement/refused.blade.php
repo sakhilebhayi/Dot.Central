@@ -4,7 +4,7 @@
 @extends('errors._ecosystem-layout', ['code' => 403])
 
 @section('icon')
-    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f2a70b" stroke-width="1.75"><rect x="5" y="11" width="14" height="9" rx="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11V7a4 4 0 118 0v4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="5" y="11" width="14" height="9" rx="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11V7a4 4 0 118 0v4" stroke-linecap="round" stroke-linejoin="round"/></svg>
 @endsection
 
 @section('code_label', $stamp)
@@ -21,7 +21,7 @@
 @endsection
 
 @section('actions')
-    <a href="{{ $platformsUrl }}" class="press" data-primary-action style="padding: 12px 24px; background: var(--signal); border: 1px solid var(--signal); color: #15120a; font-size: 15px;">Open Platforms in InfoDot</a>
+    <a href="{{ $platformsUrl }}" class="press" data-primary-action style="padding: 12px 24px; background: var(--signal); border: 1px solid var(--signal); color: var(--on-signal); font-size: 15px;">Open Platforms in InfoDot</a>
 @endsection
 
 @section('after')

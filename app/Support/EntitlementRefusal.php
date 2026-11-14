@@ -39,17 +39,17 @@ class EntitlementRefusal
             'suspended' => [
                 'stamp' => 'SUSPENDED',
                 'title' => "Dot.Central is suspended for {$for}",
-                'body' => 'Nobody in the company can work in it until the suspension is lifted. Control rooms, shifts and records are kept as they are. Platforms in InfoDot shows what is needed.',
+                'body' => 'Nobody in the company can work in it until the suspension is lifted. Nothing has been lost: control rooms, shifts and records are exactly as they were. Platforms in InfoDot shows what is needed.',
             ],
             'payment_required' => [
                 'stamp' => 'PAYMENT NEEDED',
                 'title' => "Dot.Central needs a payment for {$for}",
-                'body' => 'It opens again once the payment is settled. Control rooms, shifts and records are kept as they are. An owner or administrator can settle it from Platforms in InfoDot.',
+                'body' => 'It opens again once the payment is settled. Nothing has been lost: control rooms, shifts and records are exactly as they were. An owner or administrator can settle it from Platforms in InfoDot.',
             ],
             'subscription_expired', 'trial_ended', 'expired', 'cancelled' => [
                 'stamp' => 'ENDED',
                 'title' => "Dot.Central has ended for {$for}",
-                'body' => 'The company no longer holds this platform. Control rooms, shifts and records are kept as they are. An owner or administrator can take it up again from Platforms in InfoDot.',
+                'body' => 'The company no longer holds this platform. Nothing has been lost: control rooms, shifts and records are exactly as they were. An owner or administrator can take it up again from Platforms in InfoDot.',
             ],
             'activation_pending' => [
                 'stamp' => 'NOT YET ON',
@@ -74,7 +74,7 @@ class EntitlementRefusal
             default => [
                 'stamp' => 'NOT SWITCHED ON',
                 'title' => "Dot.Central is not switched on for {$for}",
-                'body' => 'An owner or administrator can switch it on from Platforms in InfoDot. Everything already recorded is kept as it is.',
+                'body' => 'An owner or administrator can switch it on from Platforms in InfoDot. Nothing has been lost: everything already recorded is exactly as it was.',
             ],
         };
     }
