@@ -110,8 +110,13 @@ function arrive() {
 
 document.addEventListener('DOMContentLoaded', arrive);
 document.addEventListener('livewire:init', () => {
-    window.Livewire.hook('commit', ({ succeed }) => {
-        // Remember focus and typed text, let Livewire morph, then put the page back exactly as it was.
+    window.Livewire.hook('commit', ({ component, succeed }) => {
+        // Remember focus and typed text, let Livewire morph, then put the page back exactly as it was. Only for the component that
+        // renders this page: the header search, the bell and the switcher are Livewire components too (R-52), and a commit of theirs
+        // must not pull focus back into a box the person has just left with Escape.
+        const page = root();
+        const scope = component && component.el ? component.el : null;
+        if (!page || !scope || !(scope === page || scope.contains(page) || page.contains(scope))) return;
         const active = document.activeElement;
         const key = active && active.id ? active.id : null;
         const sel = active && active.selectionStart !== undefined ? [active.selectionStart, active.selectionEnd] : null;
