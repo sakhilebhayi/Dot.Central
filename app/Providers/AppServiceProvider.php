@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\EnsureCompanyEntitled;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Rules\ExceptionShiftBlockers;
@@ -9,6 +10,7 @@ use App\Services\Shifts\ShiftBlockers;
 use App\Support\Role;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,6 +27,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // R-50: Livewire updates from a page in the signed-in area carry that page's entitlement check with them.
+        Livewire::addPersistentMiddleware([EnsureCompanyEntitled::class]);
+
         // Integration health is readable by supervisors and above; only
         // administrators act on it (docs/dot-central/07-security-and-permissions.md).
         Gate::define('view-health', function (User $user): bool {

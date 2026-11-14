@@ -10,10 +10,10 @@
 
 ## Global Constraints
 
-- `StaleSessionProposal` uses `HasControlRoomTeamScope` (unlike Dot.Billing's `DunningCase`, which deliberately didn't) — confirmed by reading `app/Models/Concerns/HasControlRoomTeamScope.php` directly: its condition is `if (Auth::check() && Auth::user()->currentTeam)`, the same non-fail-closed shape as Dot.Analytics's `HasTeamScope`, not Dot.Billing's fail-closed one. The reviewer here is a normal team member, so team-scoping is exactly what's wanted.
+- `StaleSessionProposal` uses `HasControlRoomTeamScope` (unlike another Dot platform's cross-tenant model, which deliberately didn't) — confirmed by reading `app/Models/Concerns/HasControlRoomTeamScope.php` directly: its condition is `if (Auth::check() && Auth::user()->currentTeam)`, the same non-fail-closed shape as Dot.Analytics's `HasTeamScope`, not the fail-closed one used elsewhere in the ecosystem. The reviewer here is a normal team member, so team-scoping is exactly what's wanted.
 - `StaleSessionProposalController::end()`/`dismiss()` authorize with `abort_unless($request->user()->belongsToTeam($controlRoom->team), 403)` — identical to `AlertController`/`OperatorSessionController`'s existing bar. Do not invent a stricter role; ending a stale session through this gate is the same action a human already takes manually via `OperatorSessionController::update()`.
 - `Alert` has no `type` column — dedup the Level 1 alert by an exact-match title constant (`STALE_SESSION_ALERT_TITLE`) plus `cleared_at IS NULL`, not a type field that doesn't exist.
-- This repo uses model factories and `Model::factory()->for(...)->create()` in tests (confirmed: `AlertFactory`, `ControlRoomFactory`, `DispatchDecisionFactory`, `OperatorSessionFactory` all exist) — give `StaleSessionProposal` the same, and use it the same way in tests. Do not use `Model::create()` directly (that's Auction/Billing's convention, not this repo's).
+- This repo uses model factories and `Model::factory()->for(...)->create()` in tests (confirmed: `AlertFactory`, `ControlRoomFactory`, `DispatchDecisionFactory`, `OperatorSessionFactory` all exist) — give `StaleSessionProposal` the same, and use it the same way in tests. Do not use `Model::create()` directly (that's Auction's convention, not this repo's).
 - Match `resources/views/control-rooms/show.blade.php`'s existing inline-style card convention exactly (`var(--card-bg)`, `var(--card-border)`, `'Syne'` headings) for any new markup.
 - Per this repo's own `CLAUDE.md` Laravel Boost guidelines ("Verification Scripts" section): do not create verification scripts or use `tinker` when tests cover the functionality and prove it works.
 - Run `vendor/bin/pint --dirty --format agent` after every task before committing.
@@ -241,7 +241,7 @@ docs/superpowers/specs/2026-08-09-stale-session-alert-gate.md.
 
 Uses HasControlRoomTeamScope (verified its condition directly rather
 than assuming from another platform) since the reviewer here is a
-normal team member, unlike Dot.Billing's cross-tenant DunningCase.
+normal team member, unlike another Dot platform's cross-tenant model.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 EOF

@@ -12,6 +12,7 @@ use App\Services\Mines\FreshnessEvaluator;
 use App\Services\Shifts\ShiftDerivation;
 use App\Services\Shifts\ShiftService;
 use App\Support\EquipmentState;
+use App\Support\OverviewArrival;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -35,7 +36,12 @@ class Overview extends Component
         $room = $rooms->firstWhere('id', $this->roomId) ?? $rooms->first();
 
         if ($room === null) {
-            return view('livewire.overview', ['rooms' => $rooms, 'room' => null]);
+            return view('livewire.overview', [
+                'rooms' => $rooms,
+                'room' => null,
+                'arrival' => OverviewArrival::for(auth()->user(), null, null, false, false, ['exceptions' => 0, 'critical' => 0, 'alerts' => 0]),
+                'infodotUrl' => $this->infodotUrl(),
+            ]);
         }
 
         $shift = $shifts->current($room) ?? Shift::withoutGlobalScopes()->where('control_room_id', $room->id)->whereIn('status', ['CLOSED', 'APPROVED'])->orderByDesc('ends_at')->first();
@@ -69,7 +75,15 @@ class Overview extends Component
         $alerts = Alert::withoutGlobalScopes()->where('control_room_id', $room->id)->whereNull('cleared_at')->with(['equipment', 'assignee', 'controlRoom'])
             ->orderByRaw("case severity when 'critical' then 0 when 'warning' then 1 else 2 end")->orderByDesc('triggered_at')->get();
 
+        $shiftLineup = $shift !== null ? $lineup->lineup($shift) : null;
+
         return view('livewire.overview', [
+            'arrival' => OverviewArrival::for(auth()->user(), $room, $shift, $shiftLineup?->isConfirmed() ?? false, $connection !== null, [
+                'exceptions' => $exceptions->count(),
+                'critical' => $exceptions->where('severity', 'CRITICAL')->count(),
+                'alerts' => $alerts->count(),
+            ], $room->timezone()),
+            'infodotUrl' => $this->infodotUrl(),
             'rooms' => $rooms,
             'room' => $room,
             'shift' => $shift,
@@ -83,9 +97,15 @@ class Overview extends Component
             'alerts' => $alerts,
             'assignees' => $team instanceof Team ? $team->allUsers()->sortBy('name')->values() : collect(),
             'connection' => $connection,
-            'lineup' => $shift !== null ? $lineup->lineup($shift) : null,
+            'lineup' => $shiftLineup,
             'lineupSummary' => $shift !== null ? $lineup->summary($shift) : null,
             'timezone' => $room->timezone(),
         ]);
+    }
+
+    /** The way back to InfoDot, from the same registry the rest of the app reads. */
+    private function infodotUrl(): string
+    {
+        return rtrim((string) config('ecosystem.platforms.infodot.url', 'https://infodot.co.za'), '/');
     }
 }
