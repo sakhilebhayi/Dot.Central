@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dot-roboto">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,9 +21,9 @@
             <link rel="icon" href="{{ asset($faviconPath) }}">
         @endif
 
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+        <link rel="preload" href="{{ asset('dot-ui/fonts/roboto/roboto-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
+        <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-roboto.css') }}">
+        <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-type.css') }}">
 
         {{-- No Vite bundle on purpose: an error page must render even when the build is missing. --}}
         <script>try { if (localStorage.getItem('dot-central-theme') === 'light') { document.documentElement.setAttribute('data-theme', 'light'); } } catch (e) {}</script>
@@ -38,9 +38,9 @@
                 --text-quiet: #7f8995;
                 --signal: #f2a70b;
                 --on-signal: #15120a;
-                --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
-                --font-body: 'IBM Plex Sans', system-ui, sans-serif;
-                --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+                --font-display: var(--dot-font-sans);
+                --font-body: var(--dot-font-sans);
+                --font-mono: var(--dot-font-mono);
             }
             /* Day, the same values as the app shell (app.css). The app stores the choice under dot-central-theme. */
             :root[data-theme='light'] {
