@@ -262,4 +262,8 @@ a.ov-u:hover { background: var(--panel-raised); border-color: var(--rule-strong)
     .shellfoot__item { min-height: 44px; }
     .ov-path a { height: auto; min-height: 44px; }
     .ov-seg button { height: 44px; }
+    .ov-u { width: 44px; height: 44px; }
+    .ov-units { gap: 0; }
+    .ov-key .ov-u { width: 14px; height: 14px; }
+    .ov-links a, .ov-kv .ov-link, .ov-figs .ov-link, .ov-sub-head .ov-link, .ov-pane-head .ov-link, .ov-stopped .ov-link { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
 }
