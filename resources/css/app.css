@@ -15,6 +15,8 @@
 @import 'tailwindcss' source(none);
 @import './tailwind-v3-palette.css';
 @import './overview.css';
+/* Roboto and the type scale (dot-ui). Outside any @layer, as the package asks. */
+@import '../../dot-ui/tailwind/tailwind-theme.css';
 
 @source '../views/**/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -60,25 +62,6 @@
     --radius-sm: 0.125rem;
     --blur: 8px;
     --blur-sm: 4px;
-}
-
-/*
- * The three font utilities, as tailwind.config.js had them. Declared `inline` and
- * NOT as plain --font-* variables: the shell below defines its own --font-display
- * and --font-mono on :root (`@layer base`), which would otherwise replace these
- * values under the utilities and under preflight's `code`/`pre` rule.
- */
-@theme inline {
-    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-        'Courier New', monospace;
-    --default-font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
-        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --default-mono-font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        'Liberation Mono', 'Courier New', monospace;
 }
 
 /*
@@ -275,9 +258,10 @@
         --selection: rgba(138, 92, 7, 0.22);
 
         /* ---- Type ---------------------------------------------------- */
-        --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
-        --font-body: 'IBM Plex Sans', system-ui, sans-serif;
-        --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+        /* R-52: Roboto is the one text face (headings, body, controls). The mono stack stays for readings, codes and the clock. */
+        --font-display: var(--dot-font-sans);
+        --font-body: var(--dot-font-sans);
+        --font-mono: var(--dot-font-mono);
 
         --t-display: 1.5rem;
         --t-title: 1.05rem;
@@ -288,7 +272,7 @@
         --t-micro: 0.75rem;
 
         --r-sm: 2px; --r: 3px; --r-lg: 4px;
-        --nav-w: 240px; --bar-h: 50px;
+        --nav-w: 240px;
 
         /* ---- Aliases kept for the existing page views -------------- */
         --page-bg: var(--ground);
@@ -384,111 +368,203 @@
     }
 }
 
-.material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; line-height: 1; user-select: none; }
+/* The icon font, self-hosted (Material Symbols Rounded, Apache-2.0): the 28 icons this app draws, as one 6 kB file. Replaces the Google CSS link. */
+@font-face { font-family: 'Material Symbols Rounded'; font-style: normal; font-weight: 400; font-display: block; src: url('../fonts/material-symbols-rounded.woff2') format('woff2'); }
+.material-symbols-rounded { font-family: 'Material Symbols Rounded'; font-weight: 400; font-style: normal; display: inline-block; white-space: nowrap; letter-spacing: normal; text-transform: none; direction: ltr; -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga'; font-size: 24px; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; line-height: 1; user-select: none; }
 [x-cloak] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .skip-link { position: absolute; left: -9999px; top: 0; z-index: 100; background: var(--signal); color: #0b0e12; padding: 10px 16px; border-radius: 0 0 var(--r) 0; font-weight: 600; font-size: 13px; }
 .skip-link:focus { left: 0; }
 
 /* ------------------------------------------------------------------
-   Sidebar: a sunken bay with hairline rules; the active item carries
-   a 2px signal rule on its left edge, flush with the nav.
+   Shared Dot UI (R-52). One header (dot-ui `<x-dot.header>`) across the top: logo, the state of the room, the search, the
+   tools and the account. Everything below maps dot-ui's tokens onto the control room's own. UNLAYERED on purpose: dot-ui's
+   rules are unlayered, and an unlayered rule beats a layered one whatever its specificity.
    ------------------------------------------------------------------ */
-.sidebar { position: fixed; left: 0; top: 0; width: var(--nav-w); height: 100vh; background: var(--panel-sunken); border-right: 1px solid var(--rule); display: flex; flex-direction: column; z-index: 40; overflow: hidden; }
-.sidebar-brand { padding: 14px 14px 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-height: var(--bar-h); border-bottom: 1px solid var(--rule); }
-.brand-mark { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
-.brand-mark--night { display: none; }
-:root.dark .brand-mark--night { display: block; }
-:root.dark .brand-mark--day { display: none; }
-.brand-name { font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: 0.02em; line-height: 1.15; }
-.brand-subtitle { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 2px; }
-.sidebar-nav { padding: 4px 0 8px; flex: 1; overflow-y: auto; scrollbar-width: none; }
-.sidebar-nav::-webkit-scrollbar { display: none; }
-.nav-section-label { font-family: var(--font-display); font-size: 12px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.14em; padding: 14px 14px 5px; }
-.nav-item { position: relative; display: flex; align-items: center; gap: 9px; padding: 7px 12px 7px 14px; font-size: 13px; font-weight: 500; color: var(--text-quiet); text-decoration: none; transition: background .13s, color .13s; }
-.nav-item:hover { background: var(--panel-raised); color: var(--text); }
-.nav-item.active { background: var(--panel-raised); color: var(--text); font-weight: 600; }
-.nav-item.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--signal); }
-.nav-item--locked { color: var(--text-ghost); cursor: default; }
-.nav-item--locked:hover { background: transparent; color: var(--text-ghost); }
-.nav-icon { font-size: 17px; width: 20px; text-align: center; flex-shrink: 0; }
-.nav-count { margin-left: auto; font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 0 6px; border-radius: var(--r-sm); line-height: 18px; min-width: 18px; text-align: center; }
-.nav-count--bad { background: var(--bad-quiet); color: var(--bad); }
-.nav-count--warn { background: var(--warn-quiet); color: var(--warn); }
-.sidebar-divider { height: 1px; background: var(--rule); margin: 8px 0; }
-.sidebar-footer { padding: 10px 12px; border-top: 1px solid var(--rule); flex-shrink: 0; display: flex; align-items: center; gap: 9px; }
-.user-avatar { width: 26px; height: 26px; border-radius: var(--r); background: var(--panel-raised); border: 1px solid var(--rule-strong); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; }
-.user-row__text { min-width: 0; flex: 1; }
-.user-name { font-size: 12px; font-weight: 600; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.user-team { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.user-signout { background: none; border: 0; color: var(--text-faint); cursor: pointer; display: flex; padding: 4px; border-radius: var(--r-sm); }
-.user-signout:hover { color: var(--text); background: var(--panel-raised); }
-.user-signout .material-symbols-rounded { font-size: 17px; }
-
-/* ------------------------------------------------------------------
-   State bar: the instrument's pulse. One lamp, the state in words,
-   the shift, the data link, the clock. Replaces the generic top bar.
-   ------------------------------------------------------------------ */
-.statebar { position: fixed; top: 0; left: var(--nav-w); right: 0; height: var(--bar-h); background: var(--panel-sunken); border-bottom: 1px solid var(--rule); display: flex; align-items: stretch; z-index: 30; }
-.statebar__bay { display: flex; align-items: center; gap: 10px; padding: 0 16px; border-right: 1px solid var(--rule); white-space: nowrap; }
-.statebar__bay--grow { flex: 1 1 auto; min-width: 0; border-right: 0; }
-.statebar__bay--tools { gap: 6px; padding: 0 12px; border-right: 0; border-left: 1px solid var(--rule); }
-.statebar--ok { --lamp: var(--ok); }
-.statebar--warn { --lamp: var(--warn); }
-.statebar--bad { --lamp: var(--bad); }
-.statebar--idle { --lamp: var(--text-faint); }
-.statebar__lamp { width: 9px; height: 9px; border-radius: 50%; background: var(--lamp); color: var(--lamp); flex-shrink: 0; }
-.statebar__state { font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.02em; text-transform: uppercase; }
-.statebar__detail { font-size: var(--t-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.statebar__detail a { color: var(--signal); text-decoration: none; }
-.statebar__detail a:hover { text-decoration: underline; }
-.shiftpill { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-decoration: none; border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 4px 9px; white-space: nowrap; transition: border-color .13s, color .13s; }
-.shiftpill:hover { border-color: var(--rule-strong); color: var(--text); }
-.shiftpill--open { color: var(--text); border-color: rgba(var(--signal-rgb), 0.45); }
-/* Host token mapping for the shared Dot UI switcher (dot-ui/css/dot-switcher.css). The trigger sits in the state bar in the
-   control room's own colours; the panel follows night/day like the rest of the shell (the logo plates stay white, as the
-   logos are drawn for white). Amber is the focus ring, as everywhere in this shell. */
-.statebar .dsw {
+:root {
+    --bar-h: var(--dot-header-offset);
+    --dsr-panel: var(--panel);
+    --dsr-hover: var(--panel-raised);
+    --dsr-rule: var(--rule);
+    --dsr-rule-strong: var(--rule-strong);
+    --dsr-text: var(--text);
+    --dsr-text-2: var(--text-muted);
+    --dsr-text-3: var(--text-quiet);
+    --dsr-focus-ring: var(--signal);
+}
+.dh {
+    --dh-bg: var(--panel-sunken);
+    --dh-ink: var(--text);
+    --dh-ink-2: var(--text-muted);
+    --dh-rule: var(--rule);
+    --dh-hover: var(--panel-raised);
+    --dh-accent: var(--signal);
+    --dh-focus: var(--signal);
+    --dh-radius: var(--r-sm);
+    --dh-badge-bg: var(--bad);
+    --dh-badge-ink: #fff;
+    --dh-search-w: clamp(280px, 28vw, 560px);
+    border-bottom: 1px solid var(--rule);
+}
+/* The switcher in the header: the control room's colours; its panel follows night/day (the logo plates stay white, as the logos are drawn for white). */
+.dh .dsw {
     --dsw-btn-ink: var(--text-muted);
     --dsw-btn-border: var(--rule-strong);
     --dsw-btn-bg-hover: var(--panel-raised);
     --dsw-focus: var(--signal);
     --dsw-radius: var(--r);
-    --dsw-btn-h: 28px;
-    --dsw-btn-min-w: 28px;
-    --dsw-btn-pad-x: 0;
     --dsw-paper: var(--panel);
     --dsw-ink: var(--text);
     --dsw-ink-2: var(--text-muted);
     --dsw-rule: var(--rule-strong);
     --dsw-tile-ink: #1b2124;
 }
-.statebar .dsw-slot { display: flex; align-items: center; }
-/* The bar was already wider than its container below ~1280px (the theme, profile and bell buttons sat off screen), and the
-   switcher adds to it. The Dot Apps button is icon-only (the package's `compact` mode; the name stays on the button for
-   screen readers) and, from 1280px down, the two status pills may shrink to an ellipsis instead of pushing the tools out.
-   Nothing is hidden; both pills carry a title. */
-@media (max-width: 1280px) {
-    .statebar__bay { min-width: 0; flex-shrink: 1; }
-    .statebar__bay--tools { flex-shrink: 0; }
-    .statebar .shiftpill { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-}
+.dh .dsw-slot { display: flex; align-items: center; }
+
+/* Brand: the original logo files (night and day, 4:3, never redrawn) at 34px high, and the name. */
+.dh .brand-mark { width: auto; height: 34px; max-width: none; }
+.dh .brand-mark--night { display: none; }
+:root.dark .dh .brand-mark--night { display: block; }
+:root.dark .dh .brand-mark--day { display: none; }
+.dh-brand__name { font-size: 14px; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
+@media (max-width: 599px), (min-width: 861px) and (max-width: 1099px) { .dh-brand__name { display: none; } }
+
+/* Central's navigation is the sidebar, so the header has no primary nav (an empty one would still reserve 44px of the start column). */
+.dh-start > .dh-nav { display: none; }
+
+/* The state of the room sits in the start column (the header's "context" slot, shown at every width here). Lamp, state word, counts. */
+.dh-start > .dh-context { display: flex; flex: 0 1 auto; max-width: none; margin-left: 4px; padding-left: 14px; }
+.statebar { display: inline-flex; align-items: center; gap: 8px; min-width: 0; min-height: var(--dot-hit); color: var(--text); text-decoration: none; white-space: nowrap; }
+a.statebar:hover .statebar__state { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--signal); }
+.statebar--ok { --lamp: var(--ok); }
+.statebar--warn { --lamp: var(--warn); }
+.statebar--bad { --lamp: var(--bad); }
+.statebar--idle { --lamp: var(--text-faint); }
+.statebar__lamp { width: 9px; height: 9px; border-radius: 50%; background: var(--lamp); color: var(--lamp); flex: none; }
+.statebar__state { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); }
+.statebar__short { display: none; }
+.statebar__counts, .statebar__detail { display: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+/* The start column decides what it can hold (container query): the counts when there is room for them, the full sentence when there is room for that. The state word is always there, and the full sentence is also the link's title. */
+.dh-start { container-type: inline-size; }
+@container (min-width: 440px) { .statebar__counts { display: block; } }
+@container (min-width: 600px) { .statebar__counts { display: none; } .statebar__detail { display: block; } }
 @media (max-width: 860px) {
-    .statebar__bay { padding: 0 8px; }
-    .statebar__bay--tools { gap: 4px; padding: 0 8px; }
-    .statebar__bay:first-child { flex-shrink: 0; }
+    .dh-start > .dh-context { margin-left: 0; padding-left: 0; border-left: 0; min-width: 0; }
+    .statebar__state { font-size: 12px; }
 }
-/* On a phone the shift and Dot.Mines pills (3rd and 4th bay) have no room: they were already cut off past the edge, so
-   they are dropped here to keep the state sentence, the switcher and the tools on screen. Both are on the overview. */
-.statebar__clock { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.topbar-btn { width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--rule); background: transparent; display: inline-flex; align-items: center; justify-content: center; color: var(--text-quiet); cursor: pointer; transition: background .13s, color .13s; text-decoration: none; flex-shrink: 0; }
-.topbar-btn:hover { background: var(--panel-raised); color: var(--text); }
-.topbar-btn .material-symbols-rounded { font-size: 17px; }
+@media (max-width: 399px) { .statebar__long { display: none; } .statebar__short { display: inline; } }
+
+/* Theme toggle (night/day), in the tools. Under 480px it moves into the navigation (there is no room for it in the bar). */
 .theme-icon-night { display: none; }
 :root.dark .theme-icon-night { display: inline; }
 :root.dark .theme-icon-day { display: none; }
-.sidebar-toggle { display: none; }
-.content-wrap { margin-left: var(--nav-w); padding-top: var(--bar-h); min-height: 100vh; }
+.dh-themebtn .material-symbols-rounded { font-size: 20px; }
+@media (max-width: 479px) { .dh-themebtn { display: none; } }
+
+/* Notifications (Livewire bell) in the header: the dot-ui bell's button, and a panel that stays inside the viewport. */
+.cb { display: flex; }
+.cb .dh-bell .material-symbols-rounded { font-size: 22px; }
+.cb-panel { position: fixed; top: calc(var(--dot-header-offset) + 4px); right: max(var(--dot-gutter), 8px); z-index: 60; width: min(360px, calc(100vw - 16px)); max-height: min(70vh, 480px); max-height: min(70dvh, 480px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--rule-strong); border-radius: var(--r-lg); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35); overflow: hidden; }
+.cb-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; min-height: 48px; border-bottom: 1px solid var(--rule); flex: none; }
+.cb-panel__title { font-size: 13px; font-weight: 700; color: var(--text); }
+.cb-panel__mark { min-height: 44px; padding: 0 4px; background: none; border: 0; color: var(--ok); font: 600 12px var(--font-body); cursor: pointer; }
+.cb-panel__list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.cb-item { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; min-height: 44px; border-bottom: 1px solid var(--rule); text-decoration: none; }
+.cb-item:hover { background: var(--panel-raised); }
+.cb-item.is-read { opacity: 0.6; }
+.cb-item__title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.cb-item__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex: none; }
+.cb-item__text { font-size: 12px; line-height: 1.4; color: var(--text-quiet); overflow-wrap: anywhere; }
+.cb-panel__empty { padding: 32px 16px; text-align: center; color: var(--text-faint); }
+.cb-panel__empty .material-symbols-rounded { display: block; margin-bottom: 8px; font-size: 30px; }
+.cb-panel__empty p { margin: 0; font-size: 12px; color: var(--text-muted); }
+.cb-panel__foot { flex: none; border-top: 1px solid var(--rule); text-align: center; }
+.cb-panel__foot a { display: flex; align-items: center; justify-content: center; min-height: 44px; font-size: 12px; font-weight: 600; color: var(--info); text-decoration: none; }
+
+/* The header search: Livewire's wrapper must not become the grid item of the mobile search sheet. */
+.hs { display: contents; }
+
+/* ------------------------------------------------------------------
+   Sidebar: a sunken bay with hairline rules under the header; the active item carries a 2px signal rule on its left edge,
+   flush with the nav. On a phone it is the dot-ui drawer (adopt mode): the header's menu button opens it, and dot-ui draws the
+   scrim on <body> (a transformed sidebar can no longer shrink it to nothing).
+   ------------------------------------------------------------------ */
+.sidebar { position: fixed; left: 0; top: var(--dot-header-offset); bottom: 0; width: var(--nav-w); background: var(--panel-sunken); border-right: 1px solid var(--rule); display: flex; flex-direction: column; z-index: 30; overflow: hidden; }
+.sidebar-brand { display: none; padding: 12px 8px 12px 14px; align-items: center; gap: 10px; flex-shrink: 0; min-height: 56px; border-bottom: 1px solid var(--rule); }
+.brand-mark { width: auto; height: 34px; flex-shrink: 0; }
+.brand-mark--night { display: none; }
+:root.dark .brand-mark--night { display: block; }
+:root.dark .brand-mark--day { display: none; }
+.brand-name { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: 0.02em; line-height: 1.15; }
+.brand-subtitle { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 2px; }
+.sidebar-close { margin-left: auto; width: 44px; height: 44px; display: inline-grid; place-items: center; background: transparent; border: 0; border-radius: var(--r-sm); color: var(--text-muted); cursor: pointer; flex: none; }
+.sidebar-close:hover { background: var(--panel-raised); color: var(--text); }
+.sidebar-nav { padding: 4px 0 8px; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.sidebar-nav::-webkit-scrollbar { display: none; }
+.nav-section-label { font-size: 12px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 14px 5px; }
+.nav-item { position: relative; display: flex; align-items: center; gap: 9px; padding: 7px 12px 7px 14px; font-size: 13px; font-weight: 500; color: var(--text-quiet); text-decoration: none; transition: background .13s, color .13s; }
+.nav-item:hover { background: var(--panel-raised); color: var(--text); }
+.nav-item.active { background: var(--panel-raised); color: var(--text); font-weight: 600; }
+.nav-item.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--signal); }
+.nav-item--locked { color: var(--text-ghost); cursor: default; }
+.nav-item--locked:hover { background: transparent; color: var(--text-ghost); }
+.nav-item--button { width: 100%; background: transparent; border: 0; font-family: inherit; text-align: left; cursor: pointer; }
+.nav-icon { font-size: 17px; width: 20px; text-align: center; flex-shrink: 0; }
+.nav-count { margin-left: auto; font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 0 6px; border-radius: var(--r-sm); line-height: 18px; min-width: 18px; text-align: center; }
+.nav-count--bad { background: var(--bad-quiet); color: var(--bad); }
+.nav-count--warn { background: var(--warn-quiet); color: var(--warn); }
+.sidebar-divider { height: 1px; background: var(--rule); margin: 8px 0; }
+/* Notifications, profile, team and sign-out live in the header's account menu on a wide screen; the sidebar carries them on a phone, where that menu is not in the bar. */
+.nav-account, .sidebar-footer { display: none; }
+.nav-theme { display: none; }
+.sidebar-footer { padding: 10px 12px; border-top: 1px solid var(--rule); flex-shrink: 0; align-items: center; gap: 9px; }
+.user-avatar { width: 28px; height: 28px; border-radius: var(--r); background: var(--panel-raised); border: 1px solid var(--rule-strong); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; }
+.user-row__text { min-width: 0; flex: 1; }
+.user-name { font-size: 12px; font-weight: 600; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-team { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-signout { background: none; border: 0; color: var(--text-faint); cursor: pointer; display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-sm); }
+.user-signout:hover { color: var(--text); background: var(--panel-raised); }
+.user-signout .material-symbols-rounded { font-size: 20px; }
+.content-wrap { margin-left: var(--nav-w); min-height: calc(100vh - var(--bar-h)); min-height: calc(100dvh - var(--bar-h)); }
+
+@media (max-width: 860px) {
+    .sidebar { top: 0; bottom: auto; height: 100vh; height: 100dvh; width: min(300px, 86vw); z-index: var(--dh-z-drawer, 120); padding-top: env(safe-area-inset-top, 0px); transform: translateX(-100%); visibility: hidden; transition: transform .2s ease, visibility 0s linear .2s; }
+    .sidebar[data-dh-open] { transform: none; visibility: visible; transition: transform .2s ease; }
+    .sidebar-brand { display: flex; }
+    .sidebar-nav { padding-bottom: 16px; }
+    .nav-account { display: block; }
+    .sidebar-footer { display: flex; padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+    .content-wrap { margin-left: 0; }
+}
+@media (max-width: 479px) { .nav-theme { display: flex; } }
+@media (prefers-reduced-motion: reduce) { .sidebar, .sidebar[data-dh-open] { transition: none; } }
+
+/* ------------------------------------------------------------------
+   Header search: the full results page behind it.
+   ------------------------------------------------------------------ */
+.sr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sr-list { list-style: none; margin: 0; padding: 0; }
+.sr-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; min-height: 52px; padding: 8px 20px; border-bottom: 1px solid var(--rule); color: var(--text); text-decoration: none; }
+.sr-list li:last-child .sr-row { border-bottom: 0; }
+.sr-row:hover { background: var(--panel-raised); }
+.sr-row__ref { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); }
+.sr-row__title { grid-column: 2; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 500; }
+.sr-row:not(:has(.sr-row__ref)) .sr-row__title { grid-column: 1 / 3; }
+.sr-row__title mark { background: var(--signal-quiet); color: var(--signal); border-radius: 2px; }
+.sr-row__sub { grid-column: 3; justify-self: end; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-quiet); }
+@media (max-width: 620px) {
+    .sr-row { grid-template-columns: minmax(0, 1fr); padding: 10px 16px; }
+    .sr-row__ref, .sr-row__title, .sr-row:not(:has(.sr-row__ref)) .sr-row__title { grid-column: 1; }
+    .sr-row__sub { grid-column: 1; justify-self: start; max-width: 100%; }
+}
+
+/* Foot lamps: the same three words in colour (replaces inline styles). */
+.shellfoot__lamp { margin: 0; }
+.shellfoot__lamp--signal { background: var(--signal); }
+.shellfoot__lamp--idle { background: var(--text-faint); }
+.shellfoot__lamp--ok { background: var(--ok); }
+.shellfoot__lamp--warn { background: var(--warn); }
+.shellfoot__lamp--bad { background: var(--bad); }
 
 /* ------------------------------------------------------------------
    Panels share edges: one 1px grid gap over a ruled background.
@@ -507,9 +583,10 @@
 .dot-panel { padding: 1.1rem 1.25rem; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--r-lg); }
 .dot-panels > .dot-panel { border: 0; border-radius: 0; }
 .dot-panel--flush { padding: 0; }
-.dot-panel__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding: 0.8rem 1.25rem; border-bottom: 1px solid var(--rule); }
+.dot-panel__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 0.75rem; padding: 0.8rem 1.25rem; border-bottom: 1px solid var(--rule); }
 .dot-panel__title { font-family: var(--font-display); font-size: var(--t-sm); font-weight: 600; color: var(--text); margin: 0; letter-spacing: 0.03em; text-transform: uppercase; }
-.dot-panel__action { font-size: var(--t-xs); color: var(--signal); text-decoration: none; white-space: nowrap; }
+.dot-panel__action { font-size: var(--t-xs); color: var(--signal); text-decoration: none; }
+.dot-panel__action:is(a, button) { white-space: nowrap; }
 .dot-panel__action:hover { text-decoration: underline; }
 .dot-panel__body { padding: 1.1rem 1.25rem; }
 
@@ -631,6 +708,32 @@ select.dot-select option, select.dot-input option { background: var(--panel); co
 .dot-badge--review { background: var(--review-quiet); color: var(--review); }
 .dot-status-lamp { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
 
+/* The agent chat fills the region between the header and the foot (dvh: a phone's address bar must not push the composer off screen). */
+.agent-chat { display: flex; flex-direction: column; height: calc(100vh - var(--bar-h) - var(--foot-h)); height: calc(100dvh - var(--bar-h) - var(--foot-h)); }
+
+/* Forms and page furniture that used to be inline styles (the admin page first). */
+.dot-ledger th.th-num { text-align: right; }
+.cr-name { font-weight: 700; color: var(--text); }
+.cr-open { text-align: right; white-space: nowrap; }
+.dot-link-hit { color: var(--signal); font-size: var(--t-xs); font-weight: 700; text-decoration: none; }
+.dot-link-hit:hover { text-decoration: underline; }
+.dot-ledger__key > div { font-family: inherit; }
+.dot-page-head__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.dot-form-stack { display: flex; flex-direction: column; gap: 0.75rem; }
+.dot-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.dot-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 1rem; }
+.dot-span-all { grid-column: 1 / -1; }
+.dot-check { display: flex; gap: 0.5rem; align-items: center; font-size: var(--t-sm); min-height: 24px; }
+.dot-inline-form { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.dot-input--auto { width: auto; max-width: 100%; }
+.dot-input--reason { width: 11rem; max-width: 100%; }
+.dot-panel__action--faint { color: var(--text-faint); }
+.dot-mb { margin-bottom: 1rem; }
+@media (max-width: 620px) {
+    .dot-form-row { grid-template-columns: minmax(0, 1fr); }
+    .dot-input--reason { width: 100%; }
+}
+
 /* Jetstream form components, rethemed through the same tokens. */
 .jet-input { width: 100%; background: var(--panel-sunken); border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 0.5rem 0.7rem; font-family: var(--font-body); font-size: var(--t-body); color: var(--text); box-shadow: none; }
 .jet-input:hover { border-color: var(--rule-strong); }
@@ -646,34 +749,30 @@ select.dot-select option, select.dot-input option { background: var(--panel); co
 .jet-errors__title { font-weight: 600; color: var(--bad); }
 .jet-errors ul { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: var(--t-sm); color: var(--bad); }
 
-/* ------------------------------------------------------------------
-   Responsive: the sidebar slides off-canvas below 860px and a toggle
-   in the state bar brings it back.
-   ------------------------------------------------------------------ */
-.sidebar-toggle { align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--r-sm); background: transparent; border: 1px solid var(--rule); color: var(--text-muted); cursor: pointer; flex-shrink: 0; margin-right: 8px; }
-.sidebar.is-open::after { content: ''; position: fixed; inset: 0 0 0 var(--nav-w); background: rgba(0, 0, 0, 0.5); }
-
 @media (max-width: 1100px) {
     .dot-panels--4, .dot-panels--5, .dot-panels--6, .dot-panels--7 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dot-panels--3, .dot-panels--split, .dot-split { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
-    .sidebar { transform: translateX(-100%); transition: transform .2s ease; }
-    .sidebar.is-open { transform: translateX(0); }
-    .statebar { left: 0; }
-    .content-wrap { margin-left: 0; }
-    .sidebar-toggle { display: inline-flex; }
-    .statebar__clock, .statebar__bay--user { display: none; }
     .dot-page { padding: 1.1rem 1rem 2.5rem; }
+    .dot-input, .dot-select, .jet-input, textarea.dot-input { font-size: 16px; }
+}
+/* Touch and tablet (and any narrow desktop window): every control is a finger target. */
+@media (max-width: 1024px), (pointer: coarse) {
+    .dot-btn, .dot-btn-sm, .dot-input, .dot-select, .jet-input { min-height: 44px; }
+    .dot-btn, .dot-btn-sm { min-width: 44px; justify-content: center; }
+    .nav-item { min-height: 44px; padding-top: 0; padding-bottom: 0; }
+    .dot-ledger td > a, .dot-ledger td > div > a, .dot-link-hit, .dot-panel__action:is(a, button), .dot-arrival__back a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+    .dot-check { min-height: 44px; }
+    .dot-check input[type=checkbox] { width: 20px; height: 20px; flex: none; }
 }
 @media (max-width: 620px) {
     .dot-panels--4, .dot-panels--5, .dot-panels--6, .dot-panels--7, .dot-panels--2 { grid-template-columns: minmax(0, 1fr); }
-    .statebar__detail { display: none; }
     .dot-readout__value { font-size: 1.5rem; }
 }
 
 @media print {
-    .sidebar, .statebar { display: none !important; }
+    .dh, .sidebar { display: none !important; }
     .content-wrap { margin: 0; padding: 0; }
     body { background: #fff; color: #000; }
 }

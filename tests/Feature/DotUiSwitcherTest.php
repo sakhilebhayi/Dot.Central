@@ -15,7 +15,7 @@ use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
- * The state bar carries the shared Dot UI platform switcher (dot-ui). Central has no search, so none is added. The
+ * The shared header carries the Dot UI platform switcher (dot-ui) next to the search (R-52). The
  * switcher is lazy: the page never waits for InfoDot. Once drawn, it only shows what InfoDot says the CURRENT company
  * holds and links through InfoDot's /go (never straight to a host, never with a token).
  */
@@ -102,26 +102,25 @@ class DotUiSwitcherTest extends TestCase
         $this->assertStringNotContainsString('data-dsw-trigger', $html, 'no half-drawn control');
     }
 
-    public function test_the_switcher_sits_in_the_tools_bay_after_the_state_sentence_which_is_untouched(): void
+    public function test_the_switcher_sits_in_the_headers_tools_after_the_state_and_the_search(): void
     {
         $this->fakeInfoDot([]);
         $html = $this->actingAs($this->memberOf(self::ACME, 'Acme Ltd'))->get(route('dashboard'))->getContent();
 
-        $this->assertSame(1, preg_match('/<span class="statebar__state">[^<]+<\/span>.*?<div class="statebar__bay statebar__bay--tools">\s*<div[^>]*dsw-slot/s', $html), 'state sentence first, switcher first in the tools bay');
         $this->assertSame(1, substr_count($html, 'class="statebar__state"'));
-        $this->assertStringContainsString('class="statebar__detail"', $html);
-        $this->assertSame(1, preg_match('/dsw-slot.*?<button type="button" class="topbar-btn"/s', $html), 'theme toggle, profile and bell keep their place after it');
+        $this->assertSame(1, preg_match('/statebar__state.*?role="search".*?<div class="dh-end">.*?dsw-slot.*?data-theme-toggle/s', $html), 'state word, then the search, then the tools: switcher first, theme toggle after it');
+        $this->assertSame(1, preg_match('/dsw-slot.*?data-theme-toggle.*?class="cb"/s', $html), 'theme toggle and the bell keep their place after the switcher');
     }
 
-    public function test_central_has_no_search_so_none_is_added(): void
+    public function test_the_header_search_is_the_shared_pill(): void
     {
         $this->fakeInfoDot([]);
         $html = $this->actingAs($this->memberOf(self::ACME, 'Acme Ltd'))->get(route('dashboard'))->getContent();
 
-        $this->assertStringNotContainsString('role="search"', $html);
-        $this->assertStringNotContainsString('dsr-input', $html);
-        $this->assertStringNotContainsString('type="search"', $html);
-        $this->assertFileExists(public_path('dot-ui/css/dot-search.css'), 'the package copy is whole, even though this platform links only the switcher half');
+        $this->assertStringContainsString('role="search"', $html);
+        $this->assertStringContainsString('dsr-input', $html);
+        $this->assertStringContainsString('type="search"', $html);
+        $this->assertFileExists(public_path('dot-ui/css/dot-search.css'));
     }
 
     public function test_a_guest_sees_no_switcher(): void
@@ -241,7 +240,7 @@ class DotUiSwitcherTest extends TestCase
         $user = $this->memberOf(self::ACME, 'Acme Ltd');
         $html = $this->actingAs($user)->get(route('dashboard'))->getContent();
 
-        foreach (['css/dot-fonts.css', 'css/dot-tokens.css', 'css/dot-switcher-fonts.css', 'css/dot-switcher.css', 'js/dot-switcher.js'] as $asset) {
+        foreach (['css/dot-roboto.css', 'css/dot-type.css', 'css/dot-tokens.css', 'css/dot-search.css', 'css/dot-switcher.css', 'css/dot-header.css', 'js/dot-search.js', 'js/dot-switcher.js', 'js/dot-nav.js'] as $asset) {
             $this->assertStringContainsString(asset('dot-ui/'.$asset), $html, $asset.' is linked from this site');
             $this->assertFileExists(public_path('dot-ui/'.$asset));
         }

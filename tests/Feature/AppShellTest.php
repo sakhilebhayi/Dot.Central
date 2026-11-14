@@ -35,14 +35,15 @@ class AppShellTest extends TestCase
 
         $html = $this->actingAs($user)->get('/dashboard')->assertOk()->getContent();
 
-        $this->assertStringContainsString('IBM+Plex+Sans+Condensed', $html);
+        $this->assertStringContainsString('dot-ui/css/dot-roboto.css', $html, 'Roboto is the one text face (R-52), served from this site');
+        $this->assertStringNotContainsString('IBM+Plex', $html);
         $this->assertStringNotContainsString('Syne', $html);
         $this->assertStringNotContainsString('JetBrains', $html);
         $this->assertStringContainsString('class="statebar statebar--idle"', $html, 'a user with no control room gets the idle state');
         $this->assertStringContainsString('NO CONTROL ROOM', $html);
         $this->assertStringContainsString('No open shift', $html);
         $this->assertStringContainsString('Dot.Mines: not connected', $html);
-        $this->assertStringContainsString('<html lang="en" class="dark">', $html, 'night is the default');
+        $this->assertStringContainsString('<html lang="en" class="dark dot-roboto">', $html, 'night is the default');
     }
 
     public function test_state_bar_reports_open_critical_alerts(): void

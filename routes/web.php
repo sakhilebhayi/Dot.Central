@@ -21,6 +21,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SchedulerProbeController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
@@ -77,6 +78,8 @@ Route::middleware([
     EnsureCompanyEntitled::class,
 ])->group(function () {
     Route::get('/dashboard', Overview::class)->name('dashboard');
+
+    Route::get('/search', [SearchController::class, 'index'])->name('search');
 
     Route::get('/agent-hub', [AgentController::class, 'hub'])->name('agents.hub');
 
