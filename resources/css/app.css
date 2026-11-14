@@ -444,6 +444,44 @@
 .shiftpill { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-decoration: none; border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 4px 9px; white-space: nowrap; transition: border-color .13s, color .13s; }
 .shiftpill:hover { border-color: var(--rule-strong); color: var(--text); }
 .shiftpill--open { color: var(--text); border-color: rgba(var(--signal-rgb), 0.45); }
+/* Host token mapping for the shared Dot UI switcher (dot-ui/css/dot-switcher.css). The trigger sits in the state bar in the
+   control room's own colours; the panel follows night/day like the rest of the shell (the logo plates stay white, as the
+   logos are drawn for white). Amber is the focus ring, as everywhere in this shell. */
+.statebar .dsw {
+    --dsw-btn-ink: var(--text-muted);
+    --dsw-btn-border: var(--rule-strong);
+    --dsw-btn-bg-hover: var(--panel-raised);
+    --dsw-focus: var(--signal);
+    --dsw-radius: var(--r);
+    --dsw-btn-h: 28px;
+    --dsw-btn-min-w: 28px;
+    --dsw-btn-pad-x: 0;
+    --dsw-paper: var(--panel);
+    --dsw-ink: var(--text);
+    --dsw-ink-2: var(--text-muted);
+    --dsw-rule: var(--rule-strong);
+    --dsw-tile-ink: #1b2124;
+}
+.statebar .dsw-slot { display: flex; align-items: center; }
+/* The bar was already wider than its container below ~1280px (the theme, profile and bell buttons sat off screen), and the
+   switcher adds to it. The Dot Apps button is icon-only (the package's `compact` mode; the name stays on the button for
+   screen readers) and, from 1280px down, the two status pills may shrink to an ellipsis instead of pushing the tools out.
+   Nothing is hidden; both pills carry a title. */
+@media (max-width: 1280px) {
+    .statebar__bay { min-width: 0; flex-shrink: 1; }
+    .statebar__bay--tools { flex-shrink: 0; }
+    .statebar .shiftpill { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (max-width: 860px) {
+    .statebar__bay { padding: 0 8px; }
+    .statebar__bay--tools { gap: 4px; padding: 0 8px; }
+    .statebar__bay:first-child { flex-shrink: 0; }
+}
+/* On a phone the shift and Dot.Mines pills (3rd and 4th bay) have no room: they were already cut off past the edge, so
+   they are dropped here to keep the state sentence, the switcher and the tools on screen. Both are on the overview. */
+@media (max-width: 520px) {
+    .statebar > .statebar__bay:nth-child(3), .statebar > .statebar__bay:nth-child(4) { display: none; }
+}
 .statebar__clock { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .topbar-btn { width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--rule); background: transparent; display: inline-flex; align-items: center; justify-content: center; color: var(--text-quiet); cursor: pointer; transition: background .13s, color .13s; text-decoration: none; flex-shrink: 0; }
 .topbar-btn:hover { background: var(--panel-raised); color: var(--text); }
