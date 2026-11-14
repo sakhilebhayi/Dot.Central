@@ -97,7 +97,7 @@ jobs:
           $PHP artisan view:cache
           $PHP artisan event:cache
 
-          for target in build images favicon-16x16.png favicon-32x32.png apple-touch-icon.png robots.txt; do
+          for target in build images dot-ui favicon-16x16.png favicon-32x32.png apple-touch-icon.png robots.txt; do
             ln -sfn "central/public/${target}" "$DOCROOT/${target}"
           done
           DEPLOY

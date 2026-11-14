@@ -38,6 +38,9 @@
         <span class="statebar__clock" data-shell-clock title="Server time, UTC">{{ now('UTC')->format('Y-m-d H:i') }} UTC</span>
     </div>
     <div class="statebar__bay statebar__bay--tools">
+        @auth
+        <livewire:dot-apps />
+        @endauth
         <button type="button" class="topbar-btn" title="Switch to day" aria-label="Switch between night and day display" onclick="window.dotToggleTheme(this)">
             <span class="material-symbols-rounded theme-icon-night">light_mode</span>
             <span class="material-symbols-rounded theme-icon-day">dark_mode</span>
