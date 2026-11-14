@@ -23,6 +23,11 @@
     hidden-fields  optional array of extra hidden inputs rendered INSIDE the form, name => value (a value may be an array: one
                  input per item, name[]), e.g. :hidden-fields="['status' => 'open', 'sort' => 'new']". For anything the host's search
                  route needs besides the query; no `form` attribute workaround.
+    loading      true: the root carries data-dsr-loading (the dropdown's loading line shows, see docs/SEARCH.md "Loading"). A host that
+                 re-renders on its own (Livewire) usually toggles the attribute itself and leaves this false.
+    loading-text optional: renders InfoDot's loading line, <p class="dsr-foot dsr-loading" aria-live="polite">, at the end of the
+                 dropdown (InfoDot's reads "Looking in Files and Documents..."). Hidden unless data-dsr-loading is on the root.
+    escape-clears  true: Escape also empties the box, as InfoDot's does (data-dsr-escape-clear; needs js/dot-search.js)
   Slots
     results      the host's dropdown markup, rendered inside .dsr-panel
     extra-hidden raw markup rendered inside the form, after the hidden fields, e.g. a CSRF field or hidden inputs the host builds itself
@@ -41,6 +46,9 @@
     'formAttributes' => [],
     'rootAttributes' => [],
     'hiddenFields' => [],
+    'loading' => false,
+    'loadingText' => null,
+    'escapeClears' => false,
 ])
 @php
     $inputId = $id ?? $attributes->get('id') ?? 'dsr-'.(trim((string) preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $name), '-') ?: 'search');
@@ -54,7 +62,7 @@
             $hiddenInputs[] = [is_array($hiddenValue) ? $hiddenName.'[]' : (string) $hiddenName, (string) $one];
         }
     }
-    $hasResults = isset($results) && ! $results->isEmpty();
+    $hasResults = (isset($results) && ! $results->isEmpty()) || filled($loadingText);
     $inputAttrs = [
         'id' => $inputId,
         'type' => 'search',
@@ -67,7 +75,7 @@
         $inputAttrs += ['role' => 'combobox', 'aria-autocomplete' => 'list', 'aria-controls' => $listId, 'aria-expanded' => 'false'];
     }
 @endphp
-<div {{ $rootBag->except(['data-dsr', 'data-dsr-shortcut'])->class(['dsr', 'dsr--nohint' => ! $hint]) }} data-dsr @if($hint) data-dsr-shortcut @endif>
+<div {{ $rootBag->except(['data-dsr', 'data-dsr-shortcut', 'data-dsr-loading', 'data-dsr-escape-clear'])->class(['dsr', 'dsr--nohint' => ! $hint]) }} data-dsr @if($hint) data-dsr-shortcut @endif @if($loading) data-dsr-loading @endif @if($escapeClears) data-dsr-escape-clear @endif>
     <label for="{{ $inputId }}" class="dsr-sr">{{ $label }}</label>
     <form {{ $formBag->merge($formDefaults) }}>
         @foreach($hiddenInputs as [$hiddenName, $hiddenValue])
@@ -82,6 +90,6 @@
         <button type="submit" class="dsr-go" aria-label="{{ $label }}"><span class="dsr-arrow" aria-hidden="true"></span></button>
     </form>
     @if($hasResults)
-        <div id="{{ $listId }}" class="dsr-panel" role="listbox" aria-label="Suggestions" tabindex="-1">{{ $results }}</div>
+        <div id="{{ $listId }}" class="dsr-panel" role="listbox" aria-label="Suggestions" tabindex="-1">@isset($results){{ $results }}@endisset @if(filled($loadingText))<p class="dsr-foot dsr-loading" aria-live="polite">{{ $loadingText }}</p>@endif</div>
     @endif
 </div>

@@ -31,6 +31,34 @@
     }
 
     var BUSY_MS = 12000;
+    var PHONE = '(max-width: 639px)';
+    var locked = typeof WeakSet === 'function' ? new WeakSet() : null; // roots that hold a scroll lock (phone sheet)
+
+    // Scroll lock shared with dot-nav.js (the drawer and the search sheet): a reference count on window.__dotLock, defined by
+    // whichever script loads first (both files carry this identical definition on purpose). It adds html.dot-scroll-locked
+    // (overflow hidden); when the page has a classic scrollbar it also adds html.dot-scroll-locked--gutter (scrollbar-gutter:
+    // stable), so the page does not jump sideways when the scrollbar goes. Classes only: no inline style anywhere.
+    var Lock = window.__dotLock || (window.__dotLock = (function () {
+        var n = 0;
+        return {
+            count: function () { return n; },
+            lock: function () {
+                if (n++ === 0) {
+                    var de = document.documentElement;
+                    var classic = window.innerWidth - de.clientWidth > 0;
+                    de.classList.add('dot-scroll-locked');
+                    if (classic) { de.classList.add('dot-scroll-locked--gutter'); }
+                }
+            },
+            unlock: function () {
+                if (n > 0 && --n === 0) {
+                    var de = document.documentElement;
+                    de.classList.remove('dot-scroll-locked');
+                    de.classList.remove('dot-scroll-locked--gutter');
+                }
+            },
+        };
+    })());
     var opened = typeof WeakSet === 'function' ? new WeakSet() : null; // roots the user has open
     var busyTimers = typeof WeakMap === 'function' ? new WeakMap() : null;
     var pending = false;
@@ -216,8 +244,21 @@
         p.panel.setAttribute('data-open', '');
         p.trigger.setAttribute('aria-expanded', 'true');
 
+        // a phone shows the panel as a bottom sheet over a scrim: the page behind must not scroll
+        if (locked && !locked.has(root) && window.matchMedia && window.matchMedia(PHONE).matches) {
+            locked.add(root);
+            Lock.lock();
+        }
+
         if (p.filter) {
             p.filter.focus();
+        }
+    }
+
+    function release(root) {
+        if (locked && locked.has(root)) {
+            locked.delete(root);
+            Lock.unlock();
         }
     }
 
@@ -229,6 +270,7 @@
         }
 
         applyClosed(root, p);
+        release(root);
 
         if (returnFocus && p.trigger) {
             p.trigger.focus();
@@ -282,7 +324,8 @@
 
         // click outside: every other open root closes
         Array.prototype.forEach.call(document.querySelectorAll('[data-dsw]'), function (root) {
-            if (root !== triggerRoot && isOpen(root) && !root.contains(target)) {
+            // target === root: the tap landed on the sheet's scrim (a pseudo-element of the root)
+            if (root !== triggerRoot && isOpen(root) && (!root.contains(target) || target === root)) {
                 close(root, false);
             }
         });

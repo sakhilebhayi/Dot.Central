@@ -338,7 +338,8 @@
     border-radius: 0;
     background: var(--dsr-panel);
     color: var(--dsr-text);
-    font: 600 13px var(--dsr-font);
+    /* 14px line: the chip's height (28px) used to come from Archivo's `normal` line height; pinned so Roboto does not make it 29px */
+    font: 600 13px/14px var(--dsr-font);
     cursor: pointer;
 }
 
@@ -355,6 +356,19 @@
     margin: 0;
     padding: 12px;
     color: var(--dsr-text-2);
+}
+
+/* Loading (0.5.0). InfoDot's only loading state is a line in the dropdown, "Looking in Files and Documents..." (.ix-results__foot,
+   aria-live polite), shown while its other platforms answer. There is no spinner and the pill does not change. This is that line,
+   driven by one attribute the host sets while it waits: <div class="dsr" data-dsr-loading>. The row itself is
+   <p class="dsr-foot dsr-loading" aria-live="polite">...</p> in the host's results slot (or the `loading-text` prop); it is hidden
+   unless the attribute is on the root. docs/SEARCH.md shows the Livewire, Alpine and Vue ways to toggle it. */
+.dsr .dsr-loading {
+    display: none;
+}
+
+.dsr[data-dsr-loading] .dsr-loading {
+    display: block;
 }
 
 @media (max-width: 639px) {
