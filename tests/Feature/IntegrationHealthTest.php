@@ -107,6 +107,8 @@ class IntegrationHealthTest extends TestCase
 
     public function test_health_shows_the_scheduler_and_queue_heartbeats(): void
     {
+        // Frozen: the page and the expectation each read the clock, and a second boundary between them made "30 s ago" read "31 s ago".
+        $this->freezeTime();
         $owner = User::factory()->withPersonalTeam()->create();
         $supervisor = $this->member($owner->currentTeam, 'supervisor', ControlRoom::factory()->for($owner->currentTeam)->create());
         Cache::forever('dot.scheduler_heartbeat', now()->subSeconds(30)->toIso8601String());
