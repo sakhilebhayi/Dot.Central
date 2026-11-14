@@ -28,6 +28,11 @@
             button.title = label;
         };
     </script>
+    {{-- Shared Dot UI (platform switcher), served from this site's own public/dot-ui. Before the app CSS so the token mapping in app.css wins. --}}
+    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-fonts.css') }}">
+    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-tokens.css') }}">
+    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-switcher-fonts.css') }}">
+    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-switcher.css') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -143,6 +148,7 @@
     </div>
 
     @stack('modals')
+    <script src="{{ asset('dot-ui/js/dot-switcher.js') }}" defer></script>
     @livewireScripts
 </body>
 </html>

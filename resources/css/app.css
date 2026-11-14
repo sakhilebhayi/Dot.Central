@@ -444,6 +444,24 @@
 .shiftpill { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-decoration: none; border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 4px 9px; white-space: nowrap; transition: border-color .13s, color .13s; }
 .shiftpill:hover { border-color: var(--rule-strong); color: var(--text); }
 .shiftpill--open { color: var(--text); border-color: rgba(var(--signal-rgb), 0.45); }
+/* Host token mapping for the shared Dot UI switcher (dot-ui/css/dot-switcher.css). The trigger sits in the state bar in the
+   control room's own colours; the panel follows night/day like the rest of the shell (the logo plates stay white, as the
+   logos are drawn for white). Amber is the focus ring, as everywhere in this shell. */
+.statebar .dsw {
+    --dsw-btn-ink: var(--text-muted);
+    --dsw-btn-border: var(--rule-strong);
+    --dsw-btn-bg-hover: var(--panel-raised);
+    --dsw-focus: var(--signal);
+    --dsw-radius: var(--r);
+    --dsw-btn-h: 28px;
+    --dsw-btn-pad-x: 10px;
+    --dsw-paper: var(--panel);
+    --dsw-ink: var(--text);
+    --dsw-ink-2: var(--text-muted);
+    --dsw-rule: var(--rule-strong);
+    --dsw-tile-ink: #1b2124;
+}
+.statebar .dsw-slot { display: flex; align-items: center; }
 .statebar__clock { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .topbar-btn { width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--rule); background: transparent; display: inline-flex; align-items: center; justify-content: center; color: var(--text-quiet); cursor: pointer; transition: background .13s, color .13s; text-decoration: none; flex-shrink: 0; }
 .topbar-btn:hover { background: var(--panel-raised); color: var(--text); }
