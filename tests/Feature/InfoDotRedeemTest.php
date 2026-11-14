@@ -166,12 +166,14 @@ class InfoDotRedeemTest extends TestCase
     public function test_a_wrong_service_secret_or_platform_is_refused_not_signed_in(): void
     {
         // 401: this app's secret is not the one InfoDot holds. 422: InfoDot does not serve this platform.
-        foreach ([401, 422] as $status) {
-            Http::swap(new Factory);
-            Http::fake([self::URL => Http::response(['error' => 'refused'], $status)]);
+        // R-52: 401 is the host's problem (operator page); 422 is the token's (login page).
+        Http::fake([self::URL => Http::response(['error' => 'refused'], 401)]);
+        $this->post(route('ecosystem.auth'), ['token' => 't'], $this->fromInfodot())->assertStatus(503)->assertSee('SSO-SECRET-REJECTED');
 
-            $this->post(route('ecosystem.auth'), ['token' => 't'], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
-        }
+        Http::swap(new Factory);
+        Http::fake([self::URL => Http::response(['error' => 'refused'], 422)]);
+        $this->post(route('ecosystem.auth'), ['token' => 't'], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
+        $this->assertGuest();
 
         $this->assertGuest();
         $this->assertSame(0, User::count());
@@ -236,7 +238,7 @@ class InfoDotRedeemTest extends TestCase
         config(['ecosystem.infodot.secret' => null]);
         Http::fake();
 
-        $this->post(route('ecosystem.auth'), ['token' => 'unknown'], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
+        $this->post(route('ecosystem.auth'), ['token' => 'unknown'], $this->fromInfodot())->assertStatus(503)->assertSee('SSO-NOT-CONFIGURED');
 
         Http::assertNothingSent();
     }
@@ -275,7 +277,7 @@ class InfoDotRedeemTest extends TestCase
         $user = User::factory()->withPersonalTeam()->create();
         config(['ecosystem.infodot.secret' => null]);
 
-        $this->post(route('ecosystem.auth'), ['token' => $this->localToken($user, ['read'])], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
+        $this->post(route('ecosystem.auth'), ['token' => $this->localToken($user, ['read'])], $this->fromInfodot())->assertStatus(503);
 
         $this->assertGuest();
     }

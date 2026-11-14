@@ -103,11 +103,19 @@ class CompanyEntitlementTest extends TestCase
         return $entitled === null ? $team : $team + ['entitled' => $entitled, 'access' => $access];
     }
 
+    /** One person, one InfoDot uuid: the same email always maps to the same one, as it does in InfoDot. */
+    private function uuidFor(string $email): string
+    {
+        $h = md5($email);
+
+        return substr($h, 0, 8).'-'.substr($h, 8, 4).'-4'.substr($h, 13, 3).'-8'.substr($h, 17, 3).'-'.substr($h, 20, 12);
+    }
+
     private function signIn(string $email, array $teams, ?string $current = null)
     {
         $this->infodotSays([self::REDEEM => Http::response([
             'platform' => 'central',
-            'user' => ['id' => 1, 'uuid' => (string) Str::uuid(), 'name' => ucfirst(strstr($email, '@', true)), 'email' => $email, 'email_verified' => true],
+            'user' => ['id' => 1, 'uuid' => $this->uuidFor($email), 'name' => ucfirst(strstr($email, '@', true)), 'email' => $email, 'email_verified' => true],
             'teams' => $teams,
             'current_team_id' => 1,
             'current_team_uuid' => $current,

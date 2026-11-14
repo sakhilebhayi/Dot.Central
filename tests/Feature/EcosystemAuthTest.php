@@ -42,7 +42,8 @@ class EcosystemAuthTest extends TestCase
         $this->assertSame(0, $user->tokens()->count(), 'the handoff token is consumed');
 
         auth()->logout();
-        $this->post(route('ecosystem.auth'), ['token' => $plain], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
+        // R-52: no InfoDot secret on this host and the token is spent, so the visitor gets the operator page, not a silent login redirect.
+        $this->post(route('ecosystem.auth'), ['token' => $plain], $this->fromInfodot())->assertStatus(503)->assertSee('SSO-NOT-CONFIGURED');
         $this->assertGuest();
     }
 
@@ -52,10 +53,11 @@ class EcosystemAuthTest extends TestCase
         $expired = $user->createToken('hub-handoff', ['ecosystem:read'], now()->subMinute())->plainTextToken;
         $wrongAbility = $user->createToken('api', ['read'], now()->addMinutes(5))->plainTextToken;
 
-        $this->post(route('ecosystem.auth'), ['token' => $expired], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
-        $this->post(route('ecosystem.auth'), ['token' => $wrongAbility], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
+        // The test host has no InfoDot secret: a token that is not in this database cannot be proven anywhere (R-52: operator page).
+        $this->post(route('ecosystem.auth'), ['token' => $expired], $this->fromInfodot())->assertStatus(503);
+        $this->post(route('ecosystem.auth'), ['token' => $wrongAbility], $this->fromInfodot())->assertStatus(503);
         $this->post(route('ecosystem.auth'), [], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
-        $this->post(route('ecosystem.auth'), ['token' => 'not-a-token'], $this->fromInfodot())->assertStatus(303)->assertRedirect('/login');
+        $this->post(route('ecosystem.auth'), ['token' => 'not-a-token'], $this->fromInfodot())->assertStatus(503);
         $this->assertGuest();
         $this->assertSame(2, $user->tokens()->count(), 'refused tokens are left alone');
     }

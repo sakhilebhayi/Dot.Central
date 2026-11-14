@@ -10,12 +10,17 @@ use App\Models\User;
 use App\Services\InfoDot\IdentityClient;
 use App\Services\InfoDot\InfoDotUnavailable;
 use App\Support\EntitlementRefusal;
+use App\Support\SsoFailure;
+use App\Support\SsoReceiverStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 /**
  * Ecosystem SSO handoff: InfoDot (the identity hub) sends the browser here with a
@@ -42,15 +47,76 @@ class EcosystemAuthController extends Controller
      */
     public function handle(Request $request): Response
     {
-        if ($request->isMethod('post') && ! $this->postedFromInfoDot($request)) {
-            return $this->refused();
+        try {
+            if ($request->isMethod('post')) {
+                $this->assertPostedFromInfoDot($request);
+            }
+
+            return app()->call([$this, 'redeem'], ['request' => $request]);
+        } catch (SsoFailure $failure) {
+            return $this->fail($request, $failure);
+        } catch (HttpExceptionInterface $e) {
+            return $this->fail($request, new SsoFailure(
+                $e->getStatusCode() === 503 ? SsoFailure::INFODOT_UNAVAILABLE : SsoFailure::TOKEN_REJECTED,
+                ['http_status' => $e->getStatusCode()],
+            ));
+        }
+    }
+
+    /**
+     * R-52: every refusal has a named reason. The reason is logged (never the token, the secret or anything about
+     * the person). A host-setup problem gets the operator recovery page; anything else goes back to the login page
+     * with a safe, specific sentence.
+     */
+    private function fail(Request $request, SsoFailure $failure): Response
+    {
+        $context = array_merge(['reason' => $failure->reason], $failure->context);
+
+        if ($failure->needsOperator()) {
+            // One line a minute per reason: an operator problem repeats for every visitor.
+            $once = true;
+
+            try {
+                $once = Cache::add('sso:receiver:logged:'.$failure->reason, 1, 60);
+            } catch (Throwable) {
+                // No cache: log every time rather than not at all.
+            }
+
+            if ($once) {
+                Log::error('SSO receiver cannot sign anyone in: '.$failure->reason.'. Run php artisan sso:check on this host.', $context + ['setup_problems' => SsoReceiverStatus::problems()]);
+            }
+
+            return response()
+                ->view('auth.sso-problem', ['code' => $failure->code(), 'reason' => $failure->reason, 'advice' => $this->advice($failure), 'infodotUrl' => rtrim((string) config('ecosystem.platforms.infodot.url', 'https://infodot.co.za'), '/')], 503)
+                ->header('Cache-Control', 'no-store, private')
+                ->header('Referrer-Policy', 'no-referrer');
         }
 
-        try {
-            return app()->call([$this, 'redeem'], ['request' => $request]);
-        } catch (HttpExceptionInterface $e) {
-            return $this->refused($e->getStatusCode() === 503);
+        Log::warning('SSO sign-in refused: '.$failure->reason.'.', $context);
+
+        return redirect('/login', 303)->with('status', $failure->userMessage());
+    }
+
+    /**
+     * Setting names only, never values, for the person who runs this host.
+     *
+     * @return list<string>
+     */
+    private function advice(SsoFailure $failure): array
+    {
+        if ($failure->reason === SsoFailure::SECRET_REJECTED) {
+            return ["InfoDot refused this platform's secret. INFODOT_SERVICE_SECRET here must equal ECOSYSTEM_SECRET_CENTRAL in InfoDot's .env, and INFODOT_PLATFORM_KEY must be central. Compare their hashes, never print them. Then run php artisan config:cache."];
         }
+
+        $problems = SsoReceiverStatus::blocking();
+
+        if ($failure->reason === SsoFailure::REDEEM_HOST_MISMATCH && ! in_array(SsoReceiverStatus::REDEEM_HOST_MISMATCH, $problems, true)) {
+            $problems[] = SsoReceiverStatus::REDEEM_HOST_MISMATCH;
+        }
+
+        return array_map(fn (string $p) => SsoReceiverStatus::ADVICE[$p], $problems) ?: [
+            'Run php artisan sso:check on this host: it names the setting that is wrong.',
+        ];
     }
 
     /**
@@ -58,7 +124,7 @@ class EcosystemAuthController extends Controller
      * token). A browser names the page that posted a cross-site form in Origin, so only InfoDot's launch page,
      * on this app's parent domain (tasks.infodot.co.za -> infodot.co.za), is accepted.
      */
-    private function postedFromInfoDot(Request $request): bool
+    private function assertPostedFromInfoDot(Request $request): void
     {
         $origin = (string) $request->headers->get('Origin', '');
         $host = $origin !== '' && $origin !== 'null'
@@ -66,66 +132,94 @@ class EcosystemAuthController extends Controller
             : parse_url((string) $request->headers->get('Referer', ''), PHP_URL_HOST);
 
         if (! is_string($host) || $host === '') {
-            return in_array($request->headers->get('Sec-Fetch-Site'), ['same-origin', 'same-site'], true);
+            if (in_array($request->headers->get('Sec-Fetch-Site'), ['same-origin', 'same-site'], true)) {
+                return;
+            }
+
+            throw new SsoFailure(SsoFailure::ORIGIN_REJECTED, ['origin_host' => null]);
         }
 
         $host = strtolower($host);
 
         // When this app knows InfoDot's address, exactly that origin is accepted, not a sibling subdomain.
-        $infodot = parse_url((string) config('ecosystem.infodot.redeem_url', ''), PHP_URL_HOST);
+        $infodot = SsoReceiverStatus::redeemHost();
 
-        if (is_string($infodot) && $infodot !== '') {
-            return $host === strtolower($infodot);
+        if ($infodot !== null) {
+            if ($host === $infodot) {
+                return;
+            }
+
+            // InfoDot's own public host posted, but this host was told InfoDot lives somewhere else: that is this
+            // host's setting being wrong, not a stranger's form.
+            if ($host === SsoReceiverStatus::infodotHost()) {
+                throw new SsoFailure(SsoFailure::REDEEM_HOST_MISMATCH, ['origin_host' => $host, 'redeem_host' => $infodot]);
+            }
+
+            throw new SsoFailure(SsoFailure::ORIGIN_REJECTED, ['origin_host' => $host, 'redeem_host' => $infodot]);
         }
 
         // An app without that setting falls back to its own parent domain.
         $self = strtolower($request->getHost());
         $parent = str_contains($self, '.') ? substr($self, strpos($self, '.') + 1) : $self;
 
-        return $host === $self || $host === $parent || str_ends_with($host, '.'.$parent);
-    }
+        if ($host === $self || $host === $parent || str_ends_with($host, '.'.$parent)) {
+            return;
+        }
 
-    private function refused(bool $unavailable = false): RedirectResponse
-    {
-        return redirect('/login', 303)->with('status', $unavailable
-            ? 'Sign-in through InfoDot is unavailable right now. Please try again in a moment.'
-            : 'We could not sign you in through InfoDot. Please open this app again from InfoDot.');
+        // No address for InfoDot is configured at all: the host's setting, not a stranger's form.
+        if (in_array(SsoReceiverStatus::REDEEM_URL_MISSING, SsoReceiverStatus::problems(), true)) {
+            throw new SsoFailure(SsoFailure::NOT_CONFIGURED, ['origin_host' => $host, 'setup_problems' => implode(',', SsoReceiverStatus::problems())]);
+        }
+
+        throw new SsoFailure(SsoFailure::ORIGIN_REJECTED, ['origin_host' => $host]);
     }
 
     public function redeem(Request $request, IdentityClient $infoDot, ProvisionUserFromInfoDot $provision, SyncTeamsFromInfoDot $syncTeams): Response
     {
         $token = $request->post('token');
 
-        abort_unless(is_string($token) && $token !== '', 403);
+        if (! is_string($token) || $token === '') {
+            throw new SsoFailure(SsoFailure::TOKEN_MISSING);
+        }
 
         $user = $this->userFromLocalToken($token);
         $identity = null;
 
-        // Production gives each Dot app its own database, so InfoDot's token is not
-        // in ours: ask InfoDot to prove it.
-        if (! $user && $infoDot->enabled()) {
+        // Production gives each Dot app its own database, so InfoDot's token is
+        // not in ours: ask InfoDot to prove it.
+        if (! $user) {
+            if (! $infoDot->enabled()) {
+                // No secret (or no redeem address) and the token is not in a database we share: nobody can ever sign
+                // in here. That is the host's setting, not the visitor's doing.
+                throw new SsoFailure(SsoFailure::NOT_CONFIGURED, ['setup_problems' => implode(',', SsoReceiverStatus::problems())]);
+            }
+
             try {
                 $identity = $infoDot->redeem($token);
             } catch (InfoDotUnavailable) {
-                abort(503, 'Sign-in through InfoDot is unavailable right now. Please try again in a moment.');
+                throw new SsoFailure(SsoFailure::INFODOT_UNAVAILABLE, ['infodot_status' => $infoDot->lastStatus]);
+            }
+
+            if ($identity === null) {
+                throw $infoDot->lastStatus === 401
+                    ? new SsoFailure(SsoFailure::SECRET_REJECTED, ['infodot_status' => 401])
+                    : new SsoFailure($infoDot->lastStatus !== null && $infoDot->lastStatus < 300 ? SsoFailure::BAD_ANSWER : SsoFailure::TOKEN_REJECTED, ['infodot_status' => $infoDot->lastStatus]);
             }
 
             // R-50: InfoDot marks each company with whether it holds this platform. When it says none does, nobody
             // is signed in and nothing is created: the person gets the plain page that says so.
-            if ($identity && ($refusal = $this->nothingEntitled($identity)) !== null) {
+            if (($refusal = $this->nothingEntitled($identity)) !== null) {
                 return EntitlementRefusal::response($refusal['reason'], $refusal['company']);
             }
 
-            if ($identity) {
-                $user = $provision($identity);
+            $user = $provision($identity);
 
-                if ($user) {
-                    $syncTeams($user, $identity);
-                }
+            if (! $user) {
+                throw new SsoFailure($provision->failure ?? SsoFailure::NO_ACCOUNT);
             }
-        }
 
-        abort_if(! $user, 403);
+            $syncTeams($user, $identity);
+        }
 
         // Auth::login() also regenerates the session id (no fixation).
         Auth::login($user);

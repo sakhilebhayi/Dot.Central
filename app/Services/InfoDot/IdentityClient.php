@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Log;
  */
 class IdentityClient
 {
+    /** HTTP status of the last redeem answer (null before one, or when InfoDot could not be reached). Never a secret. */
+    public ?int $lastStatus = null;
+
     public function enabled(): bool
     {
         return filled(config('ecosystem.infodot.secret')) && filled(config('ecosystem.infodot.redeem_url'));
@@ -27,6 +30,8 @@ class IdentityClient
      */
     public function redeem(string $token): ?array
     {
+        $this->lastStatus = null;
+
         try {
             $response = Http::withToken((string) config('ecosystem.infodot.secret'))
                 ->acceptJson()
@@ -40,6 +45,8 @@ class IdentityClient
 
             throw new InfoDotUnavailable('InfoDot could not be reached.', 0, $e);
         }
+
+        $this->lastStatus = $response->status();
 
         if ($response->serverError() || $response->status() === 429) {
             Log::warning('InfoDot redeem failed.', ['status' => $response->status()]);

@@ -104,7 +104,9 @@ class EcosystemSsoPostTest extends TestCase
         foreach ($tokens as $token) {
             $response = $this->post('/auth/ecosystem', ['token' => $token], $this->fromInfodot());
 
-            $response->assertStatus(303)->assertRedirect('/login');
+            // R-52: an empty token is the visitor's; a token this host cannot prove (no InfoDot secret here) is the
+            // host's, and gets the operator page. Neither echoes the token.
+            $token === '' ? $response->assertStatus(303)->assertRedirect('/login') : $response->assertStatus(503);
             $this->assertGuest();
             $this->assertStringNotContainsString('token', (string) $response->headers->get('Location'));
             if ($token !== '') {
