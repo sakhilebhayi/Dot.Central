@@ -34,7 +34,7 @@
             .topbar { border-bottom: 1px solid var(--rule); }
             .topbar .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
             .topbar nav { display: flex; align-items: center; gap: 22px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
-            .topbar nav a { text-decoration: none; }
+            .topbar nav a { text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; }
             .topbar nav a:hover { color: var(--text); }
             .btn { display: inline-block; padding: 10px 18px; font-family: var(--font-display); font-weight: 600; font-size: 14px; text-decoration: none; border: 1px solid var(--rule-strong); color: var(--text); }
             .btn:hover { border-color: var(--text-muted); }
@@ -78,7 +78,7 @@
             footer { padding: 28px 0 40px; }
             footer .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; font-family: var(--font-mono); font-size: 12px; color: var(--text-quiet); }
             footer nav { display: flex; gap: 18px; }
-            footer a { text-decoration: none; }
+            footer a { text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
             footer a:hover { color: var(--text); }
             .skip { position: absolute; left: -9999px; }
             .skip:focus { left: 16px; top: 16px; background: var(--signal); color: #15120a; padding: 8px 12px; z-index: 10; }
