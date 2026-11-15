@@ -1,45 +1,42 @@
-<div style="position:relative;" x-data @click.outside="$wire.open = false">
-    <button wire:click="toggle" class="topbar-btn" title="Notifications" style="position:relative;">
-        <span class="material-symbols-rounded">notifications</span>
+<div class="cb" x-data @click.outside="if ($wire.open) $wire.set('open', false)" @keydown.escape.window="if ($wire.open) $wire.set('open', false)">
+    <button type="button" wire:click="toggle" class="dh-icon-btn dh-bell" title="Notifications" aria-haspopup="true" aria-expanded="{{ $open ? 'true' : 'false' }}" aria-controls="cb-panel"
+        aria-label="{{ $this->unreadCount > 0 ? 'Notifications, '.$this->unreadCount.' unread' : 'Notifications' }}">
+        <span class="material-symbols-rounded" aria-hidden="true">notifications</span>
         @if($this->unreadCount > 0)
-            <span style="position:absolute;top:-2px;right:-2px;min-width:15px;height:15px;padding:0 3px;border-radius:100px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1;">
-                {{ $this->unreadCount > 9 ? '9+' : $this->unreadCount }}
-            </span>
+            <span class="dh-badge" aria-hidden="true">{{ $this->unreadCount > 99 ? '99+' : $this->unreadCount }}</span>
         @endif
     </button>
 
     @if($open)
-    <div style="position:absolute;top:calc(100% + 8px);right:0;width:320px;max-height:420px;overflow-y:auto;background:var(--card-bg);border:1px solid var(--card-border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.35);z-index:50;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.85rem 1rem;border-bottom:1px solid var(--divider);">
-            <span style="font-family:var(--font-display);font-size:12.5px;font-weight:700;color:var(--text-primary);">Notifications</span>
+    <div class="cb-panel" id="cb-panel" role="region" aria-label="Notifications">
+        <div class="cb-panel__head">
+            <span class="cb-panel__title">Notifications</span>
             @if($this->unreadCount > 0)
-                <button wire:click="markAllAsRead" style="background:none;border:none;color:var(--ok);font-size:11px;font-weight:600;cursor:pointer;padding:0;">Mark all read</button>
+                <button type="button" wire:click="markAllAsRead" class="cb-panel__mark">Mark all read</button>
             @endif
         </div>
 
         @if($this->notifications->isEmpty())
-            <div style="text-align:center;padding:2rem 1rem;">
-                <span class="material-symbols-rounded" style="font-size:30px;color:var(--text-faint);display:block;margin-bottom:0.5rem;">notifications_off</span>
-                <p style="font-size:0.75rem;color:var(--text-muted);margin:0;">No notifications yet.</p>
+            <div class="cb-panel__empty">
+                <span class="material-symbols-rounded" aria-hidden="true">notifications_off</span>
+                <p>No notifications yet.</p>
             </div>
         @else
-            <div>
+            <div class="cb-panel__list">
                 @foreach($this->notifications as $notification)
-                <a href="{{ $notification->data['url'] ?? '#' }}" wire:click="markAsRead('{{ $notification->id }}')" style="display:block;padding:0.7rem 1rem;border-bottom:1px solid var(--divider);cursor:pointer;text-decoration:none;{{ $notification->read_at ? 'opacity:0.55;' : '' }}">
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        @if(!$notification->read_at)
-                            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
-                        @endif
-                        <span style="font-size:12px;font-weight:600;color:var(--text-secondary);">{{ $notification->data['title'] ?? 'Notification' }}</span>
-                    </div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;">{{ $notification->data['message'] ?? '' }}</div>
+                <a href="{{ $notification->data['url'] ?? '#' }}" wire:click="markAsRead('{{ $notification->id }}')" class="cb-item {{ $notification->read_at ? 'is-read' : '' }}">
+                    <span class="cb-item__title">
+                        @if(!$notification->read_at)<span class="cb-item__dot" aria-hidden="true"></span>@endif
+                        {{ $notification->data['title'] ?? 'Notification' }}
+                    </span>
+                    <span class="cb-item__text">{{ $notification->data['message'] ?? '' }}</span>
                 </a>
                 @endforeach
             </div>
         @endif
 
-        <div style="padding:0.6rem 1rem;border-top:1px solid var(--divider);text-align:center;">
-            <a href="{{ route('notifications.index') }}" style="font-size:11px;color:var(--info);text-decoration:none;font-weight:600;">View all</a>
+        <div class="cb-panel__foot">
+            <a href="{{ route('notifications.index') }}">View all</a>
         </div>
     </div>
     @endif

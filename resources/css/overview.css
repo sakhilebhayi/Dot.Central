@@ -1,23 +1,19 @@
 /*
  * Dot.Central Overview (R-51): one ruled sheet inside the existing shell. Tokens are the product's own
  * (app.css :root = day, :root.dark = night); nothing here defines a colour. Spacing 4/8/12/16/24/32, rows 30/40/52,
- * type 12/13/14/16/24, radius 2/3/4. The page is its own scroller (.ov), so the bar and the foot never move.
+ * type 12/13/14/16/24, radius 2/3/4. The page is its own scroller (.ov), so the header and the foot never move.
  */
 :root { --foot-h: 32px; --ov-hit: 32px; }
 
-/* ---------- Foot: the shift, the Dot.Mines link and the clock (moved here from the state bar) ---------- */
+/* ---------- Foot: the shift, the Dot.Mines link and the clock (moved here from the state bar; R-52: the state bar is now the lamp, word and counts inside the shared header) ---------- */
 .shellfoot { position: fixed; left: var(--nav-w); right: 0; bottom: 0; height: var(--foot-h); z-index: 30; display: flex; align-items: stretch; background: var(--panel-sunken); border-top: 1px solid var(--rule); font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); min-width: 0; }
 .shellfoot__item { display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; border-right: 1px solid var(--rule); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-decoration: none; color: inherit; font-variant-numeric: tabular-nums; }
 a.shellfoot__item:hover { background: var(--panel-raised); color: var(--text); }
 .shellfoot__item--grow { flex: 1 1 auto; border-right: 0; justify-content: flex-end; color: var(--text-faint); }
 .shellfoot .dot-status-lamp { flex: none; }
 .content-wrap { padding-bottom: var(--foot-h); }
-.statebar__title { font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: 0.01em; color: var(--text); padding-right: 12px; margin-right: 2px; border-right: 1px solid var(--rule); line-height: 28px; }
-.statebar__detail { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
 @media (max-width: 860px) { .shellfoot { left: 0; } .shellfoot__clock { display: none; } }
 @media (max-width: 620px) {
-    :root { --foot-h: 44px; }
-    .statebar__title { display: none; }
     .shellfoot__item { padding: 0 12px; }
     .shellfoot__item:nth-child(2) { display: none; }
     .shellfoot__item--shift { flex: 1 1 auto; }
@@ -220,7 +216,9 @@ a.ov-u:hover { background: var(--panel-raised); border-color: var(--rule-strong)
     .ov-btn--sm { min-height: 44px; }
     .ov-seg button { height: 44px; }
     .ov-pane-head { height: auto; flex-wrap: wrap; padding: 8px 16px; }
-    .ov-u { width: 32px; height: 32px; }
+    .ov-u { width: 44px; height: 44px; }
+    .ov-units { gap: 0; }
+    .ov-kv .ov-link, .ov-figs .ov-link, .ov-sub-head .ov-link, .ov-pane-head .ov-link, .ov-stopped .ov-link { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
     .ov-figs { flex-wrap: wrap; gap: 4px 16px; }
     .ov-links a { display: inline-flex; align-items: center; min-height: 44px; }
     .ov-fleet-table thead { display: none; }
@@ -257,3 +255,15 @@ a.ov-u:hover { background: var(--panel-raised); border-color: var(--rule-strong)
 .ov-head__room label { white-space: nowrap; }
 .ov-split--solo { grid-template-columns: minmax(0, 1fr) !important; }
 .ov-split--solo .ov-queue { border-right: 0; }
+
+/* Touch and tablet (and a narrow desktop window): finger-sized targets. The foot is 44px plus its rule, the Overview's own controls are 44px. */
+@media (max-width: 1024px), (pointer: coarse) {
+    :root { --foot-h: 45px; --ov-hit: 44px; }
+    .shellfoot__item { min-height: 44px; }
+    .ov-path a { height: auto; min-height: 44px; }
+    .ov-seg button { height: 44px; }
+    .ov-u { width: 44px; height: 44px; }
+    .ov-units { gap: 0; }
+    .ov-key .ov-u { width: 14px; height: 14px; }
+    .ov-links a, .ov-kv .ov-link, .ov-figs .ov-link, .ov-sub-head .ov-link, .ov-pane-head .ov-link, .ov-stopped .ov-link { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+}

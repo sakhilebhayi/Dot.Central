@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark dot-roboto">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,46 +8,70 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon-16x16.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('apple-touch-icon.png') }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
-    <script>
-        // `.dark` on <html> means NIGHT, and night is the default: a control
-        // room is read in a dim room far more often than a bright one. A
-        // stored preference wins. Applied before first paint.
-        (function () {
-            var stored = null;
-            try { stored = localStorage.getItem('dot-central-theme'); } catch (e) {}
-            if (stored === 'light') { document.documentElement.classList.remove('dark'); }
-        })();
-        window.dotToggleTheme = function (button) {
-            var night = document.documentElement.classList.toggle('dark');
-            try { localStorage.setItem('dot-central-theme', night ? 'dark' : 'light'); } catch (e) {}
-            var label = night ? 'Switch to day' : 'Switch to night';
-            var text = button.querySelector('[data-theme-label]'); if (text) { text.textContent = label; }
-            button.title = label;
-        };
-    </script>
-    {{-- Shared Dot UI (platform switcher), served from this site's own public/dot-ui. Before the app CSS so the token mapping in app.css wins. --}}
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-fonts.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-tokens.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-switcher-fonts.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-switcher.css') }}">
+    {{-- Theme: night is the default; a plain external script so the class is set before first paint and the page needs no inline script. --}}
+    <script src="{{ Vite::asset('resources/js/theme-init.js') }}"></script>
+    {{-- Shared Dot UI 0.6.1 (one stylesheet: typography, header, search, switcher; one script, the results controller loads lazily), served from this site's own public/dot-ui. Before the app CSS so the token mapping in app.css wins. --}}
+    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-ui.min.css') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
 <body>
-    <a href="#main" class="skip-link">Skip to content</a>
     <x-banner />
+
+    @php
+        $navCounts = app(\App\View\Components\ShellStateBar::class);
+        $shellUser = Auth::user();
+        $shellTeam = $shellUser?->currentTeam;
+        $shellAccount = $shellUser ? [
+            'name' => $shellUser->name,
+            'email' => $shellUser->email,
+            'team' => $shellTeam ? $shellTeam->name.' · '.($shellUser->roleOn($shellTeam)?->label() ?? 'Member') : 'No team',
+            'links' => array_values(array_filter([
+                ['label' => 'Notifications', 'href' => route('notifications.index')],
+                ['label' => 'Profile & settings', 'href' => route('profile.show'), 'current' => request()->routeIs('profile.show')],
+                $shellTeam && Laravel\Jetstream\Jetstream::hasTeamFeatures() ? ['label' => 'Team & roles', 'href' => route('teams.show', $shellTeam), 'current' => request()->routeIs('teams.*')] : null,
+            ])),
+            'signOut' => ['action' => route('logout')],
+        ] : null;
+    @endphp
+
+    {{-- One header: logo, the state of the room (lamp + word + counts), the search, the tools and the account. The sidebar below it is the
+         module navigation; on a phone the header's menu button opens it (dot-ui adopt mode). --}}
+    <x-dot.header id="dh" brand-href="{{ route('dashboard') }}" brand-label="Dot.Central, overview" :account="$shellAccount"
+        drawer-target="dot-sidebar" menu-label="Open navigation" search-label="Search Dot.Central" skip="#main">
+        <x-slot:brand>
+            <img src="{{ asset('images/logo-light.png') }}" alt="" class="brand-mark brand-mark--night" width="45" height="34" />
+            <img src="{{ asset('images/logo.png') }}" alt="" class="brand-mark brand-mark--day" width="45" height="34" />
+            <span class="dh-brand__name">Dot.Central</span>
+        </x-slot:brand>
+        <x-slot:context>@include('components.shell-state-bar', ['bar' => $navCounts])</x-slot:context>
+        @auth
+        <x-slot:search><livewire:header-search /></x-slot:search>
+        @endauth
+        <x-slot:tools>
+            @auth
+            <livewire:dot-apps />
+            @endauth
+            <button type="button" class="dh-icon-btn dh-themebtn" data-theme-toggle title="Switch to day">
+                <span class="material-symbols-rounded theme-icon-night" aria-hidden="true">light_mode</span>
+                <span class="material-symbols-rounded theme-icon-day" aria-hidden="true">dark_mode</span>
+                <span class="sr-only" data-theme-label>Switch to day</span>
+            </button>
+            @auth
+            @livewire('notification-bell')
+            @endauth
+        </x-slot:tools>
+    </x-dot.header>
 
     <aside class="sidebar" id="dot-sidebar">
         <div class="sidebar-brand">
-            <img src="{{ asset('images/logo-light.png') }}" alt="" class="brand-mark brand-mark--night" />
-            <img src="{{ asset('images/logo.png') }}" alt="" class="brand-mark brand-mark--day" />
+            <img src="{{ asset('images/logo-light.png') }}" alt="" class="brand-mark brand-mark--night" width="40" height="30" />
+            <img src="{{ asset('images/logo.png') }}" alt="" class="brand-mark brand-mark--day" width="40" height="30" />
             <div>
                 <div class="brand-name">Dot.Central</div>
                 <div class="brand-subtitle">Control room</div>
             </div>
+            <button type="button" class="sidebar-close" data-dh-close aria-label="Close navigation"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
         </div>
 
         <nav class="sidebar-nav" aria-label="Main">
@@ -65,7 +89,6 @@
                 Alerts
             </a>
             <div class="nav-section-label">Control</div>
-            @php($navCounts = app(\App\View\Components\ShellStateBar::class))
             <a href="{{ route('exceptions.index') }}" class="nav-item {{ request()->routeIs('exceptions.*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">rule</span>
                 Exceptions
@@ -107,7 +130,8 @@
                 <span class="material-symbols-rounded nav-icon">smart_toy</span>
                 Agents
             </a>
-            <div class="sidebar-divider"></div>
+            <div class="nav-account">
+                <div class="sidebar-divider"></div>
             <a href="{{ route('notifications.index') }}" class="nav-item {{ request()->routeIs('notifications.*') ? 'active' : '' }}">
                 <span class="material-symbols-rounded nav-icon">notifications</span>
                 Notifications
@@ -122,6 +146,12 @@
                 Team &amp; Roles
             </a>
             @endif
+                <button type="button" class="nav-item nav-item--button nav-theme" data-theme-toggle title="Switch to day">
+                    <span class="material-symbols-rounded nav-icon theme-icon-night">light_mode</span>
+                    <span class="material-symbols-rounded nav-icon theme-icon-day">dark_mode</span>
+                    <span data-theme-label>Switch to day</span>
+                </button>
+            </div>
         </nav>
 
         @auth
@@ -141,8 +171,6 @@
         @endauth
     </aside>
 
-    <x-shell-state-bar :title="request()->routeIs('dashboard') ? 'Overview' : null" />
-
     <div class="content-wrap">
         <main id="main">{{ $slot }}</main>
     </div>
@@ -150,7 +178,7 @@
     <x-shell-foot :bar="$navCounts" />
 
     @stack('modals')
-    <script src="{{ asset('dot-ui/js/dot-switcher.js') }}" defer></script>
+    <script src="{{ asset('dot-ui/js/dot-ui-core.min.js') }}" defer></script>
     @livewireScripts
 </body>
 </html>

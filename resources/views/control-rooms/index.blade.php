@@ -1,9 +1,9 @@
 <x-app-layout>
-    <div style="padding:2rem 2.5rem;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;">
+    <div class="dot-page">
+        <div class="dot-page-head">
             <div>
-                <h1 style="font-family:var(--font-display);font-size:1.625rem;font-weight:800;color:var(--text-primary);margin:0 0 0.25rem;">Control Rooms</h1>
-                <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">Mining-dispatch domain — one control room per Dot.Mines site.</p>
+                <h1 class="dot-page-head__title">Control Rooms</h1>
+                <p class="dot-page-head__lede">Mining-dispatch domain — one control room per Dot.Mines site.</p>
             </div>
             <a href="{{ route('control-rooms.create') }}" class="dot-btn dot-btn-primary">
                 New Control Room
@@ -37,7 +37,7 @@
             @endforeach
         </div>
 
-        <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:0.875rem;overflow:hidden;">
+        <div class="dot-panel dot-panel--flush">
             @if($controlRooms->isEmpty())
                 <div style="padding:3.5rem 1.5rem;text-align:center;">
                     <div style="width:56px;height:56px;border-radius:14px;background:rgba(125,211,252,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
@@ -51,38 +51,31 @@
                     </a>
                 </div>
             @else
-                <table style="width:100%;border-collapse:collapse;">
+                <div class="dot-table-wrap">
+                <table class="dot-ledger">
                     <thead>
-                        <tr style="border-bottom:1px solid var(--divider);">
-                            <th style="padding:0.75rem 1.5rem;text-align:left;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Name</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Dot.Mines</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Status</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Decisions</th>
-                            <th style="padding:0.75rem 1rem;text-align:left;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);">Alerts</th>
-                            <th style="padding:0.75rem 1.5rem;text-align:right;"></th>
-                        </tr>
+                        <tr><th>Name</th><th>Dot.Mines</th><th>Status</th><th class="th-num">Decisions</th><th class="th-num">Alerts</th><th aria-label="Open"></th></tr>
                     </thead>
                     <tbody>
                         @foreach($controlRooms as $room)
-                        <tr style="border-bottom:1px solid var(--divider);">
-                            <td style="padding:1rem 1.5rem;font-family:var(--font-display);font-weight:700;color:var(--text-primary);">{{ $room->name }}</td>
-                            <td style="padding:1rem;color:var(--text-secondary);font-size:0.8rem;">@if($room->minesConnection) team #{{ $room->minesConnection->mines_team_id ?? '—' }} · {{ $room->minesConnection->status }} @else not connected @endif</td>
-                            <td style="padding:1rem;">
+                        <tr>
+                            <td class="cr-name">{{ $room->name }}</td>
+                            <td>@if($room->minesConnection) team #{{ $room->minesConnection->mines_team_id ?? '—' }} · {{ $room->minesConnection->status }} @else not connected @endif</td>
+                            <td>
                                 @if($room->is_active)
-                                    <span style="color:var(--ok);font-size:0.75rem;font-weight:700;">Active</span>
+                                    <span class="dot-badge dot-badge--ok">Active</span>
                                 @else
-                                    <span style="color:var(--text-muted);font-size:0.75rem;font-weight:700;">Inactive</span>
+                                    <span class="dot-badge">Inactive</span>
                                 @endif
                             </td>
-                            <td style="padding:1rem;color:var(--text-secondary);font-size:0.8rem;">{{ $room->dispatch_decisions_count }}</td>
-                            <td style="padding:1rem;color:var(--text-secondary);font-size:0.8rem;">{{ $room->alerts_count }}</td>
-                            <td style="padding:1rem 1.5rem;text-align:right;">
-                                <a href="{{ route('control-rooms.show', $room) }}" style="color:#fda4af;font-size:0.75rem;font-weight:700;text-decoration:none;">Open →</a>
-                            </td>
+                            <td class="num">{{ $room->dispatch_decisions_count }}</td>
+                            <td class="num">{{ $room->alerts_count }}</td>
+                            <td class="cr-open"><a href="{{ route('control-rooms.show', $room) }}" class="dot-link-hit" aria-label="Open {{ $room->name }}">Open →</a></td>
                         </tr>
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </div>
     </div>

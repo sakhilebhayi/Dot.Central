@@ -1,10 +1,7 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Team Settings') }}
-        </h2>
-    </x-slot>
+    <x-slot name="header">{{ __('Team Settings') }}</x-slot>
 
+    <h1 class="sr-only">{{ __('Team Settings') }}</h1>
     <div>
         <div class="max-w-7xl mx-auto py-10 sm:px-6 lg:px-8">
             @livewire('teams.update-team-name-form', ['team' => $team])

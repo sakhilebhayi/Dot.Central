@@ -153,6 +153,6 @@ class ShellStateBar extends Component
 
     public function render(): View
     {
-        return view('components.shell-state-bar');
+        return view('components.shell-state-bar', ['bar' => $this]);
     }
 }
