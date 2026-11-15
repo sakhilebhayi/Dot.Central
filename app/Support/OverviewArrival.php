@@ -24,7 +24,7 @@ final class OverviewArrival
 {
     /**
      * @param  array{exceptions: int, critical: int, alerts: int}  $needs
-     * @return array{welcome: string, place: string, state: string, level: string, action: array{key: string, label: string, url: string, why: string}}
+     * @return array{headline: string, welcome: string, place: string, state: string, level: string, action: array{key: string, label: string, url: string, why: string}}
      */
     public static function for(User $user, ?ControlRoom $room, ?Shift $shift, bool $lineupConfirmed, bool $connected, array $needs, string $timezone = 'UTC'): array
     {
@@ -33,6 +33,7 @@ final class OverviewArrival
 
         if ($room === null) {
             return [
+                'headline' => $user->can('create', ControlRoom::class) ? 'No control room exists for this team yet.' : 'You are not assigned to a control room yet.',
                 'welcome' => $first !== '' ? 'Welcome, '.$first.'.' : 'Welcome.',
                 'place' => $team !== null ? 'You are signed in to '.$team->name.'.' : 'You are not in a team yet.',
                 'state' => $user->can('create', ControlRoom::class)
@@ -46,12 +47,35 @@ final class OverviewArrival
         $isCurrent = $shift?->isCurrent() ?? false;
 
         return [
+            'headline' => self::headline($needs, $shift),
             'welcome' => $first !== '' ? 'Welcome, '.$first.'.' : 'Welcome.',
             'place' => 'You are in '.$room->name.($team !== null ? ', '.$team->name : '').'.',
             'state' => self::shiftSentence($shift, $isCurrent).' '.self::needsSentence($needs),
             'level' => $needs['critical'] > 0 ? 'bad' : ($needs['exceptions'] + $needs['alerts'] > 0 ? 'warn' : 'ok'),
             'action' => self::withRoom($user, $room, $shift, $isCurrent, $lineupConfirmed, $connected, $timezone),
         ];
+    }
+
+    /**
+     * The one sentence the page opens with. It is built from the SAME counts the
+     * state bar shows (exceptions needing attention plus open alerts), so the bar,
+     * the headline and the navigation badges cannot disagree.
+     *
+     * @param  array{exceptions: int, critical: int, alerts: int}  $needs
+     */
+    public static function headline(array $needs, ?Shift $shift = null): string
+    {
+        $items = $needs['exceptions'] + $needs['alerts'];
+
+        if ($needs['critical'] > 0) {
+            return $needs['critical'].' critical '.Str::plural('exception', $needs['critical']).($needs['critical'] === 1 ? ' blocks' : ' block').' the shift close.';
+        }
+
+        if ($items > 0) {
+            return $items.' '.Str::plural('item', $items).($items === 1 ? ' needs' : ' need').' attention.';
+        }
+
+        return $shift === null ? 'No shift has been started in this room yet.' : 'Nothing needs you right now.';
     }
 
     private static function shiftSentence(?Shift $shift, bool $isCurrent): string
@@ -88,13 +112,8 @@ final class OverviewArrival
             return 'Nothing needs you right now.';
         }
 
-        $sentence = implode(' and ', $parts).($needs['exceptions'] + $needs['alerts'] === 1 ? ' needs' : ' need').' attention';
-
-        if ($needs['critical'] > 0) {
-            return $sentence.'; '.$needs['critical'].' critical '.Str::plural('exception', $needs['critical']).($needs['critical'] === 1 ? ' blocks' : ' block').' the shift close.';
-        }
-
-        return $sentence.'.';
+        // The critical count is the headline's job (headline()); repeating it here printed the same sentence twice.
+        return implode(' and ', $parts).($needs['exceptions'] + $needs['alerts'] === 1 ? ' needs' : ' need').' attention.';
     }
 
     /**

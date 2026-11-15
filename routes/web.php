@@ -21,6 +21,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperatorSessionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SchedulerProbeController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ShiftPagesController;
 use App\Http\Controllers\StaleSessionProposalController;
@@ -29,11 +30,6 @@ use App\Http\Middleware\EnsureCompanyEntitled;
 use App\Livewire\FleetBoard;
 use App\Livewire\Lineup;
 use App\Livewire\Overview;
-use App\Models\Agent;
-use App\Models\AgentSkill;
-use App\Models\AgentUsageLog;
-use App\Models\Conversation;
-use App\Models\Message;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Laravel\Fortify\Features;
@@ -83,27 +79,9 @@ Route::middleware([
 ])->group(function () {
     Route::get('/dashboard', Overview::class)->name('dashboard');
 
-    Route::get('/agent-hub', function () {
-        // Agent/AgentSkill are the ecosystem-wide agent catalog (no owner
-        // column at all) and are intentionally never scoped. Conversation/
-        // Message/AgentUsageLog carry HasUserScope/HasConversationUserScope,
-        // so they no longer need the ad-hoc where('user_id', ...) filters
-        // that used to live directly in this closure.
-        $totalAgents = Agent::count();
-        $activeAgents = Agent::where('is_active', true)->count();
-        $totalConversations = Conversation::count();
-        $totalMessages = Message::count();
-        $totalTokens = AgentUsageLog::selectRaw('COALESCE(SUM(tokens_input + tokens_output), 0) as total')
-            ->value('total') ?? 0;
-        $totalSkills = AgentSkill::count();
-        $agents = Agent::withCount('conversations')->latest()->get();
-        $skills = AgentSkill::withCount('agents')->get();
+    Route::get('/search', [SearchController::class, 'index'])->name('search');
 
-        return view('dashboard', compact(
-            'totalAgents', 'activeAgents', 'totalConversations', 'totalMessages',
-            'totalTokens', 'totalSkills', 'agents', 'skills'
-        ));
-    })->name('agents.hub');
+    Route::get('/agent-hub', [AgentController::class, 'hub'])->name('agents.hub');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

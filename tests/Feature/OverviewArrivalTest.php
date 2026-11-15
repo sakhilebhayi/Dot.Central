@@ -90,7 +90,7 @@ class OverviewArrivalTest extends TestCase
     private function band(TestResponse $response): string
     {
         $html = (string) $response->getContent();
-        $this->assertSame(1, preg_match('/<section class="dot-panels dot-arrival".*?<\/section>/s', $html, $m));
+        $this->assertSame(1, preg_match('/<section class="ov-row ov-head".*?<\/section>/s', $html, $m));
 
         return $m[0];
     }
@@ -190,21 +190,27 @@ class OverviewArrivalTest extends TestCase
         // Another room's records never reach this sentence.
         OperationalException::factory()->for(ControlRoom::factory()->for($this->team))->create();
 
-        $this->assertSame('15 Oct 2026 · Day shift is open. 3 exceptions and 1 open alert need attention; 1 critical exception blocks the shift close.', $state());
+        // The sub line counts; the headline (the one sentence the page opens with) says what blocks the close.
+        $this->assertSame('15 Oct 2026 · Day shift is open. 3 exceptions and 1 open alert need attention.', $state());
+        $this->actingAs($operator)->get('/dashboard')->assertSee('1 critical exception blocks the shift close.');
     }
 
-    public function test_the_band_shows_the_original_logo_files_and_the_way_back_to_infodot(): void
+    public function test_the_original_logo_files_are_untouched_and_the_head_shows_them_only_when_there_is_no_room(): void
     {
         $this->assertSame(self::LOGO_SHA256, hash_file('sha256', public_path('images/logo.png')));
         $this->assertSame(self::LOGO_LIGHT_SHA256, hash_file('sha256', public_path('images/logo-light.png')));
 
-        $band = $this->band($this->actingAs($this->member('operator', 'Sipho Operator'))->get('/dashboard')->assertOk());
-
+        // A person with no room gets the arrival with the original logo files and no figure.
+        $band = $this->band($this->actingAs($this->member('operator', 'Naledi Newcomer', inRoom: false))->get('/dashboard')->assertOk());
         $this->assertStringContainsString('src="'.asset('images/logo.png').'" alt="Dot.Central"', $band);
         $this->assertStringContainsString('src="'.asset('images/logo-light.png').'" alt="Dot.Central"', $band);
-        $this->assertStringContainsString('<a href="https://infodot.co.za/home">InfoDot</a>', $band);
-        $this->assertStringContainsString('<a href="https://infodot.co.za/platforms">Platforms</a>', $band);
         $this->assertStringNotContainsString('<svg', $band);
+
+        // With a room the logo lives in the sidebar only, and the way back to InfoDot is the shared switcher in the bar.
+        $html = (string) $this->actingAs($this->member('operator', 'Sipho Operator'))->get('/dashboard')->assertOk()->getContent();
+        $this->assertStringNotContainsString('class="ov-head__logo', $html);
+        $this->assertStringNotContainsString('infodot.co.za/platforms">Platforms</a>', $html);
+        $this->assertStringContainsString('class="sidebar-brand"', $html);
     }
 
     public function test_the_platform_registry_lists_only_current_platforms(): void

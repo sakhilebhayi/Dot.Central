@@ -16,8 +16,9 @@ use Illuminate\View\View;
 /**
  * The state bar answers "does anything need me?" in words, on every page,
  * before any figure is read (docs/dot-central/11-operator-experience.md §2).
- * It is computed from the rooms the user can see: open alerts by severity
- * and the state of their Dot.Mines connections.
+ * It is computed from the rooms the user can see, and it counts the SAME two
+ * things the Overview headline and the navigation badges count: exceptions
+ * that need attention plus open alerts (R-51: one truth for "what needs me").
  */
 class ShellStateBar extends Component
 {
@@ -35,6 +36,11 @@ class ShellStateBar extends Component
 
     public int $warning = 0;
 
+    /** Exceptions needing attention plus open alerts, across the rooms the user can see. */
+    public int $open = 0;
+
+    public ?string $title = null;
+
     public string $dataLink = 'Dot.Mines: not connected';
 
     public ?Shift $currentShift = null;
@@ -47,8 +53,9 @@ class ShellStateBar extends Component
 
     public string $dataLinkLevel = 'idle';
 
-    public function __construct()
+    public function __construct(?string $title = null)
     {
+        $this->title = $title;
         $user = Auth::user();
 
         if (! $user instanceof User || $user->currentTeam === null) {
@@ -74,9 +81,11 @@ class ShellStateBar extends Component
             return;
         }
 
-        $open = Alert::query()->whereIn('control_room_id', $roomIds)->whereNull('cleared_at');
-        $this->critical = (clone $open)->where('severity', 'critical')->count();
-        $this->warning = (clone $open)->where('severity', 'warning')->count();
+        $alerts = Alert::query()->whereIn('control_room_id', $roomIds)->whereNull('cleared_at');
+        $exceptions = OperationalException::withoutGlobalScopes()->whereIn('control_room_id', $roomIds)->needsAttention();
+        $this->critical = (clone $alerts)->where('severity', 'critical')->count() + (clone $exceptions)->where('severity', 'CRITICAL')->count();
+        $this->warning = (clone $alerts)->where('severity', 'warning')->count() + (clone $exceptions)->where('severity', 'WARNING')->count();
+        $this->open = (clone $alerts)->count() + (clone $exceptions)->count();
 
         $connections = MinesConnection::query()->whereIn('control_room_id', $roomIds)->get();
         $this->describeDataLink($connections->count(), $connections->pluck('status'));
@@ -84,18 +93,17 @@ class ShellStateBar extends Component
         if ($this->critical > 0) {
             $this->level = 'bad';
             $this->state = 'NEEDS ATTENTION';
-            $this->detail = $this->critical.' critical alert'.($this->critical === 1 ? '' : 's').' open'
-                .($this->warning > 0 ? ', '.$this->warning.' warning'.($this->warning === 1 ? '' : 's') : '').'.';
+            $this->detail = $this->critical.' critical, '.$this->open.' open, '.$this->rooms.' control room'.($this->rooms === 1 ? '' : 's').'.';
             $this->detailUrl = route('control-rooms.index');
 
             return;
         }
 
-        if ($this->warning > 0 || $this->dataLinkLevel === 'bad') {
+        if ($this->open > 0 || $this->dataLinkLevel === 'bad') {
             $this->level = 'warn';
             $this->state = 'WATCH';
-            $this->detail = $this->warning > 0
-                ? $this->warning.' warning alert'.($this->warning === 1 ? '' : 's').' open, no critical.'
+            $this->detail = $this->open > 0
+                ? '0 critical, '.$this->open.' open, '.$this->rooms.' control room'.($this->rooms === 1 ? '' : 's').'.'
                 : 'A Dot.Mines credential has been rejected; synchronisation is paused.';
             $this->detailUrl = route('control-rooms.index');
 
@@ -104,7 +112,7 @@ class ShellStateBar extends Component
 
         $this->level = 'ok';
         $this->state = 'ALL QUIET';
-        $this->detail = 'No open alerts across '.$this->rooms.' control room'.($this->rooms === 1 ? '' : 's').'.';
+        $this->detail = 'Nothing open across '.$this->rooms.' control room'.($this->rooms === 1 ? '' : 's').'.';
     }
 
     /**
@@ -145,6 +153,6 @@ class ShellStateBar extends Component
 
     public function render(): View
     {
-        return view('components.shell-state-bar');
+        return view('components.shell-state-bar', ['bar' => $this]);
     }
 }

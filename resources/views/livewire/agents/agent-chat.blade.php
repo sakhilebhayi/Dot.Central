@@ -1,4 +1,4 @@
-<div style="display:flex;flex-direction:column;height:calc(100vh - 4rem);">
+<div class="agent-chat">
     <div style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--divider);">
         <h1 style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;color:var(--text-primary);margin:0;">{{ $agent->name }}</h1>
         <p style="font-size:0.75rem;color:var(--text-muted);margin:0.15rem 0 0;">{{ $conversation->title }}</p>
