@@ -9,6 +9,7 @@ use App\Services\Guardian\Checks\MemoryOutboxCheck;
 use App\Services\Guardian\Checks\MinesSyncCheck;
 use App\Services\Guardian\Checks\QueueCheck;
 use App\Services\Guardian\Checks\SchedulerCheck;
+use App\Services\Guardian\Checks\SsoReceiverCheck;
 use App\Services\Guardian\Contracts\GuardianCheck;
 use App\Services\Guardian\GuardianHealthReport;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,7 @@ class GuardianHealthController extends Controller
         QueueCheck::class,
         MinesSyncCheck::class,
         MemoryOutboxCheck::class,
+        SsoReceiverCheck::class,
     ];
 
     public function __invoke(): JsonResponse
