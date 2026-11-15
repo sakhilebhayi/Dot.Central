@@ -9,7 +9,9 @@
     initials  the avatar letters (default: the first letters of `name`)
     avatar    optional image URL (replaces the initials)
     links     list of ['label' => 'Profile', 'href' => '/profile', 'badge' => null, 'attrs' => [], 'rule' => false]
-              (an entry with only 'rule' => true prints a divider)
+              (an entry with only 'rule' => true prints a divider). 0.6.0: an entry may also be a FORM row (`form` => ['action', 'method' => 'PUT',
+              'fields' => [...]], printed with the CSRF token and a spoofed method: Jetstream's team switch), a plain BUTTON row (`button` => true, `attrs`
+              for wire:click) or a heading; see blade/menu-item.blade.php.
     sign-out  ['action' => '/logout', 'method' => 'post', 'label' => 'Sign out'] (null: no sign-out row). A POST form with the
               CSRF token (csrf_token() when Laravel is present, or `csrf`).
     csrf      override the CSRF token (non-Laravel hosts)
@@ -51,11 +53,7 @@
         </div>
         <div class="dh-menu__rule" role="separator"></div>
         @foreach ((array) $links as $link)
-            @if (! empty($link['rule']))
-                <div class="dh-menu__rule" role="separator"></div>
-            @else
-                <a class="dh-menu__item" href="{{ $link['href'] ?? '#' }}" @if(! empty($link['current'])) aria-current="page" @endif {{ new \Illuminate\View\ComponentAttributeBag($link['attrs'] ?? []) }}><span class="dh-menu__label">{{ $link['label'] ?? '' }}</span>@if(isset($link['badge']) && $link['badge'] !== '' && $link['badge'] !== null)<span class="dh-count">{{ $link['badge'] }}</span>@endif</a>
-            @endif
+            <x-dot.menu-item :item="$link" :csrf="$token" />
         @endforeach
         @if ($theme)
             <div class="dh-menu__rule" role="separator"></div>
@@ -85,11 +83,7 @@
         </span>
     </div>
     @foreach ((array) $links as $link)
-        @if (! empty($link['rule']))
-            <div class="dh-menu__rule" role="separator"></div>
-        @else
-            <a class="dh-menu__item" href="{{ $link['href'] ?? '#' }}" @if(! empty($link['current'])) aria-current="page" @endif {{ new \Illuminate\View\ComponentAttributeBag($link['attrs'] ?? []) }}><span class="dh-menu__label">{{ $link['label'] ?? '' }}</span>@if(isset($link['badge']) && $link['badge'] !== '' && $link['badge'] !== null)<span class="dh-count">{{ $link['badge'] }}</span>@endif</a>
-        @endif
+        <x-dot.menu-item :item="$link" :csrf="$token" />
     @endforeach
     @if ($theme)
         <div class="dh-theme" role="group" aria-label="Theme">

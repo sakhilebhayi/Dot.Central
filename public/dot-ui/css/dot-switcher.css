@@ -176,6 +176,18 @@
 
 /* `.dsw-fallback` is the no-script link to InfoDot's platforms page. It shares the trigger's look through this list but is
    NOT a `.dsw-btn`, so a host selector such as `.topbar .dsw-btn` or `.dsw-btn:first-child` hits the real button. */
+/* insulation from a host's bare `button { text-transform: uppercase; letter-spacing }` rule (0.6.0): the trigger and the tiles set what such a rule would change */
+.dsw-btn,
+.dsw-fallback,
+.dsw-bay,
+.dsw-more summary,
+.dsw-more a {
+    margin: 0;
+    text-transform: none;
+    letter-spacing: normal;
+    text-shadow: none;
+}
+
 .dsw-btn,
 .dsw-fallback {
     display: inline-flex;
@@ -673,11 +685,15 @@
     display: none;
 }
 
-@media (max-width: 639px) {
+/* the "Dot Apps" label hides at 860px, the header's collapse point (--dot-bp-md), not at 640 (0.6.0): between 640 and 860 the header is already the one-row
+   mobile bar, and a labelled trigger there pushed the bell and the menu button off the row. */
+@media (max-width: 860px) {
     .dsw-btn__label {
         display: none;
     }
+}
 
+@media (max-width: 639px) {
     .dsw-in {
         padding: 16px 16px 24px;
     }
@@ -711,7 +727,7 @@
    scrim that covers the whole viewport, with the page scroll locked by js/dot-switcher.js. The scrim is a fixed pseudo-element
    of the (static, untransformed) root, so it is never inside the panel's animated transform. `:has()` marks the open state without
    a new attribute; a browser without it still gets the sheet, just no scrim. ---- */
-@media (max-width: 639px) {
+@media (max-width: 860px) {
     .dsw-panel {
         position: fixed;
         left: 0;
@@ -754,7 +770,7 @@
 }
 
 /* ---- tablet: a popover on the right instead of a full-bleed sheet (640 to 1023px) ---- */
-@media (min-width: 640px) and (max-width: 1023px) {
+@media (min-width: 861px) and (max-width: 1023px) {
     .dsw-panel {
         left: auto;
         right: 12px;

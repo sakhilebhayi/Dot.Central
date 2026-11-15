@@ -31,7 +31,7 @@
     }
 
     var BUSY_MS = 12000;
-    var PHONE = '(max-width: 639px)';
+    var PHONE = '(max-width: 860px)'; // = --dot-bp-md: the header's collapse point and the CSS bottom sheet's (0.6.0; it was 639)
     var locked = typeof WeakSet === 'function' ? new WeakSet() : null; // roots that hold a scroll lock (phone sheet)
 
     // Scroll lock shared with dot-nav.js (the drawer and the search sheet): a reference count on window.__dotLock, defined by
@@ -248,6 +248,7 @@
         if (locked && !locked.has(root) && window.matchMedia && window.matchMedia(PHONE).matches) {
             locked.add(root);
             Lock.lock();
+            updateTouch();
         }
 
         if (p.filter) {
@@ -255,11 +256,30 @@
         }
     }
 
+    // iOS ignores overflow:hidden on the root for touch scrolling, so with the phone sheet open the page behind would still scroll under a finger
+    // (0.6.0, the same guard dot-nav.js has for the drawer): a touchmove that starts outside something that really scrolls is cancelled.
+    var touchArmed = false;
+    function touchGuard(e) {
+        for (var n = e.target; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+            if (n.nodeType !== 1) { continue; }
+            var oy = getComputedStyle(n).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) { return; }
+        }
+        if (e.cancelable) { e.preventDefault(); }
+    }
+    function updateTouch() {
+        var any = false;
+        document.querySelectorAll('.dsw[data-dsw]').forEach(function (r) { if (locked && locked.has(r)) { any = true; } });
+        if (any && !touchArmed) { document.addEventListener('touchmove', touchGuard, { passive: false }); touchArmed = true; }
+        else if (!any && touchArmed) { document.removeEventListener('touchmove', touchGuard, { passive: false }); touchArmed = false; }
+    }
+
     function release(root) {
         if (locked && locked.has(root)) {
             locked.delete(root);
             Lock.unlock();
         }
+        updateTouch();
     }
 
     function close(root, returnFocus) {

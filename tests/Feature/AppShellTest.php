@@ -35,7 +35,7 @@ class AppShellTest extends TestCase
 
         $html = $this->actingAs($user)->get('/dashboard')->assertOk()->getContent();
 
-        $this->assertStringContainsString('dot-ui/css/dot-roboto.css', $html, 'Roboto is the one text face (R-52), served from this site');
+        $this->assertStringContainsString('dot-ui/css/dot-ui.min.css', $html, 'Roboto is the one text face (R-52), served from this site');
         $this->assertStringNotContainsString('IBM+Plex', $html);
         $this->assertStringNotContainsString('Syne', $html);
         $this->assertStringNotContainsString('JetBrains', $html);

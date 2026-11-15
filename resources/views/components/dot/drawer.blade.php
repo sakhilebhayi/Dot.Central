@@ -12,6 +12,8 @@
     context   optional text under the head (the company / team name)
     close-label  accessible name of the close button (default "Close menu")
     account   null, or the props of <x-dot.account-menu> as an array: the expanded account section (links, theme, sign out) is printed at the bottom
+    guest     null, or ['login' => [...], 'register' => [...]] (0.6.0): the signed-out pair, two full-width rows at the TOP of the drawer, above the nav
+    guest-slot  your own markup for the same place
   Slots
     default   replaces the nav sections (your own markup; use .dh-dnav__link / .dh-dgroup)
     before    markup above the nav (a switcher shortcut, a call to action)
@@ -25,12 +27,16 @@
     'context' => null,
     'closeLabel' => 'Close menu',
     'account' => null,
+    'guest' => null,
+    'guestSlot' => null,
     'before' => null,
     'after' => null,
 ])
 @php
     $gid = 0;
     $customNav = isset($slot) && trim((string) $slot) !== '';
+    $hasGuestSlot = $guestSlot !== null && trim((string) $guestSlot) !== '';
+    $navList = array_values(array_filter((array) $nav, fn ($i) => ! empty($i['items']) || isset($i['href'])));
 @endphp
 <div class="dh-drawer" id="{{ $id }}" data-dh-drawer data-side="{{ $side }}" hidden>
     <div class="dh-drawer__scrim" data-dh-scrim aria-hidden="true"></div>
@@ -41,10 +47,11 @@
         </div>
         <div class="dh-drawer__body">
             @if($context)<p class="dh-drawer__context">{{ $context }}</p>@endif
+            @if($hasGuestSlot){{ $guestSlot }}@elseif(is_array($guest))<x-dot.guest :inline="true" :login="$guest['login'] ?? null" :register="$guest['register'] ?? null" />@endif
             @if(isset($before) && trim((string) $before) !== ''){{ $before }}@endif
             @if ($customNav)
                 {{ $slot }}
-            @else
+            @elseif (count($navList) > 0)
                 <nav class="dh-dnav" aria-label="{{ $title }}">
                     <ul>
                         @foreach ((array) $nav as $item)

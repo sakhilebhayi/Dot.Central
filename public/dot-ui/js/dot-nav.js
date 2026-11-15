@@ -1,6 +1,6 @@
 /*
- * dot-ui header behaviour (0.5.0): the mobile drawer, the nav dropdowns and "More", the account menu, the mobile search sheet,
- * the visual-viewport variables. Plain browser JavaScript, no framework, no inline script, no eval, no innerHTML, no style
+ * dot-ui header behaviour (0.6.0): the mobile drawer, the nav dropdowns and "More", the account menu, the mobile search sheet,
+ * the visual-viewport variables. Plain browser JavaScript, no framework, no inline script, no eval, no HTML strings, no style
  * attributes (two CSS custom properties are written through the CSSOM, which a strict style-src allows). Needs css/dot-header.css.
  *
  * Markup contract (blade/header.blade.php and its Vue and static twins print exactly this):
@@ -13,6 +13,9 @@
  *   [data-dh-disclosure]                    a button that shows/hides the list its aria-controls names (drawer groups)
  *   [data-dh-search] [data-dh-search-toggle] [data-dh-search-close]   the search sheet (mobile)
  *   [data-dh-theme-set=light|dark|system]   theme buttons in the account menu
+ *   <html data-dh-theme-class="dark" data-dh-theme-key="my-key" data-dh-theme-default="dark" data-dh-theme-attr="false">   theme options (0.6.0, all optional):
+ *                                           toggle a class as well as data-theme, store under another key, say what "no choice yet" means, or skip data-theme.
+ *                                           js/dot-theme-boot.js applies the same rules synchronously in <head>, so the first paint is right.
  *
  * What it guarantees: aria-expanded/aria-controls kept true, one thing open at a time (a dropdown, the drawer and the search
  * sheet close each other), Escape closes the innermost one and returns focus, a focus trap while the drawer or the sheet is
@@ -39,6 +42,7 @@
     var drawerReturn = null;
     var drawerScrim = null; // the scrim js created for an adopted drawer
     var drawerTimer = 0;
+    var inerted = []; // the elements adopt mode made inert while the platform's own drawer is open
     var searchOpen = null; // the open [data-dh-search]
     var searchToggle = null;
     var searchPushed = false; // we pushed a history entry for the sheet
@@ -144,6 +148,7 @@
         p.trigger.setAttribute('aria-expanded', 'true');
         root.setAttribute('data-open', '');
         placeMenu(p.panel);
+        dispatch(root, 'dot:menu-open');
         if (focusFirst) {
             var items = focusables(p.panel);
             var el = focusFirst === 'last' ? items[items.length - 1] : items[0];
@@ -156,7 +161,9 @@
         if (openMenus) { openMenus.delete(root); }
         if (p.panel && !p.panel.hidden) { p.panel.hidden = true; }
         if (p.trigger && p.trigger.getAttribute('aria-expanded') !== 'false') { p.trigger.setAttribute('aria-expanded', 'false'); }
+        var wasOpen = root.hasAttribute('data-open');
         root.removeAttribute('data-open');
+        if (wasOpen) { dispatch(root, 'dot:menu-close'); }
         if (returnFocus && p.trigger) { p.trigger.focus(); }
     }
 
@@ -237,6 +244,26 @@
         return Math.abs(r.width - DE.clientWidth) > 1 || Math.abs(r.left) > 1 || Math.abs(r.top) > 1 || (Math.abs(r.height - h) > 2 && Math.abs(r.height - DE.clientHeight) > 2);
     }
 
+    // Adopt mode (0.6.0): the page behind the platform's own drawer is made inert, so a screen-reader or keyboard user cannot reach it. Every sibling on the
+    // path from the drawer up to <body> that does not contain the drawer is set `inert` (the scrim, scripts and anything marked data-dh-keep-live are
+    // left alone); closing lifts exactly what was added. The own .dh-drawer is a role=dialog aria-modal=true and keeps the focus trap instead.
+    function inertOthers(drawer) {
+        for (var n = drawer; n && n !== DOC.body && n.parentElement; n = n.parentElement) {
+            var kids = n.parentElement.children;
+            for (var i = 0; i < kids.length; i++) {
+                var sib = kids[i];
+                if (sib === n || sib === drawerScrim || sib.hasAttribute('inert') || sib.hasAttribute('data-dh-keep-live') || sib.classList.contains('dh-scrim') || /^(SCRIPT|STYLE|LINK|TEMPLATE|NOSCRIPT)$/.test(sib.nodeName)) { continue; }
+                sib.setAttribute('inert', '');
+                inerted.push(sib);
+            }
+        }
+    }
+
+    function liftInert() {
+        inerted.forEach(function (e) { e.removeAttribute('inert'); });
+        inerted = [];
+    }
+
     function openDrawer(btn) {
         var id = btn.getAttribute('aria-controls');
         var drawer = id ? DOC.getElementById(id) : null;
@@ -266,6 +293,7 @@
             drawerScrim.className = 'dh-scrim';
             drawerScrim.setAttribute('data-dh-scrim', '');
             DOC.body.appendChild(drawerScrim);
+            inertOthers(drawer);
         }
 
         btn.setAttribute('aria-expanded', 'true');
@@ -298,6 +326,7 @@
             if (reduced()) { done(); } else { drawerTimer = window.setTimeout(done, 230); }
         } else {
             drawer.removeAttribute('data-dh-open');
+            liftInert();
             if (drawerScrim && drawerScrim.parentNode) { drawerScrim.parentNode.removeChild(drawerScrim); }
             drawerScrim = null;
         }
@@ -360,16 +389,47 @@
         if (returnFocus !== false && toggle && DOC.contains(toggle)) { toggle.focus(); }
     }
 
-    function dispatch(el, name) {
-        try { el.dispatchEvent(new CustomEvent(name, { bubbles: true })); } catch (e) { /* old browser */ }
+    function dispatch(el, name, detail) {
+        try { el.dispatchEvent(new CustomEvent(name, { bubbles: true, detail: detail || null })); } catch (e) { /* old browser */ }
     }
 
-    // ---- theme buttons ----
-    function applyTheme(mode) {
-        if (mode === 'light' || mode === 'dark') { DE.setAttribute('data-theme', mode); } else { DE.removeAttribute('data-theme'); }
-        try { window.localStorage.setItem('dot-theme', mode); } catch (e) { /* private mode */ }
+    // ---- theme: data-theme and/or a class on <html>, one storage key, a `dot:theme` event (0.6.0) ----
+    // Options live on <html>: data-dh-theme-class="dark" also toggles that class (a host whose dark scheme is `html.dark`), data-dh-theme-key="x" stores
+    // the choice under another key (default `dot-theme`), data-dh-theme-default="dark" says what "no choice yet" means (default `system`), and
+    // data-dh-theme-attr="false" leaves data-theme alone (a class-only host). js/dot-theme-boot.js runs the same rules synchronously in <head>.
+    function themeKey() { return DE.getAttribute('data-dh-theme-key') || 'dot-theme'; }
+    function prefersDark() { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); }
+    function storedTheme() {
+        var m = null;
+        try { m = window.localStorage.getItem(themeKey()); } catch (e) { m = null; }
+        return m === 'light' || m === 'dark' || m === 'system' ? m : null;
+    }
+    function themeMode() {
+        var attr = DE.getAttribute('data-theme');
+        return (attr === 'light' || attr === 'dark' ? attr : null) || storedTheme() || DE.getAttribute('data-dh-theme-default') || 'system';
+    }
+    function isDark(mode) { return mode === 'dark' || (mode !== 'light' && prefersDark()); }
+    function paintTheme(mode) {
+        if (DE.getAttribute('data-dh-theme-attr') !== 'false') {
+            if (mode === 'light' || mode === 'dark') { if (DE.getAttribute('data-theme') !== mode) { DE.setAttribute('data-theme', mode); } }
+            else if (DE.hasAttribute('data-theme')) { DE.removeAttribute('data-theme'); }
+        }
+        var cls = DE.getAttribute('data-dh-theme-class');
+        if (cls) { DE.classList.toggle(cls, isDark(mode)); }
         $$('[data-dh-theme-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dh-theme-set') === mode ? 'true' : 'false'); });
-        dispatch(DOC, 'dot:theme');
+    }
+    function applyTheme(mode) {
+        if (mode !== 'light' && mode !== 'dark') { mode = 'system'; }
+        try { window.localStorage.setItem(themeKey(), mode); } catch (e) { /* private mode */ }
+        paintTheme(mode);
+        dispatch(DOC, 'dot:theme', { mode: mode, dark: isDark(mode) });
+    }
+    if (window.matchMedia) {
+        try {
+            var mq = window.matchMedia('(prefers-color-scheme: dark)');
+            var onScheme = function () { if (themeMode() === 'system') { paintTheme('system'); dispatch(DOC, 'dot:theme', { mode: 'system', dark: prefersDark() }); } };
+            if (mq.addEventListener) { mq.addEventListener('change', onScheme); } else if (mq.addListener) { mq.addListener(onScheme); }
+        } catch (e) { /* old browser */ }
     }
 
     // ---- delegated listeners ----
@@ -562,11 +622,8 @@
         writeViewport();
         sync();
         scheduleFit();
-        // the theme buttons say which theme is on
-        var mode = null;
-        try { mode = window.localStorage.getItem('dot-theme'); } catch (e) { mode = null; }
-        var current = DE.getAttribute('data-theme') || mode || 'system';
-        $$('[data-dh-theme-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dh-theme-set') === current ? 'true' : 'false'); });
+        // the theme buttons say which theme is on (and the class follows, for a host that missed the boot script)
+        paintTheme(themeMode());
     }
 
     ['livewire:init', 'livewire:initialized', 'livewire:navigated', 'turbo:load', 'htmx:afterSwap'].forEach(function (n) {
@@ -616,5 +673,7 @@
         closeSearch: function () { closeSearch(true); },
         isSearchOpen: function () { return !!searchOpen; },
         closeAll: resetAll,
+        setTheme: applyTheme,
+        theme: function () { var m = themeMode(); return { mode: m, dark: isDark(m) }; },
     };
 })();

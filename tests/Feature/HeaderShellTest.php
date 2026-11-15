@@ -97,10 +97,10 @@ class HeaderShellTest extends TestCase
     {
         $html = $this->actingAs($this->owner())->get(route('dashboard'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('dot-ui/css/dot-roboto.css', $html);
-        $this->assertStringContainsString('dot-ui/css/dot-type.css', $html);
+        // dot-ui 0.6.1: Roboto, the type scale, tokens, search, switcher and header are one stylesheet.
+        $this->assertStringContainsString('dot-ui/css/dot-ui.min.css', $html);
         $this->assertMatchesRegularExpression('/<html [^>]*class="[^"]*dot-roboto/', $html);
-        $this->assertStringContainsString('rel="preload" href="'.asset('dot-ui/fonts/roboto/roboto-latin-wght-normal.woff2').'" as="font"', $html);
+        $this->assertStringNotContainsString('as="font"', $html, 'no font preload: it delayed the dashboard text LCP (dot-ui 0.6.1 guidance)');
 
         $css = (string) file_get_contents(public_path('dot-ui/css/dot-roboto.css'));
         $this->assertStringContainsString("font-family: 'Roboto'", $css);
@@ -132,7 +132,7 @@ class HeaderShellTest extends TestCase
     {
         foreach ([view('errors.404')->render(), view('errors.500')->render()] as $html) {
             $this->assertDoesNotMatchRegularExpression('#googleapis|gstatic|IBM\+Plex#i', $html);
-            $this->assertStringContainsString('dot-ui/css/dot-roboto.css', $html);
+            $this->assertStringContainsString('dot-ui/css/dot-roboto.min.css', $html);
         }
     }
 
@@ -168,11 +168,10 @@ class HeaderShellTest extends TestCase
     {
         $html = $this->actingAs($this->owner())->get(route('dashboard'))->assertOk()->getContent();
 
-        foreach (['dot-search.js', 'dot-switcher.js', 'dot-nav.js'] as $script) {
-            $this->assertStringContainsString('dot-ui/js/'.$script, $html);
-            $this->assertFileExists(public_path('dot-ui/js/'.$script));
-        }
-        $this->assertStringContainsString('dot-ui/css/dot-header.css', $html);
+        // One script holds search, switcher and nav (the results controller is lazy).
+        $this->assertStringContainsString('dot-ui/js/dot-ui-core.min.js', $html);
+        $this->assertFileExists(public_path('dot-ui/js/dot-ui-core.min.js'));
+        $this->assertStringContainsString('dot-ui/css/dot-ui.min.css', $html);
     }
 
     public function test_the_state_word_has_a_short_form_for_the_narrowest_phones(): void

@@ -12,6 +12,11 @@
     wire         optional Livewire property: renders wire:model.live.debounce.400ms="<wire>" on the input
     hint         optional shortcut hint shown inside the pill, e.g. "Ctrl K" (default: none). With no hint the root gets
                  .dsr--nohint, which reserves only the circle's width on the right instead of 104px
+    hint-key     true (default): a hint also BINDS Ctrl/Cmd+K to focus the box (js/dot-search.js). false (0.6.0): the hint is only printed, nothing is bound
+                 (a platform that owns Ctrl K itself, or shows "/" as its key: `hint="/" :hint-key="false"`)
+    results-nav  true (0.6.0): the dropdown's rows are driven from the keyboard by js/dot-search-results.js (ArrowUp/Down, aria-activedescendant, Enter opens the
+                 highlighted row, Escape clears the highlight). Rows are `.dsr-item` elements, see <x-dot.search-row>.
+    enter-first  true (0.6.0, with results-nav): Enter with nothing highlighted opens the FIRST row instead of submitting the form
     id           optional input id. Default: "dsr-<name>", the same on every render (snapshots, Livewire morphs). Pass
                  an id when two searches with the same name share a page.
     root-attributes  optional attributes for the root <div class="dsr"> (array or attribute bag), e.g. ['wire:ignore.self' => '']
@@ -42,6 +47,9 @@
     'label' => 'Search',
     'wire' => null,
     'hint' => null,
+    'hintKey' => true,
+    'resultsNav' => false,
+    'enterFirst' => false,
     'id' => null,
     'formAttributes' => [],
     'rootAttributes' => [],
@@ -63,6 +71,7 @@
         }
     }
     $hasResults = (isset($results) && ! $results->isEmpty()) || filled($loadingText);
+    $bindKey = $hint && (is_string($hintKey) ? ! in_array(strtolower(trim($hintKey)), ['false', '0', 'no', 'off', ''], true) : (bool) $hintKey);
     $inputAttrs = [
         'id' => $inputId,
         'type' => 'search',
@@ -75,7 +84,7 @@
         $inputAttrs += ['role' => 'combobox', 'aria-autocomplete' => 'list', 'aria-controls' => $listId, 'aria-expanded' => 'false'];
     }
 @endphp
-<div {{ $rootBag->except(['data-dsr', 'data-dsr-shortcut', 'data-dsr-loading', 'data-dsr-escape-clear'])->class(['dsr', 'dsr--nohint' => ! $hint]) }} data-dsr @if($hint) data-dsr-shortcut @endif @if($loading) data-dsr-loading @endif @if($escapeClears) data-dsr-escape-clear @endif>
+<div {{ $rootBag->except(['data-dsr', 'data-dsr-shortcut', 'data-dsr-loading', 'data-dsr-escape-clear', 'data-dsr-nav', 'data-dsr-enter-first'])->class(['dsr', 'dsr--nohint' => ! $hint]) }} data-dsr @if($bindKey) data-dsr-shortcut @endif @if($loading) data-dsr-loading @endif @if($escapeClears) data-dsr-escape-clear @endif @if($resultsNav) data-dsr-nav @endif @if($resultsNav && $enterFirst) data-dsr-enter-first @endif>
     <label for="{{ $inputId }}" class="dsr-sr">{{ $label }}</label>
     <form {{ $formBag->merge($formDefaults) }}>
         @foreach($hiddenInputs as [$hiddenName, $hiddenValue])

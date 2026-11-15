@@ -120,7 +120,7 @@ class DotUiSwitcherTest extends TestCase
         $this->assertStringContainsString('role="search"', $html);
         $this->assertStringContainsString('dsr-input', $html);
         $this->assertStringContainsString('type="search"', $html);
-        $this->assertFileExists(public_path('dot-ui/css/dot-search.css'));
+        $this->assertFileExists(public_path('dot-ui/css/dot-search.min.css'));
     }
 
     public function test_a_guest_sees_no_switcher(): void
@@ -240,7 +240,7 @@ class DotUiSwitcherTest extends TestCase
         $user = $this->memberOf(self::ACME, 'Acme Ltd');
         $html = $this->actingAs($user)->get(route('dashboard'))->getContent();
 
-        foreach (['css/dot-roboto.css', 'css/dot-type.css', 'css/dot-tokens.css', 'css/dot-search.css', 'css/dot-switcher.css', 'css/dot-header.css', 'js/dot-search.js', 'js/dot-switcher.js', 'js/dot-nav.js'] as $asset) {
+        foreach (['css/dot-ui.min.css', 'js/dot-ui-core.min.js'] as $asset) {
             $this->assertStringContainsString(asset('dot-ui/'.$asset), $html, $asset.' is linked from this site');
             $this->assertFileExists(public_path('dot-ui/'.$asset));
         }

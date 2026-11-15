@@ -22,13 +22,17 @@
     context        shorthand for the context slot as plain text (a company name)
     skip           href of a skip link (e.g. '#main'); null prints none
     sticky         false: no position:sticky (a shell that positions the header itself)
+    guest          signed-out state (0.6.0): ['login' => ['label','href','attrs'], 'register' => [...]] prints "Log in" / "Create account" instead of the account
+                   menu (bar from 861px, top of the drawer on a phone). Or the `guest` slot for your own markup.
   Slots
     brand       the logo (an <img> or <svg>, optionally a .dh-brand__name span). Printed inside <a class="dh-brand">.
     context     a short company/team name (wide screens only; the full name is always in the account menu and the drawer)
     nav         replaces the generated primary nav: your own <li class="dh-nav__item"> items (and <x-dot.nav-menu> groups)
     search      the search: <x-dot.search ...> untouched. Without it the header has no centre column (`dh--nosearch`).
+    status      an always-visible readout beside the brand (a state lamp and word, counts): never hidden at any width, truncates instead (0.6.0)
     tools       before the account menu: <x-dot.switcher compact>, <x-dot.bell>
     account     replaces <x-dot.account-menu> (your own markup)
+    guest       replaces the Log in / Create account pair (your own markup; the drawer gets the same markup unless `drawer-guest` is given)
     drawer      replaces the drawer's nav sections
     drawer-before / drawer-after   extra drawer markup above the nav / below the account section
   Needs css/dot-header.css (+ the search and switcher css) and js/dot-nav.js (+ js/dot-search.js, js/dot-switcher.js).
@@ -40,6 +44,7 @@
     'navLabel' => 'Primary',
     'moreLabel' => 'More',
     'account' => null,
+    'guest' => null,
     'drawerId' => 'dh-drawer',
     'drawerTarget' => null,
     'drawerSide' => 'right',
@@ -63,13 +68,19 @@
     $ctx = $blank($context ?? null) ? null : $context;
     $controls = $drawerTarget ?: $drawerId;
     $searchId = $id.'-search';
+    $guestSlot = (! is_array($guest ?? null) && ! $blank($guest ?? null)) ? $guest : null;
+    $guestData = is_array($guest ?? null) ? $guest : null;
+    $hasNav = $navSlot !== null || count($navItems) > 0;
+    $hasStatus = ! $blank($status ?? null);
 @endphp
-<header {{ $attributes->class(['dh', 'dh--nosearch' => ! $hasSearch, 'dh--static' => ! $sticky]) }} id="{{ $id }}" data-dh>
+<header {{ $attributes->class(['dh', 'dh--nosearch' => ! $hasSearch, 'dh--static' => ! $sticky, 'dh--nonav' => ! $hasNav, 'dh--adopt' => (bool) $drawerTarget]) }} id="{{ $id }}" data-dh>
     @if($skip)<a class="dh-skip skip-link" href="{{ $skip }}">Skip to content</a>@endif
     <div class="dh-bar">
         <div class="dh-start">
             <a class="dh-brand" href="{{ $brandHref }}" aria-label="{{ $brandLabel }}">@isset($brand){{ $brand }}@endisset</a>
             @if($ctx)<div class="dh-context"><span class="dh-context__text" @if(is_string($ctx)) title="{{ $ctx }}" @endif>{{ $ctx }}</span></div>@endif
+            @if($hasStatus)<div class="dh-status" data-dh-status>{{ $status }}</div>@endif
+            @if($hasNav)
             <nav class="dh-nav" aria-label="{{ $navLabel }}" data-dh-nav>
                 <ul class="dh-nav__list">
                     @if ($navSlot)
@@ -91,6 +102,7 @@
                     </li>
                 </ul>
             </nav>
+            @endif
         </div>
         @if ($hasSearch)
             <div class="dh-search" id="{{ $searchId }}" data-dh-search>
@@ -107,11 +119,15 @@
                 {{ $accountSlot }}
             @elseif ($accountData)
                 <x-dot.account-menu :name="$accountData['name'] ?? ''" :email="$accountData['email'] ?? null" :team="$accountData['team'] ?? null" :initials="$accountData['initials'] ?? null" :avatar="$accountData['avatar'] ?? null" :links="$accountData['links'] ?? []" :sign-out="$accountData['signOut'] ?? null" :csrf="$accountData['csrf'] ?? null" :theme="! empty($accountData['theme'])" />
+            @elseif ($guestSlot)
+                {{ $guestSlot }}
+            @elseif ($guestData)
+                <x-dot.guest :login="$guestData['login'] ?? null" :register="$guestData['register'] ?? null" />
             @endif
             <button type="button" class="dh-icon-btn dh-menu-btn" data-dh-menu-button aria-expanded="false" aria-controls="{{ $controls }}" aria-label="{{ $menuLabel }}"><svg class="dh-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
         </div>
     </div>
 </header>
 @unless ($drawerTarget)
-<x-dot.drawer :id="$drawerId" :nav="$navItems" :title="$drawerTitle" :side="$drawerSide" :context="is_string($ctx) ? $ctx : null" :account="$accountData" :before="$drawerBefore ?? null" :after="$drawerAfter ?? null">@isset($drawer){{ $drawer }}@endisset</x-dot.drawer>
+<x-dot.drawer :id="$drawerId" :nav="$navItems" :title="$drawerTitle" :side="$drawerSide" :context="is_string($ctx) ? $ctx : null" :account="$accountData" :guest="$guestData" :guest-slot="$drawerGuest ?? $guestSlot" :before="$drawerBefore ?? null" :after="$drawerAfter ?? null">@isset($drawer){{ $drawer }}@endisset</x-dot.drawer>
 @endunless

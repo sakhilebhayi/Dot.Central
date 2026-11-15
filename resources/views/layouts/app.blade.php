@@ -10,14 +10,8 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('apple-touch-icon.png') }}">
     {{-- Theme: night is the default; a plain external script so the class is set before first paint and the page needs no inline script. --}}
     <script src="{{ Vite::asset('resources/js/theme-init.js') }}"></script>
-    {{-- Shared Dot UI (typography, header, search, switcher), served from this site's own public/dot-ui. Before the app CSS so the token mapping in app.css wins. --}}
-    <link rel="preload" href="{{ asset('dot-ui/fonts/roboto/roboto-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-roboto.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-type.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-tokens.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-search.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-switcher.css') }}">
-    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-header.css') }}">
+    {{-- Shared Dot UI 0.6.1 (one stylesheet: typography, header, search, switcher; one script, the results controller loads lazily), served from this site's own public/dot-ui. Before the app CSS so the token mapping in app.css wins. --}}
+    <link rel="stylesheet" href="{{ asset('dot-ui/css/dot-ui.min.css') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -184,9 +178,7 @@
     <x-shell-foot :bar="$navCounts" />
 
     @stack('modals')
-    <script src="{{ asset('dot-ui/js/dot-search.js') }}" defer></script>
-    <script src="{{ asset('dot-ui/js/dot-switcher.js') }}" defer></script>
-    <script src="{{ asset('dot-ui/js/dot-nav.js') }}" defer></script>
+    <script src="{{ asset('dot-ui/js/dot-ui-core.min.js') }}" defer></script>
     @livewireScripts
 </body>
 </html>
