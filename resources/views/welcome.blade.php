@@ -40,6 +40,12 @@
             .btn:hover { border-color: var(--text-muted); }
             .btn--signal { background: var(--signal); border-color: var(--signal); color: #15120a; }
             .btn--signal:hover { background: #f6b836; border-color: #f6b836; }
+            .btn { min-height: 44px; display: inline-flex; align-items: center; }
+            @media (max-width: 639px) {
+                .topbar nav { display: none; }
+                .topbar .wrap { height: auto; min-height: 64px; flex-wrap: wrap; gap: 8px 12px; padding-top: 8px; padding-bottom: 8px; }
+                .btn { padding: 10px 14px; }
+            }
             .hero { padding: 72px 0 56px; border-bottom: 1px solid var(--rule); }
             .hero h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(34px, 5vw, 56px); line-height: 1.05; letter-spacing: -0.01em; margin: 0 0 20px; max-width: 14ch; }
             .hero p { font-size: 18px; color: var(--text-muted); max-width: 56ch; margin: 0 0 32px; }
