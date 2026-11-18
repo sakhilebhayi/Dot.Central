@@ -100,11 +100,9 @@
                         <a href="{{ route('dashboard') }}" class="btn btn--signal">Open the control room</a>
                     @else
                         @if (Route::has('login'))
-                            <a href="{{ route('login') }}" class="btn">Sign in</a>
+                            <a href="{{ \App\Support\CentralSignIn::login() }}" class="btn">Sign in</a>
                         @endif
-                        @if (Route::has('register'))
-                            <a href="{{ route('register') }}" class="btn btn--signal">Create an account</a>
-                        @endif
+                        <a href="{{ \App\Support\CentralSignIn::join() }}" class="btn btn--signal">Create an account</a>
                     @endauth
                 </div>
             </div>
@@ -120,7 +118,7 @@
                             <a href="{{ route('dashboard') }}" class="btn btn--signal">Open the control room</a>
                         @else
                             @if (Route::has('login'))
-                                <a href="{{ route('login') }}" class="btn btn--signal">Sign in</a>
+                                <a href="{{ \App\Support\CentralSignIn::login() }}" class="btn btn--signal">Sign in</a>
                             @endif
                             <a href="#shift" class="btn">How a shift runs</a>
                         @endauth

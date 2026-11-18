@@ -184,7 +184,9 @@ Route::middleware([
 });
 
 // Public sign-up is closed (accounts are created by InfoDot at first sign-in). Keep the named route so any link or
-// invitation email that points at it lands on the login page instead of failing.
+// invitation email that points at it still works. R-54: it used to land on /login (a dead end for a person with no
+// password here); it now opens InfoDot's register page (DOT_SIGNUP_URL). While DOTSSO_ENABLED the package's
+// interception answers first and sends it to /sso/login?screen=register.
 if (! Features::enabled(Features::registration())) {
-    Route::redirect('/register', '/login')->name('register');
+    Route::redirect('/register', (string) config('ecosystem.signup_url', 'https://infodot.co.za/register'))->name('register');
 }
