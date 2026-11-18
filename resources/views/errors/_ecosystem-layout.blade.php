@@ -102,7 +102,7 @@
                         <a href="{{ route('dashboard') }}" class="btn">Open the control room</a>
                     @else
                         @if (Route::has('login'))
-                            <a href="{{ route('login') }}" class="btn">Sign in</a>
+                            <a href="{{ \App\Support\CentralSignIn::login() }}" class="btn">Sign in</a>
                         @endif
                     @endauth
                 @endif

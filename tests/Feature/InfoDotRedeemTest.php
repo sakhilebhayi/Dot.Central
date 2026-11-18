@@ -137,20 +137,35 @@ class InfoDotRedeemTest extends TestCase
         $this->assertSame('Local Name', $existing->fresh()->name);
     }
 
-    public function test_an_unverified_local_account_is_adopted_and_its_password_replaced(): void
+    /** R-54: this used to be "adopted and its password replaced". An unverified account is now claimed, never taken over. */
+    public function test_an_unverified_local_account_is_sent_to_the_claim_flow_and_its_password_is_kept(): void
     {
         $squatter = User::factory()->create([
             'email' => 'amara@example.test',
             'email_verified_at' => null,
             'password' => Hash::make('attacker-knows-this'),
         ]);
+        $hash = $squatter->password;
+        Http::fake([self::URL => Http::response($this->identity(['uuid' => '11111111-1111-4111-8111-111111111111']))]);
+
+        $this->post(route('ecosystem.auth'), ['token' => 't'], $this->fromInfodot())->assertRedirect(route('dotsso.claim'));
+
+        $this->assertGuest();
+        $this->assertSame($hash, $squatter->fresh()->password, 'the password is not replaced');
+        $this->assertNull($squatter->fresh()->email_verified_at, 'nothing is verified until the code is entered');
+        $this->assertNull($squatter->fresh()->infodot_user_uuid);
+    }
+
+    public function test_an_unverified_local_account_with_no_infodot_user_id_in_the_answer_is_refused_not_adopted(): void
+    {
+        $squatter = User::factory()->create(['email' => 'amara@example.test', 'email_verified_at' => null, 'password' => Hash::make('x-keep')]);
+        $hash = $squatter->password;
         Http::fake([self::URL => Http::response($this->identity())]);
 
-        $this->post(route('ecosystem.auth'), ['token' => 't'], $this->fromInfodot());
+        $this->post(route('ecosystem.auth'), ['token' => 't'], $this->fromInfodot())->assertStatus(303);
 
-        $this->assertAuthenticatedAs($squatter);
-        $this->assertFalse(Hash::check('attacker-knows-this', $squatter->fresh()->password));
-        $this->assertNotNull($squatter->fresh()->email_verified_at);
+        $this->assertGuest();
+        $this->assertSame($hash, $squatter->fresh()->password);
     }
 
     public function test_a_token_infodot_refuses_signs_nobody_in(): void
