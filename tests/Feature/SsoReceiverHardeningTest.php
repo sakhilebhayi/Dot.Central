@@ -12,7 +12,6 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -316,16 +315,19 @@ class SsoReceiverHardeningTest extends TestCase
         $this->assertStringContainsString('identity_conflict', $this->log());
     }
 
-    public function test_an_unverified_local_account_is_adopted_with_its_password_replaced_and_linked(): void
+    /** R-54: was "adopted with its password replaced and linked". Now the claim flow: nothing replaced, nothing linked until the code. */
+    public function test_an_unverified_local_account_goes_to_the_claim_flow_and_keeps_its_password(): void
     {
         $squatter = User::factory()->withPersonalTeam()->unverified()->create(['email' => 'ann@acme.test', 'password' => bcrypt('attacker-knows-this')]);
+        $hash = $squatter->password;
 
-        $this->signIn($this->identity())->assertRedirect(route('dashboard'));
+        $this->signIn($this->identity())->assertRedirect(route('dotsso.claim'));
 
         $squatter->refresh();
-        $this->assertAuthenticatedAs($squatter);
-        $this->assertFalse(Hash::check('attacker-knows-this', $squatter->password));
-        $this->assertSame(self::ANN, $squatter->infodot_user_uuid);
+        $this->assertGuest();
+        $this->assertSame($hash, $squatter->password);
+        $this->assertNull($squatter->infodot_user_uuid);
+        $this->assertNull($squatter->email_verified_at);
     }
 
     public function test_a_new_person_is_created_exactly_as_before_with_the_uuid_and_nothing_else_new(): void
