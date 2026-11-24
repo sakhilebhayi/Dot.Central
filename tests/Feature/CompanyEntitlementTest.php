@@ -301,7 +301,7 @@ class CompanyEntitlementTest extends TestCase
         Log::shouldHaveReceived('warning')->once()->withArgs(fn ($message) => str_contains($message, 'InfoDot entitlement check gave no answer'));
     }
 
-    public function test_a_failure_is_remembered_for_a_minute_and_an_answer_for_ten(): void
+    public function test_a_failure_is_remembered_for_a_minute_and_an_answer_for_a_minute(): void
     {
         [$owner, $team] = $this->company();
         $this->infodotSays([self::readUrl(self::ACME) => Http::sequence()
@@ -613,5 +613,128 @@ class CompanyEntitlementTest extends TestCase
     public function test_livewire_updates_from_the_signed_in_area_carry_the_check(): void
     {
         $this->assertContains(EnsureCompanyEntitled::class, app(PersistentMiddleware::class)->getPersistentMiddleware());
+    }
+
+    // ---- R-61 availability contract -------------------------------------------------------------------------------
+
+    private static function availability(string $uuid, bool $entitled, ?bool $available, ?string $message = null): array
+    {
+        $body = self::platforms($uuid, $entitled, $entitled ? 'active' : 'suspended');
+
+        foreach ($body['platforms'] as &$row) {
+            if ($row['key'] === 'central') {
+                if ($available !== null) {
+                    $row['available'] = $available;
+                }
+                if ($message !== null) {
+                    $row['message'] = $message;
+                }
+            }
+        }
+
+        return $body;
+    }
+
+    private function answers(array $body): void
+    {
+        $this->infodotSays([self::readUrl(self::ACME) => Http::response($body)]);
+    }
+
+    public function test_a_platform_switched_off_gives_503_even_when_the_company_holds_it(): void
+    {
+        [$owner, , $room] = $this->company();
+        $this->answers(self::availability(self::ACME, true, false, 'Back at 18:00.'));
+
+        $response = $this->actingAs($owner)->get(route('control-rooms.index'))->assertStatus(503);
+        $this->assertStringContainsString('Back at 18:00.', $response->getContent());
+        $this->assertStringNotContainsString('North Pit Control', $response->getContent());
+        $this->assertSame('60', $response->headers->get('Retry-After'));
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+
+        $json = $this->actingAs($owner)->getJson(route('control-rooms.index'))->assertStatus(503);
+        $this->assertSame('platform_unavailable', $json->json('reason'));
+
+        $this->actingAs($owner)->delete(route('control-rooms.destroy', $room))->assertStatus(503);
+        $this->assertSame('North Pit Control', $room->fresh()->name);
+        $this->assertAuthenticated();
+    }
+
+    public function test_it_is_checked_before_what_the_company_holds(): void
+    {
+        [$owner] = $this->company();
+        $this->answers(self::availability(self::ACME, false, false));
+
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertStatus(503);
+    }
+
+    public function test_a_livewire_update_gets_a_json_503_while_switched_off(): void
+    {
+        [$owner, $team] = $this->company();
+        $this->infodotSays([self::readUrl(self::ACME) => Http::sequence()
+            ->push(self::availability(self::ACME, true, true))
+            ->push(self::availability(self::ACME, true, false, 'Maintenance.'))]);
+        $this->actingAs($owner);
+        $snapshot = $this->livewireSnapshot($team);
+
+        $this->travel(EntitlementClient::ANSWER_TTL + 1)->seconds();
+        $response = $this->livewireRename($snapshot, 'Hijacked Name');
+
+        $response->assertStatus(503)->assertJsonPath('reason', 'platform_unavailable');
+        $this->assertNotSame('Hijacked Name', $team->fresh()->name);
+    }
+
+    public function test_it_is_back_within_a_minute_of_switching_on(): void
+    {
+        [$owner] = $this->company();
+        $this->answers(self::availability(self::ACME, true, false));
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertStatus(503);
+
+        $this->answers(self::availability(self::ACME, true, true));
+        $this->travel(70)->seconds();
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertOk()->assertSee('North Pit Control');
+    }
+
+    public function test_an_older_infodot_without_the_fields_is_not_a_switch_off(): void
+    {
+        [$owner] = $this->company();
+        $this->answers(self::availability(self::ACME, true, null));
+
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertOk();
+    }
+
+    public function test_an_outage_keeps_the_last_unavailable_answer_for_six_hours_then_carries_on(): void
+    {
+        [$owner] = $this->company();
+        $this->answers(self::availability(self::ACME, true, false));
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertStatus(503);
+
+        $this->infodotSays([self::readUrl(self::ACME) => Http::response('', 500)]);
+        $this->travel(2)->minutes();
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertStatus(503);
+        $this->travel(5)->hours();
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertStatus(503);
+
+        $this->travel(2)->hours();
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertOk();
+    }
+
+    public function test_available_stays_available_through_an_outage(): void
+    {
+        [$owner] = $this->company();
+        $this->answers(self::availability(self::ACME, true, true));
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertOk();
+
+        $this->infodotSays([self::readUrl(self::ACME) => Http::response('', 500)]);
+        $this->travel(2)->minutes();
+        $this->actingAs($owner)->get(route('control-rooms.index'))->assertOk();
+    }
+
+    public function test_the_exempt_routes_stay_open_while_switched_off(): void
+    {
+        [$owner] = $this->company();
+        $this->answers(self::availability(self::ACME, true, false));
+
+        $this->actingAs($owner)->get(route('profile.show'))->assertOk();
+        $this->get('/up')->assertOk();
     }
 }
