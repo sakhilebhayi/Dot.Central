@@ -402,7 +402,7 @@ class SsoReceiverHardeningTest extends TestCase
         return $this->call($method, $uri, [], $cookies, [], $server);
     }
 
-    public function test_a_session_started_by_sso_survives_many_requests_livewire_calls_and_the_ten_minute_entitlement_recheck(): void
+    public function test_a_session_started_by_sso_survives_many_requests_livewire_calls_and_the_entitlement_recheck(): void
     {
         $dir = sys_get_temp_dir().'/central-sessions-'.Str::random(6);
         mkdir($dir);
@@ -433,21 +433,27 @@ class SsoReceiverHardeningTest extends TestCase
         $this->browserCall('GET', route('control-rooms.index'), $cookies, ['HTTP_ACCEPT' => 'application/json'])->assertOk();
         $this->assertAuthenticated();
 
-        // Eleven minutes later the cached answer has expired: InfoDot is asked again, and the person carries on.
-        $this->travel(11)->minutes();
+        // Two minutes later the one-minute cached answer has expired: InfoDot is asked again, and the person carries on.
+        $this->travel(2)->minutes();
         $this->infodotSays(['https://infodot.test/api/ecosystem/companies/*' => $recheck(true)]);
         $this->browserCall('GET', '/dashboard', $cookies)->assertOk();
         Http::assertSent(fn (Request $r) => str_contains($r->url(), '/companies/'.self::ACME.'/platforms'));
         $this->browserCall('GET', '/dashboard', $cookies, ['HTTP_X_LIVEWIRE' => 'true'])->assertOk();
 
         // If InfoDot now says the company no longer holds Central, the Livewire call is refused, not silently run.
-        $this->travel(11)->minutes();
+        $this->travel(2)->minutes();
         $this->infodotSays(['https://infodot.test/api/ecosystem/companies/*' => $recheck(false)]);
         $this->browserCall('GET', '/dashboard', $cookies, ['HTTP_X_LIVEWIRE' => 'true'])->assertForbidden();
 
-        // And a wrong secret at re-check time (an operator problem) never signs anyone out.
-        $this->travel(11)->minutes();
+        // A wrong secret at re-check time (an operator problem) never signs anyone out. R-61: with no clear answer the last clear
+        // one (under six hours old) stands, so the company InfoDot last said no to stays refused, and the session is intact.
+        $this->travel(2)->minutes();
         $this->infodotSays(['https://infodot.test/api/ecosystem/companies/*' => Http::response(['error' => 'x'], 401)]);
+        $this->browserCall('GET', '/dashboard', $cookies)->assertForbidden();
+
+        // A clear answer again, in the same session: the person is back without signing in.
+        $this->travel(2)->minutes();
+        $this->infodotSays(['https://infodot.test/api/ecosystem/companies/*' => $recheck(true)]);
         $this->browserCall('GET', '/dashboard', $cookies)->assertOk();
 
         array_map('unlink', glob($dir.'/*') ?: []);
