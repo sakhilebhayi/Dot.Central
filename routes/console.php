@@ -56,6 +56,9 @@ Schedule::command(BackupSqliteDatabase::class)->dailyAt('02:15')->onOneServer();
 
 // Dot.Memory: send what the outbox holds (backstop for the after-commit
 // dispatch) and prune sent rows. See docs/dot-central/14-dot-memory-integration.md.
-Schedule::command(FlushMemoryOutboxes::class)->everyMinute()->withoutOverlapping()->onOneServer();
+// Every five minutes: each run is its own PHP process on a host every Dot
+// platform shares (100% CPU on 2026-11-27), and writes are already flushed
+// after commit, so this backstop only catches the odd missed row.
+Schedule::command(FlushMemoryOutboxes::class)->everyFiveMinutes()->withoutOverlapping()->onOneServer();
 Schedule::command(PruneMemoryOutbox::class)->dailyAt('03:10')->onOneServer();
 Schedule::command(ReportMemoryIncidents::class)->everyFiveMinutes()->withoutOverlapping()->onOneServer();

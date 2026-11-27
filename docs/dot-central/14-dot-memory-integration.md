@@ -69,7 +69,7 @@ Webhook silence is not a condition: no event is a normal state. Incidents are se
 
 ## 6. Processes and failure modes
 
-- Outbox: `FlushMemoryOutbox` is dispatched after every write and by `memory:flush` every minute; sent rows are pruned after 30 days (`memory:prune`). Backoff 1, 5, 15, 60 minutes; a refused payload (HTTP 422) is given up on and counted as stuck; a rejected credential stops the team's sends and marks the connection.
+- Outbox: `FlushMemoryOutbox` is dispatched after every write and by `memory:flush` every five minutes (a backstop; shared-host CPU, 2026-11-27); sent rows are pruned after 30 days (`memory:prune`). Backoff 1, 5, 15, 60 minutes; a refused payload (HTTP 422) is given up on and counted as stuck; a rejected credential stops the team's sends and marks the connection.
 - The whole integration is inert without a connection: no rows, no requests, no strip.
 - Configuration: `config/memory.php` (`MEMORY_REQUEST_TIMEOUT`, `MEMORY_CONTEXT_TIMEOUT`, `MEMORY_CONTEXT_CACHE_MINUTES`, `MEMORY_OUTBOX_RETENTION_DAYS`).
 
