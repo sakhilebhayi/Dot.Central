@@ -7,6 +7,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\Rules\ExceptionShiftBlockers;
 use App\Services\Shifts\ShiftBlockers;
+use App\Support\EssentialCron;
 use App\Support\Role;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -27,6 +28,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        EssentialCron::listen();
+
         // R-50: Livewire updates from a page in the signed-in area carry that page's entitlement check with them.
         Livewire::addPersistentMiddleware([EnsureCompanyEntitled::class]);
 
