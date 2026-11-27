@@ -105,6 +105,6 @@ class IncidentReporterTest extends TestCase
 
         $events = collect(app(Schedule::class)->events())->map(fn ($e) => [$e->command, $e->expression]);
         $this->assertTrue($events->contains(fn ($e) => str_contains((string) $e[0], 'memory:report-incidents') && $e[1] === '*/5 * * * *'));
-        $this->assertTrue($events->contains(fn ($e) => str_contains((string) $e[0], 'memory:flush') && $e[1] === '* * * * *'));
+        $this->assertTrue($events->contains(fn ($e) => str_contains((string) $e[0], 'memory:flush') && $e[1] === '*/5 * * * *'));
     }
 }
